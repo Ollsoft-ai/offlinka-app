@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Window chrome only; everything on screen is Compose with the Offlinka theme. -->
+    <style name="Theme.Offlinka" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/offlinka_window</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

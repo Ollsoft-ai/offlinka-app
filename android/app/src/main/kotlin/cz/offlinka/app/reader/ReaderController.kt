@@ -1,0 +1,353 @@
+package cz.offlinka.app.reader
+
+import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.net.Uri
+import android.os.Bundle
+import android.util.Log
+import android.view.View
+import android.view.ViewGroup
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
+import android.webkit.WebView
+import androidx.core.content.FileProvider
+import androidx.webkit.WebResourceErrorCompat
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewClientCompat
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
+import cz.offlinka.app.drive.Shelf
+import cz.offlinka.ui.screens.FindState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+
+/** What the WebView currently shows. */
+data class PageInfo(
+    val url: String? = null,
+    val title: String = "",
+    val canGoBack: Boolean = false,
+    val canGoForward: Boolean = false,
+    /** 0..100 while loading, null when idle. */
+    val progress: Int? = null,
+    /** The main frame answered 404: do not record or offer saving. */
+    val notFound: Boolean = false,
+    /** Bumped every time a page finishes, so observers can record history once per visit. */
+    val visit: Int = 0,
+    /** The article's own h1 scrolled away: the top bar shows the title instead of the book. */
+    val titleInBar: Boolean = false,
+)
+
+sealed interface ReaderEvent {
+    data class External(val url: String) : ReaderEvent
+    data object CannotOpenFile : ReaderEvent
+}
+
+/**
+ * Owns the reader's single WebView for the lifetime of the activity, so its back/forward history
+ * survives moving between screens. Everything the page loads comes from [server].
+ */
+class ReaderController(
+    private val context: Context,
+    private val server: ContentServer,
+    private val shelf: Shelf,
+    private val scope: CoroutineScope,
+    /** Lives in the app graph, so view models keep following the page after the activity is recreated. */
+    private val _page: MutableStateFlow<PageInfo> = MutableStateFlow(PageInfo()),
+) {
+    val page: StateFlow<PageInfo> = _page.asStateFlow()
+
+    private val _find = MutableStateFlow<FindState?>(null)
+    val find: StateFlow<FindState?> = _find.asStateFlow()
+
+    private val _events = MutableSharedFlow<ReaderEvent>(extraBufferCapacity = 4)
+    val events: SharedFlow<ReaderEvent> = _events.asSharedFlow()
+
+    private var clearHistoryOnLoad = false
+    private var web: WebView? = null
+    private var pendingState: Bundle? = null
+
+    val webView: WebView
+        get() = web ?: create().also { web = it }
+
+    /** Loads [url]. [fresh] starts a new reading session: back then leaves the reader instead of going to older pages. */
+    fun load(url: String, fresh: Boolean) {
+        val w = webView
+        if (w.url == url) {
+            if (fresh) w.clearHistory()
+            return
+        }
+        clearHistoryOnLoad = fresh
+        _page.value = _page.value.copy(url = url, title = "", progress = 0, notFound = false)
+        w.loadUrl(url)
+    }
+
+    fun hasPage(): Boolean = web?.url != null || pendingState != null
+
+    fun back() { web?.takeIf { it.canGoBack() }?.goBack() }
+
+    fun forward() { web?.takeIf { it.canGoForward() }?.goForward() }
+
+    private var zoom = 100
+    private var dark = false
+
+    fun setTextZoom(percent: Int) {
+        zoom = percent
+        applyLook()
+    }
+
+    fun setDark(dark: Boolean) {
+        this.dark = dark
+        applyLook()
+    }
+
+    /** MediaWiki pages scale through the reader stylesheet; everything else through WebView text zoom. */
+    private fun isWikiPage(url: String?): Boolean {
+        val t = url?.let { ReaderUrls.parse(it) } ?: return false
+        return shelf.ready?.byId?.get(t.bookId)?.isWiki == true
+    }
+
+    private fun applyLook(url: String? = web?.url) {
+        val w = web ?: return
+        val wiki = isWikiPage(url)
+        w.settings.textZoom = if (wiki) 100 else zoom
+        if (wiki) w.evaluateJavascript(HtmlInjector.lookScript(ReaderLook(dark, zoom / 100f)), null)
+    }
+
+    fun openFind() {
+        _find.value = FindState()
+    }
+
+    fun findQuery(q: String) {
+        _find.value = FindState(query = q)
+        val w = web ?: return
+        if (q.isEmpty()) w.clearMatches() else w.findAllAsync(q)
+    }
+
+    fun findNext(forward: Boolean) {
+        web?.findNext(forward)
+    }
+
+    fun closeFind() {
+        web?.clearMatches()
+        _find.value = null
+    }
+
+    /** Stops JavaScript timers (games, maps) while the app is in the background. */
+    fun pause() {
+        web?.onPause()
+    }
+
+    fun resume() {
+        web?.onResume()
+    }
+
+    fun saveState(out: Bundle) {
+        val b = Bundle()
+        web?.saveState(b)
+        out.putBundle(STATE_KEY, b)
+    }
+
+    fun restoreState(saved: Bundle?) {
+        pendingState = saved?.getBundle(STATE_KEY)
+    }
+
+    /** Takes the WebView out of its old parent so a new screen can host it. */
+    fun detachedWebView(): WebView = webView.also { (it.parent as? ViewGroup)?.removeView(it) }
+
+    fun destroy() {
+        web?.let {
+            (it.parent as? ViewGroup)?.removeView(it)
+            it.stopLoading()
+            it.destroy()
+        }
+        web = null
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun create(): WebView {
+        val w = WebView(context)
+        w.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        w.settings.apply {
+            javaScriptEnabled = true // maps and games need it
+            domStorageEnabled = true // game scores, map viewer state
+            allowFileAccess = false
+            allowContentAccess = false
+            setSupportMultipleWindows(false)
+            javaScriptCanOpenWindowsAutomatically = false
+            mediaPlaybackRequiresUserGesture = true
+            builtInZoomControls = true
+            displayZoomControls = false
+            useWideViewPort = true
+            loadWithOverviewMode = true
+            cacheMode = WebSettings.LOAD_NO_CACHE
+            setGeolocationEnabled(false)
+            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        }
+        noAlgorithmicDarkening(w)
+        w.overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+        w.webViewClient = Client()
+        w.webChromeClient = object : WebChromeClient() {
+            override fun onProgressChanged(view: WebView, newProgress: Int) {
+                _page.value = _page.value.copy(progress = if (newProgress >= 100) null else newProgress)
+            }
+
+            override fun onReceivedTitle(view: WebView, title: String?) {
+                if (!title.isNullOrBlank() && !title.startsWith("https://")) _page.value = _page.value.copy(title = title)
+            }
+        }
+        w.setFindListener { active, count, done ->
+            val f = _find.value ?: return@setFindListener
+            _find.value = f.copy(current = if (count == 0) 0 else active + 1, total = count, done = done)
+        }
+        w.setDownloadListener { url, _, _, mime, _ -> openFile(url, mime) }
+        runCatching {
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+                WebViewCompat.addWebMessageListener(w, "offlinkaApp", setOf(ReaderUrls.ORIGIN)) { _, message, _, isMainFrame, _ ->
+                    if (isMainFrame) _page.value = _page.value.copy(titleInBar = message.data == "1")
+                }
+            }
+        }
+        pendingState?.let { w.restoreState(it) }
+        pendingState = null
+        return w
+    }
+
+    /** Our pages bring their own dark styles; never let the WebView invert maps or games. */
+    private fun noAlgorithmicDarkening(w: WebView) {
+        runCatching {
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+                WebSettingsCompat.setAlgorithmicDarkeningAllowed(w.settings, false)
+            }
+        }
+    }
+
+    private fun updateNav(view: WebView) {
+        _page.value = _page.value.copy(url = view.url, canGoBack = view.canGoBack(), canGoForward = view.canGoForward())
+    }
+
+    private inner class Client : WebViewClientCompat() {
+        override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse {
+            val s = server.serve(request.url.toString(), request.method, request.requestHeaders ?: emptyMap(), request.isForMainFrame)
+            return WebResourceResponse(s.mime, s.charset, s.status, s.reason, s.headers, s.body)
+        }
+
+        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+            val url = request.url.toString()
+            if (ReaderUrls.isOurs(url)) return false
+            when (request.url.scheme?.lowercase()) {
+                "tel" -> return startSystem(Intent(Intent.ACTION_DIAL, request.url))
+                "mailto", "sms", "smsto" -> return startSystem(Intent(Intent.ACTION_SENDTO, request.url))
+                "javascript", "about", "data", "blob" -> return false
+            }
+            val wiki = ReaderUrls.wikimediaTarget(url)
+            if (wiki != null) {
+                scope.launch {
+                    val target = withContext(Dispatchers.IO) { resolveOffline(wiki.first, wiki.second) }
+                    if (target != null) view.loadUrl(target) else _events.tryEmit(ReaderEvent.External(url))
+                }
+                return true
+            }
+            _events.tryEmit(ReaderEvent.External(url))
+            return true
+        }
+
+        override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+            view.settings.textZoom = if (isWikiPage(url)) 100 else zoom
+            _page.value = _page.value.copy(url = url, notFound = false, progress = 0, titleInBar = false)
+            updateNav(view)
+            if (_find.value != null) closeFind()
+        }
+
+        override fun onPageFinished(view: WebView, url: String?) {
+            if (clearHistoryOnLoad && url != null && ReaderUrls.isOurs(url)) {
+                clearHistoryOnLoad = false
+                view.clearHistory()
+            }
+            updateNav(view)
+            _page.value = _page.value.copy(
+                title = view.title?.takeUnless { it.isBlank() || it.startsWith("https://") } ?: _page.value.title,
+                progress = null,
+                visit = _page.value.visit + 1,
+            )
+        }
+
+        override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+            updateNav(view)
+        }
+
+        override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
+            if (request.isForMainFrame && errorResponse.statusCode == 404) _page.value = _page.value.copy(notFound = true)
+        }
+
+        override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceErrorCompat) {
+            Log.i(TAG, "load error ${request.url}")
+        }
+    }
+
+    /** First of [books] that has [title]; the offline URL of it. */
+    private fun resolveOffline(books: List<String>, title: String): String? {
+        val ready = shelf.ready ?: return null
+        for (id in books) {
+            val book = ready.byId[id] ?: continue
+            val found = runCatching { book.content.get(title) }.getOrNull() ?: continue
+            return ReaderUrls.article(id, found.path)
+        }
+        return null
+    }
+
+    private fun startSystem(intent: Intent): Boolean {
+        try {
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: ActivityNotFoundException) {
+            _events.tryEmit(ReaderEvent.CannotOpenFile)
+        }
+        return true
+    }
+
+    /** PDFs and other files the WebView cannot show: copied to the app cache (never the drive) and handed to a viewer. */
+    private fun openFile(url: String, mime: String?) {
+        val target = ReaderUrls.parse(url) ?: return
+        scope.launch {
+            val file = withContext(Dispatchers.IO) {
+                runCatching {
+                    val book = shelf.ready?.byId?.get(target.bookId) ?: return@runCatching null
+                    val res = book.content.get(target.path)
+                    val dir = File(context.cacheDir, "shared").apply { mkdirs() }
+                    dir.listFiles()?.forEach { it.delete() }
+                    File(dir, target.path.substringAfterLast('/').ifBlank { "soubor" }).apply { writeBytes(res.data) }
+                }.getOrNull()
+            }
+            if (file == null) {
+                _events.tryEmit(ReaderEvent.CannotOpenFile)
+                return@launch
+            }
+            val uri: Uri = FileProvider.getUriForFile(context, context.packageName + ".files", file)
+            val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime ?: ContentServer.mimeOf(file.name) ?: "*/*")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            try {
+                context.startActivity(intent)
+            } catch (e: ActivityNotFoundException) {
+                _events.tryEmit(ReaderEvent.CannotOpenFile)
+            }
+        }
+    }
+
+    private companion object {
+        const val TAG = "OfflinkaReader"
+        const val STATE_KEY = "offlinka.webview"
+    }
+}

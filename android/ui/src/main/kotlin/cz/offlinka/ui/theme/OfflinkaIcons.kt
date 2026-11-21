@@ -1,0 +1,71 @@
+package cz.offlinka.ui.theme
+
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import cz.offlinka.ui.R
+
+/** The design system's own 24 dp line icons (design/icons/svg → design/out/android/drawable). */
+object OfflinkaIcons {
+    val Search: ImageVector @Composable get() = v(R.drawable.ic_search)
+    val Close: ImageVector @Composable get() = v(R.drawable.ic_close)
+    val Back: ImageVector @Composable get() = v(R.drawable.ic_arrow_back)
+    val Forward: ImageVector @Composable get() = v(R.drawable.ic_arrow_forward)
+    val ChevronRight: ImageVector @Composable get() = v(R.drawable.ic_chevron_right)
+    val ChevronDown: ImageVector @Composable get() = v(R.drawable.ic_chevron_down)
+    val ChevronUp: ImageVector @Composable get() = v(R.drawable.ic_chevron_up)
+    val Bookmark: ImageVector @Composable get() = v(R.drawable.ic_bookmark)
+    val BookmarkFilled: ImageVector @Composable get() = v(R.drawable.ic_bookmark_filled)
+    val History: ImageVector @Composable get() = v(R.drawable.ic_history)
+    val Clock: ImageVector @Composable get() = v(R.drawable.ic_clock)
+    val Home: ImageVector @Composable get() = v(R.drawable.ic_home)
+    val Library: ImageVector @Composable get() = v(R.drawable.ic_library)
+    val Article: ImageVector @Composable get() = v(R.drawable.ic_article)
+    val Settings: ImageVector @Composable get() = v(R.drawable.ic_settings)
+    val FindInPage: ImageVector @Composable get() = v(R.drawable.ic_find_in_page)
+    val TextSize: ImageVector @Composable get() = v(R.drawable.ic_text_size)
+    val Moon: ImageVector @Composable get() = v(R.drawable.ic_moon)
+    val Sun: ImageVector @Composable get() = v(R.drawable.ic_sun)
+    val Contrast: ImageVector @Composable get() = v(R.drawable.ic_contrast)
+    val More: ImageVector @Composable get() = v(R.drawable.ic_more_vert)
+    val Info: ImageVector @Composable get() = v(R.drawable.ic_info)
+    val Help: ImageVector @Composable get() = v(R.drawable.ic_help)
+    val Trash: ImageVector @Composable get() = v(R.drawable.ic_trash)
+    val Check: ImageVector @Composable get() = v(R.drawable.ic_check)
+    val Checklist: ImageVector @Composable get() = v(R.drawable.ic_checklist)
+    val Warning: ImageVector @Composable get() = v(R.drawable.ic_warning)
+    val NoInternet: ImageVector @Composable get() = v(R.drawable.ic_no_internet)
+    val Drive: ImageVector @Composable get() = v(R.drawable.ic_drive)
+    val DriveOff: ImageVector @Composable get() = v(R.drawable.ic_drive_off)
+    val PhoneDrive: ImageVector @Composable get() = v(R.drawable.ic_phone_drive)
+    val PhoneCopy: ImageVector @Composable get() = v(R.drawable.ic_phone_copy)
+    val Redirect: ImageVector @Composable get() = v(R.drawable.ic_redirect)
+    val Random: ImageVector @Composable get() = v(R.drawable.ic_random)
+    val FirstAid: ImageVector @Composable get() = v(R.drawable.ic_first_aid)
+    val Folder: ImageVector @Composable get() = v(R.drawable.ic_folder)
+    val Plus: ImageVector @Composable get() = v(R.drawable.ic_plus)
+    val Minus: ImageVector @Composable get() = v(R.drawable.ic_minus)
+    val Retry: ImageVector @Composable get() = v(R.drawable.ic_retry)
+    val Copy: ImageVector @Composable get() = v(R.drawable.ic_copy)
+    val FillQuery: ImageVector @Composable get() = v(R.drawable.ic_fill_query)
+    val Toc: ImageVector @Composable get() = v(R.drawable.ic_toc)
+    val Lock: ImageVector @Composable get() = v(R.drawable.ic_lock)
+    val Mail: ImageVector @Composable get() = v(R.drawable.ic_mail)
+    val Globe: ImageVector @Composable get() = v(R.drawable.ic_globe)
+
+    val BookWikipedia: ImageVector @Composable get() = v(R.drawable.ic_book_wikipedia)
+    val BookWikipediaEn: ImageVector @Composable get() = v(R.drawable.ic_book_wikipedia_en)
+    val BookMedicine: ImageVector @Composable get() = v(R.drawable.ic_book_medicine)
+    val BookMaps: ImageVector @Composable get() = v(R.drawable.ic_book_maps)
+    val BookGuides: ImageVector @Composable get() = v(R.drawable.ic_book_guides)
+    val BookGames: ImageVector @Composable get() = v(R.drawable.ic_book_games)
+    val BookWikibooks: ImageVector @Composable get() = v(R.drawable.ic_book_wikibooks)
+    val BookWikiquote: ImageVector @Composable get() = v(R.drawable.ic_book_wikiquote)
+    val BookWikisource: ImageVector @Composable get() = v(R.drawable.ic_book_wikisource)
+    val BookWikiversity: ImageVector @Composable get() = v(R.drawable.ic_book_wikiversity)
+    val BookWiktionary: ImageVector @Composable get() = v(R.drawable.ic_book_wiktionary)
+    val BookWikivoyage: ImageVector @Composable get() = v(R.drawable.ic_book_wikivoyage)
+
+    @Composable
+    private fun v(id: Int): ImageVector = ImageVector.vectorResource(id)
+}
