@@ -67,6 +67,11 @@ impl<K: Hash + Eq, V: Clone> ByteLru<K, V> {
         self.bytes
     }
 
+    /// Bytes held by the entries whose key passes `keep`.
+    pub fn bytes_where(&self, keep: impl Fn(&K) -> bool) -> usize {
+        self.inner.iter().filter(|(k, _)| keep(k)).map(|(_, (_, s))| *s).sum()
+    }
+
     pub fn len(&self) -> usize {
         self.inner.len()
     }

@@ -599,11 +599,16 @@ fn closed_book_gives_io_errors_never_panics() {
 
 #[test]
 fn trim_memory_and_shared_budget() {
+    // The cache is shared by every book and other tests fill it in parallel: look only
+    // at this book's entries. (No other test in this binary trims or changes the budget.)
     let b = indexed_book();
     assert_eq!(b.get("Praha".into()).unwrap().data, b"<h1>Praha</h1>");
+    assert!(b.archive().cached_cluster_bytes() > 0, "the xz cluster of Praha is cached");
     b.preload_index().unwrap();
+    assert!(b.search_index().unwrap().is_loaded());
     offlinka_core::trim_memory();
-    assert_eq!(offlinka_core::zim::cluster_cache_bytes(), 0);
+    assert_eq!(b.archive().cached_cluster_bytes(), 0, "this book's clusters are dropped");
+    assert!(!b.search_index().unwrap().is_loaded(), "index maps unloaded");
     assert_eq!(b.suggest("cesky krumlov".into(), 1)[0].title, "Český Krumlov", "index reloads after trim");
     assert_eq!(b.get("Praha".into()).unwrap().data, b"<h1>Praha</h1>");
 }

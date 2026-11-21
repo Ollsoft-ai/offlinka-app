@@ -433,6 +433,12 @@ impl Archive {
         self.size
     }
 
+    /// Bytes the shared cluster cache holds for this archive (tests: the cache is
+    /// process-wide, so other books' entries must not count).
+    pub fn cached_cluster_bytes(&self) -> usize {
+        lock(&shared().clusters).bytes_where(|k| k.0 == self.id)
+    }
+
     pub fn entry_count(&self) -> u32 {
         self.header.entry_count
     }
