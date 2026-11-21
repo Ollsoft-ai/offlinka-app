@@ -58,9 +58,11 @@ final class BookCatalogTests: XCTestCase {
 
     func testIndexFileNamesBindNameAndSize() {
         let name = BookCatalog.indexFileName(zimFileName: "wikipedia_cs_all_maxi-offlinka_2026-09.zim", size: 9_958_167_476)
-        XCTAssertEqual(name, "wikipedia_cs_all_maxi-offlinka_2026-09-9958167476.offidx")
+        XCTAssertEqual(name, "wikipedia_cs_all_maxi-offlinka_2026-09-9958167476-v5b.offidx")
         XCTAssertEqual(BookCatalog.bookKey(ofIndexFile: name), "wikipedia_cs_all")
-        XCTAssertEqual(BookCatalog.indexFileName(zimFileName: "něco divného (1).zim", size: 5), "n_co_divn_ho__1_-5.offidx")
+        XCTAssertEqual(BookCatalog.bookKey(ofIndexFile: "wikipedia_cs_all_maxi-offlinka_2026-09-9958167476.offidx"), "wikipedia_cs_all",
+                       "indexes from before the format tag")
+        XCTAssertEqual(BookCatalog.indexFileName(zimFileName: "něco divného (1).zim", size: 5), "n_co_divn_ho__1_-5-v5b.offidx")
         XCTAssertNil(BookCatalog.bookKey(ofIndexFile: "readme.txt"))
     }
 

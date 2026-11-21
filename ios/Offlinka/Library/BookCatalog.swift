@@ -219,19 +219,30 @@ enum BookCatalog {
 
     /// File name of a search index built on the phone for one exact ZIM file (name + size, so a
     /// new edition never reuses an old index): `wikipedia_cs_all_maxi-offlinka_2026-09-9958167476.offidx`.
+    /// On-device index format tag, as on Android. Bumped when indexes built by older versions must be
+    /// rebuilt once: `v5b` = core index v5 built by the hardened core. Files with other names are
+    /// removed by the folder clean-up on the next load.
+    static let indexTag = "v5b"
+
     static func indexFileName(zimFileName: String, size: Int64) -> String {
         let stem = (zimFileName as NSString).deletingPathExtension
         let safe = String(stem.unicodeScalars.map { scalar -> Character in
             let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
             return allowed.contains(scalar) ? Character(scalar) : "_"
         })
-        return "\(safe)-\(size).offidx"
+        return "\(safe)-\(size)-\(indexTag).offidx"
     }
 
-    /// The book (`baseKey`) an index file built by `indexFileName` belongs to.
+    /// The book (`baseKey`) an index file built by `indexFileName` belongs to (also of older, untagged names).
     static func bookKey(ofIndexFile fileName: String) -> String? {
-        guard fileName.hasSuffix(".offidx"), let dash = fileName.lastIndex(of: "-") else { return nil }
-        return ZimFileName(fileName: String(fileName[..<dash]) + ".zim").baseKey
+        guard fileName.hasSuffix(".offidx") else { return nil }
+        var parts = String(fileName.dropLast(".offidx".count)).components(separatedBy: "-")
+        if parts.count > 2, let last = parts.last, last.hasPrefix("v"), Int64(last) == nil {
+            parts.removeLast()   // the format tag
+        }
+        guard parts.count >= 2 else { return nil }
+        parts.removeLast()       // the file size
+        return ZimFileName(fileName: parts.joined(separator: "-") + ".zim").baseKey
     }
 
     static func kind(of book: BookRecord) -> BookKind {

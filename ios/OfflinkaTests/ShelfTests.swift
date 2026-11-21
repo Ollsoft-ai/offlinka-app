@@ -264,7 +264,8 @@ final class ShelfTests: XCTestCase {
         let oldEdition = "wikipedia_cs_all_maxi-offlinka_2026-01-9000000000.offidx"
         let notOnThisDrive = "wikibooks_cs_all_maxi-offlinka_2026-10-44663460.offidx"
         let leftover = "wikipedia_sk_all_maxi-offlinka_2026-08-3501486592.offidx.part"
-        for name in [oldEdition, notOnThisDrive, leftover] {
+        let beforeFormatTag = "wikipedia_cs_all_maxi-offlinka_2026-09-9958167476.offidx"   // built by the old core: rebuilt
+        for name in [oldEdition, notOnThisDrive, leftover, beforeFormatTag] {
             try Data("x".utf8).write(to: indexDir.appendingPathComponent(name))
         }
         let list = books(indexed: false)
