@@ -18,21 +18,22 @@ final class LocalizationTests: XCTestCase {
     func testLanguageSwitchAndPlurals() throws {
         try XCTSkipIf(Bundle.main.path(forResource: "cs", ofType: "lproj") == nil, "strings are not compiled into this bundle")
         defer { L10n.apply(.system) }
+        // design keeps short words and numbers with the next word (non-breaking spaces)
+        func plain(_ text: String) -> String { text.replacingOccurrences(of: "\u{00A0}", with: " ") }
 
         L10n.apply(.cs)
-        XCTAssertEqual(tr(.navLibrary), "Knihovna")
-        XCTAssertEqual(tr(.libraryBooksCount, 1), "1 kniha")
-        XCTAssertEqual(tr(.libraryBooksCount, 3), "3 knihy")
-        XCTAssertEqual(tr(.libraryBooksCount, 14), "14 knih")
-        XCTAssertEqual(tr(.settingsDriveConnected, "OFFLINKA"), "Zapojená: OFFLINKA")
+        XCTAssertEqual(plain(tr(.navLibrary)), "Knihovna")
+        XCTAssertEqual(plain(tr(.libraryBooksCount, 1)), "1 kniha")
+        XCTAssertEqual(plain(tr(.libraryBooksCount, 3)), "3 knihy")
+        XCTAssertEqual(plain(tr(.libraryBooksCount, 14)), "14 knih")
+        XCTAssertEqual(plain(tr(.settingsDriveConnected, "OFFLINKA")), "Zapojená: OFFLINKA")
 
         L10n.apply(.sk)
-        // design keeps short words with the next one (non-breaking spaces)
-        XCTAssertEqual(tr(.connectTitle).replacingOccurrences(of: "\u{00A0}", with: " "), "Zapojte USB kľúč Offlinka")
+        XCTAssertEqual(plain(tr(.connectTitle)), "Zapojte USB kľúč Offlinka")
 
         L10n.apply(.en)
-        XCTAssertEqual(tr(.libraryBooksCount, 1), "1 book")
-        XCTAssertEqual(tr(.readerFindCount, 2, 5), "2 of 5")
+        XCTAssertEqual(plain(tr(.libraryBooksCount, 1)), "1 book")
+        XCTAssertEqual(plain(tr(.readerFindCount, 2, 5)), "2 of 5")
     }
 
     func testPrivacyPolicyLinkFollowsTheUILanguage() {

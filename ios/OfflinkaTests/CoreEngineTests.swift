@@ -46,9 +46,10 @@ final class CoreEngineTests: XCTestCase {
         let page = try book.resource(path: BookCatalog.firstAidPath)
         XCTAssertTrue(page.mimeType.hasPrefix("text/html"))
         XCTAssertTrue(String(decoding: page.data, as: UTF8.self).contains("První pomoc"))
-        let whole = try book.resource(path: "pdf/prvni-pomoc.pdf").data
-        XCTAssertEqual(Int(try book.contentLength(path: "pdf/prvni-pomoc.pdf")), whole.count)
-        XCTAssertEqual(try book.range(path: "pdf/prvni-pomoc.pdf", offset: 100, length: 50), whole.subdata(in: 100..<150))
+        // Ranges (media, big files) on the page itself: the app edition of the guides has no PDFs.
+        let whole = page.data
+        XCTAssertEqual(Int(try book.contentLength(path: BookCatalog.firstAidPath)), whole.count)
+        XCTAssertEqual(try book.range(path: BookCatalog.firstAidPath, offset: 100, length: 50), whole.subdata(in: 100..<150))
         XCTAssertThrowsError(try book.resource(path: "nic-takoveho.html")) { error in
             guard case ContentError.notFound = error else { return XCTFail("expected notFound, got \(error)") }
         }
