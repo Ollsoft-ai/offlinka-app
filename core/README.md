@@ -6,7 +6,7 @@ Shared Rust engine of the Offlinka apps: **our own ZIM reader** (no libzim, no K
 
 - Toolchain: `source ~/opt/offlinka-env.sh`. Heavy builds under the shared lock (see SPEC working rules).
 - `cargo test` — unit + synthetic-ZIM tests + real small ZIMs from the drive (skipped when the drive folder is missing; `OFFLINKA_DRIVE=<…/files>` to point elsewhere).
-- `cargo test --release -- --ignored` — big books (cs/sk mini index quality, cs maxi open + keystroke budget). `OFFLINKA_CS_MAXI_INDEX=<file>` reuses a built index.
+- `cargo test --profile host -- --ignored` (optimised, no LTO) — big books (cs/sk mini index quality, cs maxi open + keystroke budget). `OFFLINKA_CS_MAXI_INDEX=<file>` reuses a built index.
 - `cargo clippy --all-targets -- -D warnings`, `cargo fmt`.
 - `scripts/gen-bindings.sh` — host cdylib (profile `host`, unstripped) → Kotlin (`android/core/src/main/kotlin/cz/offlinka/core/offlinka_core.kt`) + Swift (`ios/Offlinka/Generated/OfflinkaCore.swift` + `offlinka_coreFFI.h` + `.modulemap`) + JNA host lib `core/target/host/linux-x86-64/libofflinka_core.so`.
 - `scripts/build-android-core.sh` — cargo-ndk, minSdk 26 → `android/app/src/main/jniLibs/{arm64-v8a,armeabi-v7a,x86_64}/libofflinka_core.so` (release: LTO, 1 codegen unit, stripped).
@@ -40,7 +40,7 @@ Header (magic, v5/v6), MIME list, path pointer list, classic title pointer list 
 
 ## Search index (`.offidx`)
 
-**Drive build:** `offlinka-cli index <book>.zim -o <book>.offidx` for every ZIM, file next to the ZIM with the same stem (`Knihovna/wikipedia_cs_all_maxi-offlinka_2026-09.offidx`). The apps attach it when present; without it the core falls back to the ZIM's title listing (case variants of a plain prefix, no diacritics folding). The index is bound to the ZIM's UUID: rebuild it whenever the ZIM changes.
+**Drive build:** build the CLI once (`cd core && cargo build --release --bin offlinka-cli` → `core/target/release/offlinka-cli`), then `offlinka-cli index <book>.zim -o <book>.offidx` for every ZIM (or `scripts/build-drive-indexes.sh`), file next to the ZIM with the same stem (`Knihovna/wikipedia_cs_all_maxi-offlinka_2026-09.offidx`). The apps attach it when present; without it the core falls back to the ZIM's title listing (case variants of a plain prefix, no diacritics folding). The index is bound to the ZIM's UUID: rebuild it whenever the ZIM changes.
 
 - **Normalisation** (`normalize.rs`): NFD, combining marks removed, lowercase, `ł ø đ ß æ œ þ ı` folded by hand, apostrophes dropped, other punctuation → one space. Czech/Slovak letters (`ěščřžýáíéůúňťďľĺŕôä`) all decompose, so `cesky krumlov` = `Český Krumlov`.
 - **Records**: every article (front-article listing, else HTML in `C/`) and every redirect whose chain ends at one, as `(shown entry, target entry)`. Record ids are assigned in rank order — articles before redirects, then shorter normalised title, then alphabetical — so "best" = smallest id.
@@ -93,6 +93,8 @@ Drive edition 2026-11.3, this box (x86_64, shared, load ~8), release build, warm
 | offlinka_cs_prirucky / mul_hry | 6 / 11 | 1 KB | read whole | <1 s |
 
 All indexes of the edition: ~305 MB on the drive (178 MB of it English).
+
+**Android library size** (`scripts/build-android-core.sh`, stripped, LTO): opt-level 3 → arm64-v8a 873 KB, armeabi-v7a 672 KB, x86_64 995 KB; opt-level "s" (`PROFILE=release-s`) → 862 / 648 / 962 KB. Only 1–4 % smaller, so the release profile stays at opt-level 3.
 
 ## Licences
 

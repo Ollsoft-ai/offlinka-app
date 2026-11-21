@@ -2,7 +2,7 @@
 //!
 //! Drive folder: `$OFFLINKA_DRIVE` or `/srv/offlinka/drive/release/2026-11.3/files`.
 //! Missing files skip the test (with a note on stderr).
-//! The big ones run with `cargo test --release -- --ignored`.
+//! The big ones run with `cargo test --profile host -- --ignored` (optimised, no LTO).
 
 mod common;
 
