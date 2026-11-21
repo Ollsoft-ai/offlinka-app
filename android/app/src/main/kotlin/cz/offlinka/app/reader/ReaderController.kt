@@ -99,10 +99,13 @@ class ReaderController(
             val r = s as? cz.offlinka.app.drive.ShelfState.Ready ?: return@collect
             val w = web ?: return@collect
             val pending = pendingState
+            val url = w.url
             if (pending != null) {
                 pendingState = null
                 w.restoreState(pending)
-            } else if (recovery.shouldReload(r.byId.keys)) {
+            } else if (recovery.shouldReload(r.byId.keys) ||
+                (url != null && server.wasUnavailable(url) && bookOf(url) in r.byId.keys)
+            ) {
                 w.reload()
             }
         }
@@ -412,6 +415,11 @@ class ReaderController(
                 view.clearHistory()
             }
             updateNav(view)
+            // Answered "come back later" but the book is served by now (it opened while the page loaded): again.
+            if (url != null && server.wasUnavailable(url) && served(bookOf(url)) && System.currentTimeMillis() - lastAutoReload > 5_000) {
+                lastAutoReload = System.currentTimeMillis()
+                view.postDelayed({ view.reload() }, 300)
+            }
             // A redirect stub replaces itself at once: no history row for it.
             val stub = url != null && server.wasRedirect(url)
             _page.value = _page.value.copy(

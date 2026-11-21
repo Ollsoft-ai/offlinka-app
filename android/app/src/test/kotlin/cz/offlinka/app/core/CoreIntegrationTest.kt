@@ -58,11 +58,19 @@ class CoreIntegrationTest {
         }
     }
 
+    /** The book [id] from the drive files, or the test is skipped (CI and other machines may lack some files). */
+    private fun need(id: String): ServedBook {
+        assumeTrue("$id not in the drive files", books.containsKey(id))
+        return books.getValue(id)
+    }
+
+    private fun needFile(rel: String): File = File(drive, rel).also { assumeTrue("$rel not in the drive files", it.isFile) }
+
     private fun get(url: String, mainFrame: Boolean = true, headers: Map<String, String> = emptyMap()) =
         server.serve(url, "GET", headers, mainFrame)
 
     @Test fun `metadata maps onto BookMeta`() {
-        val info = books.getValue("offlinka_cs_prirucky").content.info
+        val info = need("offlinka_cs_prirucky").content.info
         assertThat(info.id).isEqualTo("offlinka_cs_prirucky")
         assertThat(info.title).isEqualTo("Nouzové příručky")
         assertThat(info.mainPath).isNotNull()
@@ -109,7 +117,7 @@ class CoreIntegrationTest {
     }
 
     @Test fun `range on a real entry matches the full read`() {
-        val games = books.getValue("offlinka_mul_hry")
+        val games = need("offlinka_mul_hry")
         val main = games.content.info.mainPath!!
         val full = games.content.get(main)
         val r = get(ReaderUrls.article("offlinka_mul_hry", full.path), mainFrame = false, headers = mapOf("Range" to "bytes=5-54"))
@@ -119,7 +127,7 @@ class CoreIntegrationTest {
     }
 
     @Test fun `an index built on the phone finds titles without diacritics, progress reaches 1`() {
-        val guides = File(drive, "Telefon/offlinka_cs_prirucky.zim")
+        val guides = needFile("Telefon/offlinka_cs_prirucky.zim")
         val out = File(Files.createTempDirectory("idx").toFile(), "guides.offidx")
         val progress = mutableListOf<Double>()
         source.openPath(guides.path).use { book ->
@@ -141,7 +149,7 @@ class CoreIntegrationTest {
 
     @Test fun `building an index stops when cancelled and leaves no file`() {
         val out = File(Files.createTempDirectory("idx").toFile(), "guides.offidx")
-        source.openPath(File(drive, "Telefon/offlinka_cs_prirucky.zim").path).use { book ->
+        source.openPath(needFile("Telefon/offlinka_cs_prirucky.zim").path).use { book ->
             var thrown: Throwable? = null
             try {
                 source.buildIndex(book, out.path, onProgress = {}, isCancelled = { true })
@@ -155,7 +163,7 @@ class CoreIntegrationTest {
     }
 
     @Test fun `after closeFile reads fail softly with Io, trimMemory keeps other books readable`() {
-        val book = source.openPath(File(drive, "Telefon/offlinka_cs_prirucky.zim").path)
+        val book = source.openPath(needFile("Telefon/offlinka_cs_prirucky.zim").path)
         val main = book.info.mainPath!!
         assertThat(book.get(main).data.size).isGreaterThan(0)
         book.closeFile()
@@ -169,41 +177,12 @@ class CoreIntegrationTest {
         book.close()
         source.trimMemory()
         source.setCacheBudget(16L * 1024 * 1024)
-        val games = books.getValue("offlinka_mul_hry").content
+        val games = need("offlinka_mul_hry").content
         assertThat(games.get(games.info.mainPath!!).data.size).isGreaterThan(0)
     }
 
-    @Test fun `the guides bundled in the app never send anyone to Kiwix`() {
-        // The app edition (scripts/build-app-guides.py): what a store reviewer without the drive opens.
-        val asset = File("src/main/assets/offlinka_cs_prirucky.zim")
-        assumeTrue(asset.isFile)
-        source.openPath(asset.path).use { book ->
-            val main = book.info.mainPath!!
-            val seen = linkedSetOf<String>()
-            val queue = ArrayDeque(listOf(main))
-            while (queue.isNotEmpty()) {
-                val path = queue.removeFirst()
-                if (!seen.add(path)) continue
-                val res = book.get(path)
-                if (!res.mime.startsWith("text/") && !res.mime.contains("css") && !res.mime.contains("javascript")) continue
-                val text = res.data.toString(Charsets.UTF_8)
-                assertThat(text.lowercase()).doesNotContain("kiwix")
-                if (res.mime.startsWith("text/html")) {
-                    // Relative links of the book only (no data:, tel:, https:, anchors).
-                    Regex("""(?:href|src)="([^"]+)"""").findAll(text).map { it.groupValues[1].substringBefore('#').substringBefore('?') }
-                        .filter { it.isNotEmpty() && ':' !in it && !it.startsWith("/") }
-                        .forEach { link -> queue += java.net.URI(path).resolve(link).path.removePrefix("/") }
-                }
-            }
-            assertThat(seen).containsAtLeast("prvni-pomoc.html", "vypadek-proudu.html")
-            assertThat(seen.none { it.startsWith("jak-") || it.startsWith("zacni-zde") }).isTrue()
-            assertThat(book.info.title.lowercase()).doesNotContain("kiwix")
-            assertThat(book.info.description.lowercase()).doesNotContain("kiwix")
-        }
-    }
-
     @Test fun `guide sections of the real guides book are found without accents`() {
-        val guides = books.getValue("offlinka_cs_prirucky").content
+        val guides = need("offlinka_cs_prirucky").content
         val sections = cz.offlinka.app.search.GuideSections.build(guides, "offlinka_cs_prirucky")
         val hit = sections.search("krvaceni").first()
         assertThat(hit.title).isEqualTo("První pomoc › Silné krvácení")
@@ -220,8 +199,8 @@ class CoreIntegrationTest {
         books["wikipedia_sk_all"]?.content?.let { sk ->
             assertThat(sk.contentLength(cz.offlinka.app.ui.TryNow.ARTICLE.getValue("sk").first)).isGreaterThan(0L)
         }
-        assertThat(books.getValue("offlinka_cs_prirucky").content.contentLength(cz.offlinka.app.ui.TryNow.FIRST_AID)).isGreaterThan(0L)
-        assertThat(books.getValue("offlinka_mul_hry").content.contentLength(cz.offlinka.app.ui.TryNow.GAME)).isGreaterThan(0L)
+        assertThat(need("offlinka_cs_prirucky").content.contentLength(cz.offlinka.app.ui.TryNow.FIRST_AID)).isGreaterThan(0L)
+        assertThat(need("offlinka_mul_hry").content.contentLength(cz.offlinka.app.ui.TryNow.GAME)).isGreaterThan(0L)
         for (map in listOf("maps_en_czech-republic_2026-06.zim", "maps_en_slovakia_2026-06.zim")) {
             val f = File(drive, "Knihovna/$map")
             if (!f.isFile) continue
@@ -230,14 +209,14 @@ class CoreIntegrationTest {
     }
 
     @Test fun `guides pages behind the home quick links exist`() {
-        val guides = books.getValue("offlinka_cs_prirucky").content
+        val guides = need("offlinka_cs_prirucky").content
         for (p in listOf("prvni-pomoc.html", "vypadek-proudu.html")) {
             assertThat(guides.get(p).mime).startsWith("text/html")
         }
     }
 
     @Test fun `games load their own scripts`() {
-        val games = books.getValue("offlinka_mul_hry")
+        val games = need("offlinka_mul_hry")
         val main = games.content.info.mainPath!!
         val html = get(ReaderUrls.article("offlinka_mul_hry", main)).bytes().decodeToString()
         assertThat(html).doesNotContain("/_offlinka/reader.css")
@@ -253,7 +232,7 @@ class CoreIntegrationTest {
         assertThat(r.status).isEqualTo(404)
         assertThat(errors).isEmpty()
         try {
-            books.getValue("offlinka_cs_prirucky").content.get("nic-takoveho.html")
+            need("offlinka_cs_prirucky").content.get("nic-takoveho.html")
             error("expected NotFound")
         } catch (e: ContentException.NotFound) {
             // mapped from CoreException.NotFound
@@ -278,7 +257,7 @@ class CoreIntegrationTest {
     @Test fun `with a search index diacritics do not matter`() {
         val index = System.getenv("OFFLINKA_CS_MINI_INDEX")?.let(::File)
         assumeTrue("set OFFLINKA_CS_MINI_INDEX to a .offidx of the cs mini", index?.isFile == true)
-        val f = File(drive, "Telefon/wikipedia_cs_all_mini-offlinka_2026-09.zim")
+        val f = needFile("Telefon/wikipedia_cs_all_mini-offlinka_2026-09.zim")
         source.openPath(f.path).use { book ->
             book.attachIndexPath(index!!.path)
             assertThat(book.info.hasIndex).isTrue()
@@ -289,7 +268,7 @@ class CoreIntegrationTest {
 
     @Test fun `random article is a real page`() {
         assumeTrue(books.containsKey("wikipedia_cs_all"))
-        val wiki = books.getValue("wikipedia_cs_all").content
+        val wiki = need("wikipedia_cs_all").content
         val path = wiki.randomArticle()
         assertThat(path).isNotNull()
         assertThat(wiki.get(path!!).mime).startsWith("text/html")

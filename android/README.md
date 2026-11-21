@@ -26,7 +26,7 @@ flock /tmp/claude-1000/offlinka-app-build.lock nice -n 10 timeout 3600 ./gradlew
 
 ## Instrumented tests (emulator)
 
-`src/androidTest`: the real app (real core, real WebView) with a folder as the drive. `FixtureRunner` starts `FixtureApp`, whose `FolderDrive` (test-only `DriveAccess`) serves `filesDir/fixture-drive/Knihovna/offlinka_cs_prirucky.zim` (copied from the APK's assets); the system folder picker is answered with Espresso-Intents. `DriveFlowTest`: Connect → Home, search „prvni pomoc“ → article → "Zpět" back to the search, pulling the folder mid-read → unplugged cover → putting it back → the article. Run with `./gradlew connectedDebugAndroidTest` on a device or emulator (CI does it on API 26/30/35; this box has no KVM).
+`src/androidTest`: the real app (real core, real WebView) with a folder as the drive. `FixtureRunner` starts `FixtureApp`, whose `FolderDrive` (test-only `DriveAccess`) serves `filesDir/fixture-drive/Knihovna/offlinka_cs_prirucky.zim` (copied from the APK's assets); the system folder picker is answered with Espresso-Intents. `DriveFlowTest`: Connect → Home, search „prvni pomoc“ → article → "Zpět" back to the search, pulling the folder mid-read → unplugged cover → putting it back → the article. Run with `./gradlew connectedDebugAndroidTest` on a device or emulator (CI does it on API 26/30/36; this box has no KVM).
 
 ## Release signing
 

@@ -1,17 +1,20 @@
 package cz.offlinka.app.ui
 
 import android.content.Intent
+import android.os.Looper
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import cz.offlinka.app.MainActivity
+import cz.offlinka.app.drive.ShelfState
 import cz.offlinka.app.graph
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /** App-icon shortcuts open the bundled guides even with no drive at all. */
@@ -26,7 +29,15 @@ class ShortcutTest {
             .setClassName(context, MainActivity::class.java.name)
             .putExtra(MainActivity.EXTRA_PATH, "prvni-pomoc.html")
         ActivityScenario.launch<MainActivity>(intent).use { scenario ->
-            compose.waitUntil(10_000) { compose.onAllNodesWithText("Nouzové příručky").fetchSemanticsNodes().isNotEmpty() }
+            // Driven by the shelf's state, not by time: the first scan ends (no drive), then the overlay shows.
+            val graph = context.graph
+            // The main looper runs while waiting: the shelf resumes there after its IO work.
+            compose.waitUntil(30_000) {
+                shadowOf(Looper.getMainLooper()).idle()
+                graph.shelf.state.value !is ShelfState.Loading && graph.openRequest.value == null
+            }
+            compose.waitForIdle()
+            compose.onNodeWithText("Nouzové příručky").assertExists()
             scenario.onActivity { a ->
                 assertThat(a.graph.readerPage.value.url).isNull()
                 assertThat(a.graph.openRequest.value).isNull()

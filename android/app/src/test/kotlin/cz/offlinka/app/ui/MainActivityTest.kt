@@ -18,6 +18,7 @@ import cz.offlinka.app.fakes.FakeDriveAccess
 import cz.offlinka.app.fakes.fakeGuides
 import cz.offlinka.app.fakes.fakeWiki
 import cz.offlinka.app.fakes.memoryDb
+import cz.offlinka.app.drive.ShelfState
 import cz.offlinka.app.graph
 import org.junit.Rule
 import org.junit.Test
@@ -59,6 +60,15 @@ class MainActivityTest {
 
     private fun waitForText(text: String) =
         compose.waitUntil(10_000) { compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
+
+    /**
+     * Waits for [done] while running the main looper (where the shelf resumes after its IO work);
+     * compose's waitUntil alone does not run it in Robolectric when the condition reads no UI.
+     */
+    private fun awaitIdle(done: () -> Boolean) = compose.waitUntil(30_000) {
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+        done()
+    }
 
     /** Clicks a button that may sit in the scrolling column or pinned below it (compact screens). */
     private fun tap(text: String) {
@@ -106,9 +116,9 @@ class MainActivityTest {
         compose.activity.graph.shelf.reloadAsync()
         waitForText("Česká Wikipedie")
         fun keptOn() = compose.activity.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON != 0
-        compose.waitUntil(10_000) { keptOn() }
+        awaitIdle { keptOn() }
         gate.countDown()
-        compose.waitUntil(10_000) { !keptOn() }
+        awaitIdle { !keptOn() }
     }
 
     @Test fun `a granted drive opens home, unplugging shows the calm screen and plugging back returns`() {
@@ -137,7 +147,11 @@ class MainActivityTest {
 
         app.drives.drives.getValue(app.tree).plugged = true
         compose.activity.graph.shelf.onStorageChanged() // what the mount broadcast triggers
-        compose.waitUntil(10_000) { compose.onAllNodesWithText("Flashka je odpojená").fetchSemanticsNodes().isEmpty() }
-        compose.onNodeWithText("Česká Wikipedie").assertExists()
+        // Driven by the shelf's state: every book open again, then the UI settles.
+        val shelf = compose.activity.graph.shelf
+        awaitIdle { (shelf.state.value as? ShelfState.Ready)?.opening == false }
+        compose.waitForIdle()
+        compose.onNodeWithText("Flashka je odpojená").assertDoesNotExist()
+        compose.onNodeWithText("Česká Wikipedie", useUnmergedTree = true).assertExists()
     }
 }

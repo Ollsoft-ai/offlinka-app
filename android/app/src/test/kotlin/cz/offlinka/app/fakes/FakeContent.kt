@@ -132,16 +132,17 @@ class FakeLibrary : ContentLibrary {
 
 /** Opens [FakeBook]s by file name; [books] maps file names to factories. */
 class FakeContentSource(private val books: Map<String, () -> FakeBook>) : ContentSource {
-    val opened: MutableList<FakeBook> = java.util.Collections.synchronizedList(mutableListOf())
-    val openedNames: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
-    val failing: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf())
+    // Copy-on-write: tests iterate these (any/filter/count) while IO threads append.
+    val opened: MutableList<FakeBook> = java.util.concurrent.CopyOnWriteArrayList()
+    val openedNames: MutableList<String> = java.util.concurrent.CopyOnWriteArrayList()
+    val failing: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
     /** Files whose open is waiting at its gate right now (or was). */
-    val waitingAtGate: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf())
+    val waitingAtGate: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
     /** Opening these files waits until the gate is opened (to observe the shelf mid-way). */
     val gated: MutableMap<String, java.util.concurrent.CountDownLatch> = java.util.concurrent.ConcurrentHashMap()
     @Volatile var trims = 0
     @Volatile var budget = -1L
-    val built: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
+    val built: MutableList<String> = java.util.concurrent.CopyOnWriteArrayList()
     /** Index builds wait on this gate when set. */
     @Volatile var buildGate: java.util.concurrent.CountDownLatch? = null
     /** Building the index of these book ids throws this. */

@@ -136,7 +136,8 @@ class MainActivity : AppCompatActivity() {
 
         // App-icon shortcut (První pomoc, Výpadek proudu): the reader when the books are open, else the bundled guides.
         val request by graph.openRequest.collectAsStateWithLifecycle()
-        LaunchedEffect(request, shelf is ShelfState.Ready, back != null) {
+        // Keyed on the shelf state too: a cold start from the shortcut waits out Loading, then decides.
+        LaunchedEffect(request, shelf, back != null) {
             val url = request ?: return@LaunchedEffect
             if (shelf is ShelfState.Loading) return@LaunchedEffect
             graph.openRequest.value = null

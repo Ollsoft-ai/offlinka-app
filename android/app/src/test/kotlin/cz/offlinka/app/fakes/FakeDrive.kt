@@ -12,17 +12,18 @@ import java.io.InputStream
  */
 class FakeDriveAccess : DriveAccess {
     class Drive(val label: String, val files: Map<String, Long>, val contents: Map<String, ByteArray> = emptyMap()) {
-        var plugged = true
+        @Volatile var plugged = true
     }
 
-    val drives = linkedMapOf<Uri, Drive>()
-    val granted = mutableListOf<Uri>()
-    val released = mutableListOf<Uri>()
+    // Thread-safe: the shelf reads these on IO threads while tests change them.
+    val drives: MutableMap<Uri, Drive> = java.util.Collections.synchronizedMap(linkedMapOf())
+    val granted: MutableList<Uri> = java.util.concurrent.CopyOnWriteArrayList()
+    val released: MutableList<Uri> = java.util.concurrent.CopyOnWriteArrayList()
     var refusePersist = false
-    private var nextFd = 100
-    val openedFds = mutableListOf<String>()
+    private val nextFd = java.util.concurrent.atomic.AtomicInteger(100)
+    val openedFds: MutableList<String> = java.util.concurrent.CopyOnWriteArrayList()
     /** Volume labels for picked sub-folders (StorageVolume description). */
-    val volumeLabels = mutableMapOf<String, String>()
+    val volumeLabels: MutableMap<String, String> = java.util.concurrent.ConcurrentHashMap()
 
     override fun volumeLabel(tree: Uri): String? = volumeLabels[cz.offlinka.app.drive.DriveTrees.volumeId(tree)]
 
@@ -45,7 +46,7 @@ class FakeDriveAccess : DriveAccess {
 
     override fun persist(tree: Uri) {
         if (refusePersist) throw SecurityException("not persistable")
-        if (tree !in granted) granted += tree
+        synchronized(granted) { if (tree !in granted) granted += tree }
     }
 
     override fun release(tree: Uri) {
@@ -74,7 +75,7 @@ class FakeDriveAccess : DriveAccess {
         val d = drive(tree)
         if (docId !in d.files) throw IOException("no such file $docId")
         openedFds += docId
-        return nextFd++
+        return nextFd.getAndIncrement()
     }
 
     override fun openStream(tree: Uri, docId: String): InputStream {

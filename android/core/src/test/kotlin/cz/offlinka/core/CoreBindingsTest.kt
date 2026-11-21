@@ -71,6 +71,7 @@ class CoreBindingsTest {
     }
 
     @Test fun `opening from a file descriptor works and the core owns it`() {
+        assumeTrue("games ZIM not found: $games", games.isFile)
         val libc = Native.load("c", LibC::class.java)
         val fd = libc.open(games.path, 0)
         assertThat(fd).isAtLeast(0)
@@ -82,6 +83,7 @@ class CoreBindingsTest {
     }
 
     @Test fun `range reads match full reads`() {
+        assumeTrue("games ZIM not found: $games", games.isFile)
         Book.openPath(games.path).use { book ->
             val main = book.info().mainPath!!
             val full = book.get(main)

@@ -65,7 +65,24 @@ class ContentServer(
     /** [url] was answered with a redirect stub (not a page worth a history row). */
     fun wasRedirect(url: String): Boolean = redirects.containsKey(url)
 
+    /** Main-frame pages last answered 503 (book not served yet): the reader reloads them once it is. */
+    private val unavailable: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    /**
+     * The page at [url] was last answered "come back later" (503). Unlike the WebView's callbacks, which
+     * old WebViews (Android 8) do not send for intercepted responses, this always knows.
+     */
+    fun wasUnavailable(url: String): Boolean = url in unavailable
+
     fun serve(url: String, method: String, headers: Map<String, String>, mainFrame: Boolean): Served {
+        val served = serveInner(url, method, headers, mainFrame)
+        if (mainFrame) {
+            if (served.status == 503) unavailable += url else unavailable -= url
+        }
+        return served
+    }
+
+    private fun serveInner(url: String, method: String, headers: Map<String, String>, mainFrame: Boolean): Served {
         if (!ReaderUrls.isOurs(url)) return blocked()
         if (method != "GET" && method != "HEAD") return blocked()
         val target = ReaderUrls.parse(url) ?: return notFound(mainFrame)

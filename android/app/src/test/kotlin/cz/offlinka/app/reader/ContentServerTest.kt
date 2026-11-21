@@ -172,6 +172,22 @@ class ContentServerTest {
         assertThat(thrown).isInstanceOf(java.io.IOException::class.java)
     }
 
+    @Test fun `the server remembers which page was answered 503 until it is served`() {
+        val url = ReaderUrls.article("wikivoyage_en_europe", "Praha")
+        pending += "wikivoyage_en_europe"
+        get(url)
+        assertThat(server.wasUnavailable(url)).isTrue()
+        // Sub-resources never count, only the page itself.
+        get(ReaderUrls.article("wikivoyage_en_europe", "x.css"), false)
+        assertThat(server.wasUnavailable(ReaderUrls.article("wikivoyage_en_europe", "x.css"))).isFalse()
+        pending.clear()
+        val ok = ReaderUrls.article("wikipedia_cs_all", "Praha")
+        get(ok)
+        assertThat(server.wasUnavailable(ok)).isFalse()
+        get(url) // now a 404, not "come back later"
+        assertThat(server.wasUnavailable(url)).isFalse()
+    }
+
     @Test fun `a book that is still opening answers 503 so the reader reloads it, not a 404`() {
         pending += "wikivoyage_en_europe"
         assertThat(get(ReaderUrls.article("wikivoyage_en_europe", "Praha")).status).isEqualTo(503)

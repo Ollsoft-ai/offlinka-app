@@ -20,6 +20,7 @@ import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import cz.offlinka.app.drive.ShelfState
+import cz.offlinka.app.reader.ReaderUrls
 import cz.offlinka.ui.R
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -105,6 +106,37 @@ class DriveFlowTest {
         tap(str(R.string.reader_bar_back))
         compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction() and hasText("prvni pomoc")).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("První pomoc – rychlé karty").assertExists()
+    }
+
+    /**
+     * The API 26 regression of 0.3.0: a page requested while its book is not served yet (after process
+     * death, or a book still opening) is answered 503, and old WebViews send no HTTP-error callback for
+     * intercepted responses. The page must still load once the book is there.
+     */
+    @Test fun aPageOfABookStillOpeningLoadsOnceTheBookIsThere() {
+        scenario.close()
+        Intents.release()
+        val slowBook = "wikivoyage_en_europe_maxi-offlinka_2026-09.zim"
+        app.drive.prepare(app, alsoAs = listOf(slowBook))
+        val gate = java.util.concurrent.CountDownLatch(1)
+        app.drive.gates[slowBook] = gate
+        onMain { app.graph.shelf.reloadAsync() }
+        Intents.init()
+        intending(hasAction(Intent.ACTION_OPEN_DOCUMENT_TREE))
+            .respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, Intent().setData(app.drive.tree)))
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        scenario.onActivity { activity = it }
+
+        connect()
+        val url = ReaderUrls.article("wikivoyage_en_europe", "prvni-pomoc.html")
+        assertTrue(app.graph.shelf.isPending("wikivoyage_en_europe"))
+        onMain { app.graph.openRequest.value = url }
+        // The reader asked for the page while the book was opening: "come back later".
+        compose.waitUntil(20_000) { app.graph.server.wasUnavailable(url) }
+        gate.countDown()
+        // The book opens; the page loads by itself (its title reaches the reader).
+        compose.waitUntil(30_000) { app.graph.readerPage.value.title.startsWith("První pomoc") }
+        assertTrue(!app.graph.server.wasUnavailable(url))
     }
 
     @Test fun pullingTheDriveMidReadShowsTheCoverAndPluggingBackRestoresTheArticle() {

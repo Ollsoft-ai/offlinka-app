@@ -23,8 +23,15 @@ class FolderDrive(context: Context) : DriveAccess {
 
     @Volatile private var granted = false
 
-    /** A drive like the real one: Knihovna with the guides book (the copy bundled in the APK) and a README. */
-    fun prepare(context: Context) {
+    /** Opening these files waits for the latch (a book that is still opening on a slow drive). */
+    val gates: MutableMap<String, java.util.concurrent.CountDownLatch> = java.util.concurrent.ConcurrentHashMap()
+
+    /**
+     * A drive like the real one: Knihovna with the guides book (the copy bundled in the APK) and a README.
+     * [alsoAs]: more books, copies of the guides under other file names (another book id on the shelf).
+     */
+    fun prepare(context: Context, alsoAs: List<String> = emptyList()) {
+        gates.clear()
         unplugAway()
         away.deleteRecursively()
         root.deleteRecursively()
@@ -32,6 +39,7 @@ class FolderDrive(context: Context) : DriveAccess {
         context.assets.open(OfflinkaApp.BUNDLED_GUIDES).use { input ->
             File(root, "Knihovna/${OfflinkaApp.BUNDLED_GUIDES}").outputStream().use { input.copyTo(it) }
         }
+        alsoAs.forEach { name -> File(root, "Knihovna/${OfflinkaApp.BUNDLED_GUIDES}").copyTo(File(root, "Knihovna/$name")) }
         File(root, "README.txt").writeText("Offlinka\nStav obsahu (edice listopad 2026)\n")
         granted = false
     }
@@ -74,6 +82,7 @@ class FolderDrive(context: Context) : DriveAccess {
     override fun openFd(tree: Uri, docId: String): Int {
         val f = File(root, docId)
         if (!f.isFile) throw IOException("no such file $docId")
+        gates[f.name]?.await(60, java.util.concurrent.TimeUnit.SECONDS)
         return ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY).detachFd()
     }
 
