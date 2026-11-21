@@ -42,7 +42,7 @@ Answers for Google Play Console and App Store Connect, checked against the app o
   - Google: "'Collect' means transmitting data from your app off a user's device"; data "only processed locally on the user's device and not sent off device does not need to be disclosed".
   - The app cannot transmit anything: no INTERNET permission. Settings, history, saved articles and search indexes stay in app storage.
   - WebView: maps and games run JavaScript from the drive, but without network access nothing leaves the device.
-  - Android Auto Backup (`allowBackup=true`, database and preferences only) is a system backup into the user's own Google account; the app never sends or reads it. Google's page does not mention Auto Backup; the privacy policy discloses it (point 3.4). If you prefer zero doubt, ask the Android agent to set `allowBackup=false`; users then lose saved articles when they change phones.
+  - Android backup is off (`allowBackup=false`, decided 2026-11-21): nothing from the app goes into a Google backup. On iOS the settings, saved articles and history may be in the user's own iCloud backup; the app never sends or reads it; the privacy policy discloses it (point 3.4).
 - Sources: https://support.google.com/googleplay/android-developer/answer/10787469
 
 ### Content rating (IARC questionnaire)

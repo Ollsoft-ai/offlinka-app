@@ -123,8 +123,8 @@ For the session with the founders. Work top to bottom and tick the boxes. Rules 
 
 ## Open questions for the founders
 
-- **Public phone number:** both stores publish a developer phone for Ollsoft s.r.o. Which number?
+- ~~Public phone number~~: decided 2026-11-21: +420 728 374 741, the number on the website.
 - ~~Review sample hosting and demo video~~: decided 2026-11-21: the sample is a public GitHub release asset (free content, CC BY-SA / ODbL); the demo video is made by us from the iOS simulator + real drive footage, no founder recording.
 - **App terms:** Google shows a Terms of Service link per app from 2027-03-01. Shall we write short app terms (free, as is, licences)?
 - **Countries:** Czechia and Slovakia only, or the whole EU from the start?
-- **Auto Backup:** keep Android's backup of saved articles and history (disclosed in the privacy policy), or switch it off for an absolute "nothing leaves the phone"?
+- ~~Auto Backup~~: decided 2026-11-21: off on Android (`allowBackup=false`); iOS keeps the user's own iCloud backup of settings, saved articles and history (indexes excluded); privacy policy 3.4 says so.
