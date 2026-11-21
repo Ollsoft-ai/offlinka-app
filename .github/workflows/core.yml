@@ -1,0 +1,69 @@
+name: Core
+
+on:
+  push:
+    branches: [main]
+    paths: &core-paths
+      - core/**
+      - android/core/src/main/kotlin/**
+      - ios/Offlinka/Generated/**
+      - android/app/src/main/assets/offlinka_cs_prirucky.zim
+      - scripts/gen-bindings.sh
+      - scripts/lib-lock.sh
+      - scripts/ci/check-bindings.sh
+      - scripts/ci/guides-drive.sh
+      - .github/actions/setup-rust/**
+      - .github/workflows/core.yml
+  pull_request:
+    paths: *core-paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # No shared build lock on CI runners (scripts/lib-lock.sh).
+  OFFLINKA_NO_LOCK: "1"
+
+jobs:
+  core:
+    name: fmt, clippy, tests, bindings
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          components: rustfmt, clippy
+          cache-key: core
+
+      - name: cargo fmt --check
+        run: cargo fmt --all --check
+
+      - name: cargo clippy -D warnings
+        if: ${{ !cancelled() }}
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      # The drive's big books are not on the runner: their tests skip. The bundled guides ZIM stands in for
+      # Knihovna/ and Telefon/ so the small-book tests run.
+      - name: cargo test
+        if: ${{ !cancelled() }}
+        run: |
+          OFFLINKA_DRIVE="$(../scripts/ci/guides-drive.sh "$RUNNER_TEMP/drive")"
+          export OFFLINKA_DRIVE
+          cargo test --locked
+
+      - name: UniFFI bindings match the core
+        if: ${{ !cancelled() }}
+        run: ../scripts/ci/check-bindings.sh
