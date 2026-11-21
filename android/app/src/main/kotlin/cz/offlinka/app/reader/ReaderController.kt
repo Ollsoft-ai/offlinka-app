@@ -7,6 +7,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
@@ -27,6 +28,7 @@ import cz.offlinka.app.drive.Shelf
 import cz.offlinka.ui.screens.FindState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -89,25 +91,27 @@ class ReaderController(
     val webView: WebView
         get() = web ?: create().also { web = it }
 
-    init {
-        // When the drive's books open (again), apply a deferred restore and reload a page shown without them.
-        scope.launch {
-            var lastGeneration = -1
-            shelf.state.collect { s ->
-                val r = s as? cz.offlinka.app.drive.ShelfState.Ready ?: return@collect
-                if (r.generation == lastGeneration) return@collect
-                lastGeneration = r.generation
-                val w = web ?: return@collect
-                val pending = pendingState
-                if (pending != null) {
-                    pendingState = null
-                    w.restoreState(pending)
-                } else if (recovery.shouldReloadWhenReady()) {
-                    w.reload()
-                }
+    /** Follows the shelf; cancelled in [destroy] so a finished activity is never kept alive by it. */
+    internal val stateJob: Job = scope.launch {
+        // When the drive's books open (again), apply a deferred restore; reload a page shown while its book
+        // was not served yet as soon as that book is there (also when it opens later than the first ones).
+        shelf.state.collect { s ->
+            val r = s as? cz.offlinka.app.drive.ShelfState.Ready ?: return@collect
+            val w = web ?: return@collect
+            val pending = pendingState
+            if (pending != null) {
+                pendingState = null
+                w.restoreState(pending)
+            } else if (recovery.shouldReload(r.byId.keys)) {
+                w.reload()
             }
         }
     }
+
+    /** Book of a reader URL, or null for other pages. */
+    private fun bookOf(url: String?): String? = url?.let { ReaderUrls.parse(it) }?.bookId
+
+    private fun served(bookId: String?): Boolean = bookId != null && shelf.servedBooks().containsKey(bookId)
 
     /** Loads [url]. [fresh] starts a new reading session: back then leaves the reader instead of going to older pages. */
     fun load(url: String, fresh: Boolean) {
@@ -189,20 +193,41 @@ class ReaderController(
         _find.value = null
     }
 
-    /** Stops JavaScript timers (games, maps) and media while the app is in the background. */
+    /**
+     * Stops JavaScript timers (games, maps) and media while the app is in the background. pauseTimers()
+     * acts on every WebView of the process, so the paused state is process-wide ([timersPaused]): a WebView
+     * created later by a recreated activity resumes them.
+     */
     fun pause() {
         web?.let {
             it.onPause()
             it.pauseTimers()
+            timersPaused = true
         }
     }
 
     fun resume() {
         web?.let {
             it.resumeTimers()
+            timersPaused = false
             it.onResume()
         }
     }
+
+    /**
+     * The connect cover hides the reader: TalkBack must not read the WebView (a classic View the Compose
+     * semantics cannot clear) underneath.
+     */
+    fun setCovered(covered: Boolean) {
+        this.covered = covered
+        web?.importantForAccessibility =
+            if (covered) View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS else View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+    }
+
+    private var covered = false
+
+    /** Last time the user touched the page; downloads and phone/mail links need a fresh touch. */
+    @Volatile private var lastTouch = 0L
 
     /**
      * Activity is going away. The back/forward list stays in memory ([retained]); the parcelled bundle
@@ -232,6 +257,7 @@ class ReaderController(
     fun detachedWebView(): WebView = webView.also { (it.parent as? ViewGroup)?.removeView(it) }
 
     fun destroy() {
+        stateJob.cancel()
         web?.let {
             (it.parent as? ViewGroup)?.removeView(it)
             it.stopLoading()
@@ -276,7 +302,19 @@ class ReaderController(
             val f = _find.value ?: return@setFindListener
             _find.value = f.copy(current = if (count == 0) 0 else active + 1, total = count, done = done)
         }
-        w.setDownloadListener { url, _, _, mime, _ -> openFile(url, mime) }
+        // A page may not hand files to other apps on its own: only right after the user touched it.
+        w.setDownloadListener { url, _, _, mime, _ -> if (LinkPolicy.userInitiated(lastTouch, SystemClock.uptimeMillis())) openFile(url, mime) }
+        @Suppress("ClickableViewAccessibility")
+        w.setOnTouchListener { _, _ ->
+            lastTouch = SystemClock.uptimeMillis()
+            false
+        }
+        if (timersPaused) {
+            // The previous activity paused the process' timers; this WebView would otherwise start frozen.
+            w.resumeTimers()
+            timersPaused = false
+        }
+        if (covered) w.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
         runCatching {
             if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
                 WebViewCompat.addWebMessageListener(w, "offlinkaApp", setOf(ReaderUrls.ORIGIN)) { _, message, _, isMainFrame, _ ->
@@ -293,14 +331,18 @@ class ReaderController(
         pendingUrl?.let { url ->
             pendingUrl = null
             if (pendingState == null) {
-                recovery.onPageStarted(shelf.ready != null)
+                recovery.onPageStarted(bookOf(url), served(bookOf(url)))
                 w.loadUrl(url)
             }
         }
         return w
     }
 
-    /** Pages that start a service worker (some map viewers) get its fetches answered from the drive too. */
+    /**
+     * All books share one origin, so a service worker registered by any page would answer pages of every
+     * book. None of our books needs one: every service-worker fetch (its script included) is refused, which
+     * also makes registering fail; pages additionally get a script that unregisters old ones.
+     */
     private fun interceptServiceWorkers() {
         runCatching {
             if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_BASIC_USAGE) &&
@@ -308,7 +350,7 @@ class ReaderController(
             ) {
                 ServiceWorkerControllerCompat.getInstance().setServiceWorkerClient(object : ServiceWorkerClientCompat() {
                     override fun shouldInterceptRequest(request: WebResourceRequest): WebResourceResponse {
-                        val s = server.serve(request.url.toString(), request.method, request.requestHeaders ?: emptyMap(), false)
+                        val s = server.serveServiceWorker(request.url.toString())
                         return WebResourceResponse(s.mime, s.charset, s.status, s.reason, s.headers, s.body)
                     }
                 })
@@ -339,8 +381,9 @@ class ReaderController(
             val url = request.url.toString()
             if (ReaderUrls.isOurs(url)) return false
             when (request.url.scheme?.lowercase()) {
-                "tel" -> return startSystem(Intent(Intent.ACTION_DIAL, request.url))
-                "mailto", "sms", "smsto" -> return startSystem(Intent(Intent.ACTION_SENDTO, request.url))
+                // Other apps open only when the user tapped the link, never from a page's own script.
+                "tel" -> return if (request.hasGesture()) startSystem(Intent(Intent.ACTION_DIAL, request.url)) else true
+                "mailto", "sms", "smsto" -> return if (request.hasGesture()) startSystem(Intent(Intent.ACTION_SENDTO, request.url)) else true
                 "javascript", "about", "data", "blob" -> return false
             }
             val wiki = ReaderUrls.wikimediaTarget(url)
@@ -356,7 +399,7 @@ class ReaderController(
         }
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
-            recovery.onPageStarted(shelf.ready != null)
+            recovery.onPageStarted(bookOf(url), served(bookOf(url)))
             view.settings.textZoom = if (isWikiPage(url)) 100 else ReaderZoom.textZoom(zoom, fontScale)
             _page.value = _page.value.copy(url = url, notFound = false, progress = 0, titleInBar = false)
             updateNav(view)
@@ -384,11 +427,12 @@ class ReaderController(
 
         override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
             if (!request.isForMainFrame) return
-            recovery.onMainFrameStatus(errorResponse.statusCode)
-            // A 503 while the books are open (a rescan swapped them under the request): try once more.
-            if (errorResponse.statusCode == 503 && shelf.ready != null && System.currentTimeMillis() - lastAutoReload > 5_000) {
+            val book = bookOf(request.url.toString())
+            recovery.onMainFrameStatus(book, errorResponse.statusCode)
+            // A 503 while the book is served (a rescan swapped it under the request): try once more.
+            if (errorResponse.statusCode == 503 && served(book) && System.currentTimeMillis() - lastAutoReload > 5_000) {
                 lastAutoReload = System.currentTimeMillis()
-                recovery.shouldReloadWhenReady()
+                recovery.shouldReload(setOfNotNull(book))
                 view.postDelayed({ view.reload() }, 300)
             }
             if (errorResponse.statusCode == 404 || errorResponse.statusCode == 503) _page.value = _page.value.copy(notFound = true)
@@ -447,12 +491,17 @@ class ReaderController(
         }
     }
 
-    private companion object {
-        const val TAG = "OfflinkaReader"
-        const val URL_KEY = "offlinka.reader.url"
+    companion object {
+        private const val TAG = "OfflinkaReader"
+
+        /** pauseTimers() was called and not undone: process-wide, like the WebView timers themselves. */
+        @Volatile
+        internal var timersPaused = false
+
+        private const val URL_KEY = "offlinka.reader.url"
 
         /** Collects h2/h3 of the article (giving each an id if it has none) as JSON. */
-        const val CONTENTS_SCRIPT = "(function(){var out=[];var n=0;" +
+        private const val CONTENTS_SCRIPT = "(function(){var out=[];var n=0;" +
             "document.querySelectorAll('h2,h3').forEach(function(h){var t=(h.textContent||'').trim();if(!t)return;" +
             "if(!h.id)h.id='ofl-h-'+(n++);out.push({id:h.id,text:t.substring(0,120),level:h.tagName=='H2'?2:3});});" +
             "return JSON.stringify(out);})()"

@@ -86,6 +86,35 @@ data class DriveUi(
 /** Quick links on the home screen into the guides book and Wikipedia. */
 enum class QuickLink { FIRST_AID, PREPARE, RANDOM }
 
+/** On-device search index of one book, as book details show it. */
+enum class IndexPhase {
+    /** Not indexed automatically (English top1m): offered with a warning. */
+    OFFER,
+    /** Asked for, waiting for other books. */
+    QUEUED,
+    BUILDING,
+    /** Not enough free space on the phone to build it. */
+    LOW_SPACE,
+}
+
+@Immutable
+data class IndexInfo(val phase: IndexPhase, val percent: Int = 0)
+
+/**
+ * The calm note about accent-free search (Home under the search field, Search on top).
+ * [percent] while the UI-language Wikipedia's index is built ("Nechte aplikaci otevřenou"),
+ * [ready] once, right after it finished.
+ */
+@Immutable
+data class SearchNote(val percent: Int? = null, val ready: Boolean = false)
+
+/** "Vyzkoušejte hned" on Home (first run): what each link shows. */
+enum class TryNowKind { ARTICLE, MAP, FIRST_AID, GAME }
+
+/** One link of the first-run card; [label] is the article title for [TryNowKind.ARTICLE]. */
+@Immutable
+data class TryNowItem(val kind: TryNowKind, val label: String, val bookId: String, val path: String)
+
 /** A section heading of the open article (for the "Obsah" sheet). */
 @Immutable
 data class TocEntry(val id: String, val text: String, val level: Int)

@@ -17,10 +17,13 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import cz.offlinka.app.content.ContentSource
 import cz.offlinka.app.content.CoreContentSource
 import cz.offlinka.app.data.AppDatabase
+import cz.offlinka.app.data.SavedArticle
 import cz.offlinka.app.data.Settings
 import cz.offlinka.app.drive.DriveAccess
 import cz.offlinka.app.drive.SafDriveAccess
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import java.io.File
 
 open class OfflinkaApp : Application() {
@@ -58,23 +61,29 @@ open class OfflinkaApp : Application() {
             override fun onStop(owner: LifecycleOwner) { foreground.value = false }
         })
         graph.heavyIndexAllowed = heavyIndexAllowed()
+        if (settings.takeFirstRunSeed()) graph.scope.launch(Dispatchers.IO) { runCatching { seedSaved() } }
         graph.shelf.start()
         updateDriveVisible()
         if (watchStorageBroadcasts) watchStorage()
     }
 
-    /** Low memory: drop the core's cluster caches and loaded indexes (they reload on demand). */
+    /**
+     * Drop the core's cluster caches and loaded indexes (they reload on demand) only when the process is
+     * really in the background or memory is critical, not on every app switch (UI_HIDDEN), and off the main
+     * thread: unloading waits for an index that is being loaded.
+     */
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        @Suppress("DEPRECATION")
-        if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW || level == ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
-            runCatching { graph.source.trimMemory() }
-        }
+        if (shouldTrim(level)) trimInBackground()
     }
 
     override fun onLowMemory() {
         super.onLowMemory()
-        runCatching { graph.source.trimMemory() }
+        trimInBackground()
+    }
+
+    private fun trimInBackground() {
+        graph.scope.launch(Dispatchers.IO) { runCatching { graph.source.trimMemory() } }
     }
 
     /** Cluster cache shared by all books (native memory): the core's 48 MB, 32 MB on low-RAM phones. */
@@ -91,20 +100,34 @@ open class OfflinkaApp : Application() {
     }.getOrDefault(false)
 
     /**
-     * The guides book bundled in the APK (assets), copied once to app storage because the core opens
-     * files by path. "První pomoc" then works without the drive.
+     * The guides book bundled in the APK (assets), copied to app storage because the core opens files by
+     * path; copied again after every app update. "První pomoc" then works without the drive.
      */
     private fun bundledGuides(): String? = runCatching {
-        val out = File(noBackupFilesDir, BUNDLED_GUIDES)
-        // Size of the asset (stored uncompressed); unknown on odd asset managers, then copy only when missing.
-        val size = runCatching { assets.openFd(BUNDLED_GUIDES).use { it.length } }.getOrDefault(-1L)
-        if (!out.isFile || (size >= 0 && out.length() != size)) {
-            val tmp = File(out.path + ".part")
-            assets.open(BUNDLED_GUIDES).use { input -> tmp.outputStream().use { input.copyTo(it) } }
-            tmp.renameTo(out)
-        }
-        out.path
+        BundledAsset.ensure(
+            out = File(noBackupFilesDir, BUNDLED_GUIDES),
+            stamp = appStamp(),
+            open = { assets.open(BUNDLED_GUIDES) },
+        ).path
     }.onFailure { Log.w(TAG, "bundled guides missing", it) }.getOrNull()
+
+    /**
+     * Uložené is never empty: the two emergency guides (bundled in the app, so they always open) are
+     * saved on the first start.
+     */
+    private suspend fun seedSaved() {
+        val now = System.currentTimeMillis()
+        val dao = graph.db.saved()
+        dao.save(SavedArticle(MainActivity.GUIDES_ID, "vypadek-proudu.html", "Výpadek proudu – co připravit", now - 1))
+        dao.save(SavedArticle(MainActivity.GUIDES_ID, "prvni-pomoc.html", "První pomoc – rychlé karty", now))
+    }
+
+    /** Changes with every install or update of the app. */
+    @Suppress("DEPRECATION")
+    private fun appStamp(): String = runCatching {
+        val info = packageManager.getPackageInfo(packageName, 0)
+        "${info.versionCode}-${info.lastUpdateTime}"
+    }.getOrDefault("0")
 
     /** Is a removable volume (the USB drive) mounted? */
     fun updateDriveVisible() {
@@ -139,8 +162,31 @@ open class OfflinkaApp : Application() {
 
     companion object {
         private const val TAG = "OfflinkaApp"
+
+        /** Unload caches only for a backgrounded process or critical memory, never on a mere app switch. */
+        @Suppress("DEPRECATION")
+        fun shouldTrim(level: Int): Boolean =
+            level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND || level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL
         const val BUNDLED_GUIDES = "offlinka_cs_prirucky.zim"
     }
 }
 
 val Context.graph: AppGraph get() = (applicationContext as OfflinkaApp).graph
+
+/** A file shipped in the APK and copied to storage: copied again when [stamp] (the app version) changes. */
+object BundledAsset {
+    fun ensure(out: File, stamp: String, open: () -> java.io.InputStream): File {
+        val marker = File(out.path + ".stamp")
+        val current = runCatching { marker.readText() }.getOrNull()
+        if (!out.isFile || current != stamp) {
+            val tmp = File(out.path + ".part")
+            open().use { input -> tmp.outputStream().use { input.copyTo(it) } }
+            if (!tmp.renameTo(out)) {
+                out.delete()
+                tmp.renameTo(out)
+            }
+            marker.writeText(stamp)
+        }
+        return out
+    }
+}

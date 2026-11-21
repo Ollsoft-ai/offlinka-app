@@ -11,6 +11,7 @@ import cz.offlinka.ui.model.BookState
 import cz.offlinka.ui.model.BookUi
 import cz.offlinka.ui.model.QuickLink
 import cz.offlinka.ui.model.SearchGroup
+import cz.offlinka.ui.model.SearchHit
 import cz.offlinka.ui.model.ThemeMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -91,19 +92,34 @@ class ViewModelsTest {
         assertThat(direct.retriedWord).isNull()
     }
 
-    @Test fun `the UI-language Wikipedia leads the search groups, the rest keep the core's order`() {
-        fun g(id: String, kind: BookKind, lang: String) =
-            SearchGroup(BookUi(id = id, kind = kind, language = lang, zimTitle = id), emptyList())
+    @Test fun `matching guides lead the search groups, then the UI-language Wikipedia, then the core's order`() {
+        val hit = SearchHit("x", "t", "p")
+        fun g(id: String, kind: BookKind, lang: String, hits: List<SearchHit> = listOf(hit)) =
+            SearchGroup(BookUi(id = id, kind = kind, language = lang, zimTitle = id), hits)
         val core = listOf(
-            g("offlinka_cs_prirucky", BookKind.GUIDES, "cs"),
-            g("wikipedia_cs_all", BookKind.WIKIPEDIA, "cs"),
-            g("wikipedia_sk_all", BookKind.WIKIPEDIA, "sk"),
             g("wiktionary_sk_all", BookKind.WIKTIONARY, "sk"),
+            g("wikipedia_cs_all", BookKind.WIKIPEDIA, "cs"),
+            g("offlinka_cs_prirucky", BookKind.GUIDES, "cs"),
+            g("wikipedia_sk_all", BookKind.WIKIPEDIA, "sk"),
         )
-        assertThat(SearchViewModel.uiWikipediaFirst(core, "sk").map { it.book.id })
-            .containsExactly("wikipedia_sk_all", "offlinka_cs_prirucky", "wikipedia_cs_all", "wiktionary_sk_all").inOrder()
-        assertThat(SearchViewModel.uiWikipediaFirst(core, "cs").map { it.book.id })
-            .containsExactly("wikipedia_cs_all", "offlinka_cs_prirucky", "wikipedia_sk_all", "wiktionary_sk_all").inOrder()
+        assertThat(SearchViewModel.order(core, "sk").map { it.book.id })
+            .containsExactly("offlinka_cs_prirucky", "wikipedia_sk_all", "wiktionary_sk_all", "wikipedia_cs_all").inOrder()
+        assertThat(SearchViewModel.order(core, "cs").map { it.book.id })
+            .containsExactly("offlinka_cs_prirucky", "wikipedia_cs_all", "wiktionary_sk_all", "wikipedia_sk_all").inOrder()
+    }
+
+    @Test fun `guide sections lead the guides group, the page title hits follow`() {
+        val sections = listOf(SearchHit("g", "První pomoc › Silné krvácení", "prvni-pomoc.html#krvaceni"))
+        val titles = listOf(SearchHit("g", "První pomoc – rychlé karty", "prvni-pomoc.html"))
+        assertThat(SearchViewModel.withSections(sections, titles).map { it.path })
+            .containsExactly("prvni-pomoc.html#krvaceni", "prvni-pomoc.html").inOrder()
+    }
+
+    @Test fun `while the Wikipedia index is not built, search says so instead of promising accent-free search`() {
+        val vm = SearchViewModel(t.graph, null, Dispatchers.Unconfined)
+        val s = await(vm.state) { true }
+        // TestGraph builds no indexes (no index folder): the fake Wikipedia has none.
+        assertThat(s.accentFreeReady).isFalse()
     }
 
     @Test fun `no results and empty query`() {

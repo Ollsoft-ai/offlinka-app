@@ -66,8 +66,8 @@ class SearchViewModel(
         )
     }
 
-    val state: StateFlow<SearchState> = combine(base, graph.shelf.indexing) { st, idx ->
-        st.copy(indexProgress = idx?.let { (it.fraction * 100).toInt().coerceIn(0, 99) })
+    val state: StateFlow<SearchState> = combine(base, graph.searchNote) { st, note ->
+        st.copy(searchNote = note, accentFreeReady = graph.accentFreeReady())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchState(scope = null))
 
     init {
@@ -93,7 +93,8 @@ class SearchViewModel(
 
     fun clearRecent() = viewModelScope.launch { graph.db.searches().clear() }
 
-    fun cancelIndexing() = graph.shelf.cancelIndexing()
+    /** The note's X: hides it (preparing goes on; stopping lives in book details). */
+    fun dismissNote() = graph.dismissSearchNote()
 
     /**
      * Titles only: when a multi-word query finds nothing, the longest word alone is tried
@@ -111,11 +112,13 @@ class SearchViewModel(
     }
 
     private fun searchOnce(ready: ShelfState.Ready, q: String, scopeId: String?): List<SearchGroup> = try {
+        val sections = graph.guideSections()
         if (scopeId != null) {
             val book = ready.byId[scopeId]
+            val own = if (book != null && sections?.bookId == book.id) sections.search(q) else emptyList()
             val hits = book?.content?.suggest(q, SCOPED_LIMIT).orEmpty()
                 .map { SearchHit(book!!.id, it.title, it.path, it.snippet) }
-            if (book != null) listOf(SearchGroup(book.ui, hits)) else emptyList()
+            if (book != null) listOf(SearchGroup(book.ui, withSections(own, hits))) else emptyList()
         } else {
             val hits = ready.library.suggestAll(q, ALL_LIMIT)
             val groups = LinkedHashMap<String, MutableList<SearchHit>>()
@@ -123,7 +126,12 @@ class SearchViewModel(
                 val book = ready.byCoreId[h.bookId] ?: ready.byId[h.bookId] ?: continue
                 groups.getOrPut(book.id) { mutableListOf() } += SearchHit(book.id, h.title, h.path)
             }
-            uiWikipediaFirst(groups.map { (id, list) -> SearchGroup(ready.byId.getValue(id).ui, list) }, graph.uiLanguage())
+            // "krvaceni" → "První pomoc › Silné krvácení": guide sections lead the guides group.
+            val guideHits = sections?.search(q).orEmpty()
+            if (guideHits.isNotEmpty() && ready.byId.containsKey(sections!!.bookId)) {
+                groups[sections.bookId] = withSections(guideHits, groups[sections.bookId].orEmpty()).toMutableList()
+            }
+            order(groups.map { (id, list) -> SearchGroup(ready.byId.getValue(id).ui, list) }, graph.uiLanguage())
         }
     } catch (e: ContentException.Io) {
         graph.shelf.reportIoError(e)
@@ -133,9 +141,22 @@ class SearchViewModel(
     }
 
     companion object {
-        /** Design: the UI-language Wikipedia first, then the core's order (best match). */
-        fun uiWikipediaFirst(groups: List<SearchGroup>, ui: String): List<SearchGroup> =
-            groups.sortedBy { g -> if (g.book.kind == BookKind.WIKIPEDIA && g.book.language == ui) 0 else 1 }
+        /** Section hits first, then the book's own title hits that are not the same page. */
+        fun withSections(sections: List<SearchHit>, hits: List<SearchHit>): List<SearchHit> =
+            sections + hits.filter { h -> sections.none { it.path.substringBefore('#') == h.path && it.path == h.path } }
+
+        /**
+         * Group order: the guides when they match (emergency pages beat any article), then the UI-language
+         * Wikipedia, then the core's order (best match).
+         */
+        fun order(groups: List<SearchGroup>, ui: String): List<SearchGroup> =
+            groups.sortedBy { g ->
+                when {
+                    g.book.kind == BookKind.GUIDES && g.hits.isNotEmpty() -> 0
+                    g.book.kind == BookKind.WIKIPEDIA && g.book.language == ui -> 1
+                    else -> 2
+                }
+            }
 
         const val ALL_LIMIT = 60
         const val SCOPED_LIMIT = 50

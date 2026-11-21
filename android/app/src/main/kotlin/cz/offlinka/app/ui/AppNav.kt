@@ -3,6 +3,7 @@ package cz.offlinka.app.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -133,6 +134,9 @@ fun AppNavHost(
                     onRetryBook = vm::retry,
                     onQuickLink = { link -> scope.launch { vm.quickLink(link)?.let(::openReader) } },
                     onContinue = { ref -> openArticle(ref.bookId, ref.path) },
+                    onTryNow = { item -> openReader(ReaderUrls.articleAt(item.bookId, item.path)) },
+                    onDismissTryNow = vm::dismissTryNow,
+                    onDismissNote = vm::dismissNote,
                 )
             }
             composable(Routes.LIBRARY) {
@@ -199,6 +203,8 @@ fun AppNavHost(
                         notices = Notices.all,
                     ),
                     onBack = { nav.popBackStack() },
+                    // A plain browser link: the app itself still has no INTERNET permission.
+                    onPrivacy = { url -> openInBrowser(context, url) },
                 )
             }
             dialog(
@@ -223,6 +229,7 @@ fun AppNavHost(
                         onDismiss = { nav.popBackStack() },
                         onOpen = { openBookMain(graph, s.book)?.let(::openReader) },
                         onBuildIndex = vm::buildIndex,
+                        onStopIndex = vm::stopIndex,
                     )
                 }
             }
@@ -244,8 +251,10 @@ fun AppNavHost(
                         reader.savedStateHandle[OPEN_IN_READER] = url
                         nav.popBackStack()
                     } else {
+                        // Search stays under the reader: "Zpět" on the first page returns to it, query and scroll kept.
                         nav.navigate(Routes.reader(url, fresh = true)) {
-                            popUpTo(Routes.SEARCH) { inclusive = true }
+                            popUpTo(Routes.READER) { inclusive = true }
+                            launchSingleTop = true
                         }
                     }
                 }
@@ -254,15 +263,15 @@ fun AppNavHost(
                     onQueryChange = vm::setQuery,
                     onSubmit = {
                         val first = state.groups.firstOrNull()?.hits?.firstOrNull()
-                        if (first != null) open(ReaderUrls.article(first.bookId, first.path)) else vm.remember()
+                        if (first != null) open(ReaderUrls.articleAt(first.bookId, first.path)) else vm.remember()
                     },
-                    onHit = { hit -> open(ReaderUrls.article(hit.bookId, hit.path)) },
+                    onHit = { hit -> open(ReaderUrls.articleAt(hit.bookId, hit.path)) },
                     onRecent = { q -> vm.setQuery(q) },
                     onRemoveRecent = { vm.removeRecent(it) },
                     onScope = { b: BookUi? -> vm.setScope(b?.id) },
                     onBack = { nav.popBackStack() },
                     onClearRecent = { vm.clearRecent() },
-                    onCancelIndex = { vm.cancelIndexing() },
+                    onDismissNote = vm::dismissNote,
                 )
             }
             composable(
@@ -361,6 +370,7 @@ private fun ReaderDestination(graph: AppGraph, entry: NavBackStackEntry, nav: Na
             isApp = article.isApp,
             showTitle = page.titleInBar,
             contents = toc.value,
+            isMap = article.book?.kind == cz.offlinka.ui.model.BookKind.MAPS,
         ),
         onContents = { controller.contents { list -> toc.value = list.map { TocEntry(it.id, it.text, it.level) } } },
         onHeading = { h ->
@@ -369,7 +379,8 @@ private fun ReaderDestination(graph: AppGraph, entry: NavBackStackEntry, nav: Na
         },
         onCloseContents = { toc.value = null },
         onHome = { nav.popBackStack(Routes.HOME, inclusive = false) },
-        onBack = controller::back,
+        // Never a dead button: with no page history it returns to the screen the reader came from (Search keeps its query).
+        onBack = { if (page.canGoBack) controller.back() else if (!nav.popBackStack()) nav.navigate(Routes.HOME) },
         onForward = controller::forward,
         onToggleSave = {
             val was = article.saved
@@ -446,7 +457,7 @@ fun GuidesReader(graph: AppGraph, controller: ReaderController, url: String?, on
             canSave = false,
         ),
         onHome = onClose,
-        onBack = controller::back,
+        onBack = { if (page.canGoBack) controller.back() else onClose() },
         onForward = controller::forward,
         onToggleSave = {},
         onSearch = {},
@@ -473,5 +484,14 @@ fun GuidesReader(graph: AppGraph, controller: ReaderController, url: String?, on
             onRelease = { it.removeAllViews() },
             modifier = Modifier.fillMaxSize(),
         )
+    }
+}
+
+/** Hands [url] to the browser (privacy policy). Nothing happens when no browser is installed. */
+internal fun openInBrowser(context: Context, url: String) {
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    } catch (e: android.content.ActivityNotFoundException) {
+        android.widget.Toast.makeText(context, url, android.widget.Toast.LENGTH_LONG).show()
     }
 }

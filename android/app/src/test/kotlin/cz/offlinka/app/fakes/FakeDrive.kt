@@ -21,6 +21,10 @@ class FakeDriveAccess : DriveAccess {
     var refusePersist = false
     private var nextFd = 100
     val openedFds = mutableListOf<String>()
+    /** Volume labels for picked sub-folders (StorageVolume description). */
+    val volumeLabels = mutableMapOf<String, String>()
+
+    override fun volumeLabel(tree: Uri): String? = volumeLabels[cz.offlinka.app.drive.DriveTrees.volumeId(tree)]
 
     fun add(uri: String, label: String, vararg files: Pair<String, Long>): Uri {
         val u = Uri.parse(uri)

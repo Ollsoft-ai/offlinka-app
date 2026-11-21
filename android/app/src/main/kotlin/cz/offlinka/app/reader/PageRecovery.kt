@@ -1,25 +1,31 @@
 package cz.offlinka.app.reader
 
 /**
- * Decides when the reader must reload its page because it was shown while the drive's books were not
- * open (after the process was restored, while the drive was unplugged, or during the first scan).
- * Pure logic, driven by the WebView client and the shelf.
+ * Decides when the reader must reload its page because it was shown while its book was not served yet
+ * (after the process was restored, while the drive was unplugged, during the first scan, or while that
+ * book was still opening). Pure logic, driven by the WebView client and the shelf.
  */
 class PageRecovery {
-    private var stale = false
+    /** The book whose page is waiting, or null. */
+    private var waitingFor: String? = null
 
-    /** A main-frame page started loading; [booksOpen] = the drive's books were ready at that moment. */
-    fun onPageStarted(booksOpen: Boolean) {
-        if (!booksOpen) stale = true
+    /** A main-frame page of [bookId] started loading; [served] = that book was served at that moment. */
+    fun onPageStarted(bookId: String?, served: Boolean) {
+        waitingFor = if (bookId != null && !served) bookId else null
     }
 
-    /** The main frame got an HTTP error: 503 = a book was not available (closed, unplugged, still opening). */
-    fun onMainFrameStatus(status: Int) {
-        if (status == 503) stale = true
+    /** The main frame got an HTTP error: 503 = its book was not available (closed, unplugged, still opening). */
+    fun onMainFrameStatus(bookId: String?, status: Int) {
+        if (status == 503 && bookId != null) waitingFor = bookId
     }
 
-    /** The drive's books are open (again): reload once if the page was shown without them. */
-    fun shouldReloadWhenReady(): Boolean = stale.also { stale = false }
+    /** The served books changed: reload once if the waiting page's book is there now. */
+    fun shouldReload(served: Set<String>): Boolean {
+        val book = waitingFor ?: return false
+        if (book !in served) return false
+        waitingFor = null
+        return true
+    }
 }
 
 /** Text size of the reader: the user's setting times the system font scale (accessibility). */
@@ -50,4 +56,11 @@ data class Heading(val id: String, val text: String, val level: Int) {
             }
         }.getOrDefault(emptyList())
     }
+}
+
+/** When a page may hand something to another app (dialer, mail, a viewer for a file). */
+object LinkPolicy {
+    /** A download started within [windowMillis] of the user's last touch counts as the user's. */
+    fun userInitiated(lastTouch: Long, now: Long, windowMillis: Long = 3_000): Boolean =
+        lastTouch > 0 && now - lastTouch in 0..windowMillis
 }

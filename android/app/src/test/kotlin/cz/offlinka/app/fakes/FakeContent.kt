@@ -96,7 +96,13 @@ class FakeBook(
     /** Called when the book is retired (tests check what the shelf published by then). */
     var onClose: (() -> Unit)? = null
 
+    /** closeFile() waits on this gate (a read that hangs on a pulled drive) and records its thread. */
+    @Volatile var closeFileGate: java.util.concurrent.CountDownLatch? = null
+    @Volatile var closeFileThread: String? = null
+
     override fun closeFile() {
+        closeFileThread = Thread.currentThread().name
+        closeFileGate?.await(10, java.util.concurrent.TimeUnit.SECONDS)
         onClose?.invoke()
         fileClosed = true
     }
@@ -129,6 +135,8 @@ class FakeContentSource(private val books: Map<String, () -> FakeBook>) : Conten
     val opened: MutableList<FakeBook> = java.util.Collections.synchronizedList(mutableListOf())
     val openedNames: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
     val failing: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf())
+    /** Files whose open is waiting at its gate right now (or was). */
+    val waitingAtGate: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf())
     /** Opening these files waits until the gate is opened (to observe the shelf mid-way). */
     val gated: MutableMap<String, java.util.concurrent.CountDownLatch> = java.util.concurrent.ConcurrentHashMap()
     @Volatile var trims = 0
@@ -136,6 +144,10 @@ class FakeContentSource(private val books: Map<String, () -> FakeBook>) : Conten
     val built: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
     /** Index builds wait on this gate when set. */
     @Volatile var buildGate: java.util.concurrent.CountDownLatch? = null
+    /** Building the index of these book ids throws this. */
+    val buildErrors: MutableMap<String, Exception> = java.util.concurrent.ConcurrentHashMap()
+    /** Called with the file name before each open (to pull the drive mid-load). */
+    @Volatile var onOpen: ((String) -> Unit)? = null
 
     override val coreVersion = "fake-1.0"
 
@@ -143,7 +155,11 @@ class FakeContentSource(private val books: Map<String, () -> FakeBook>) : Conten
 
     override fun openPath(path: String): ContentBook {
         val name = path.substringAfterLast('/')
-        gated[name]?.await(10, java.util.concurrent.TimeUnit.SECONDS)
+        onOpen?.invoke(name)
+        gated[name]?.let { gate ->
+            waitingAtGate += name
+            gate.await(10, java.util.concurrent.TimeUnit.SECONDS)
+        }
         if (name in failing) throw ContentException.InvalidZim(name)
         val book = books[name]?.invoke() ?: throw ContentException.InvalidZim(name)
         opened += book
@@ -153,11 +169,17 @@ class FakeContentSource(private val books: Map<String, () -> FakeBook>) : Conten
 
     override fun newLibrary(): ContentLibrary = FakeLibrary()
 
-    override fun trimMemory() { trims++ }
+    @Volatile var trimThread: String? = null
+
+    override fun trimMemory() {
+        trimThread = Thread.currentThread().name
+        trims++
+    }
 
     override fun setCacheBudget(bytes: Long) { budget = bytes }
 
     override fun buildIndex(book: ContentBook, outPath: String, onProgress: (Double) -> Unit, isCancelled: () -> Boolean) {
+        buildErrors[book.info.id]?.let { throw it }
         for (i in 1..10) {
             buildGate?.await(10, java.util.concurrent.TimeUnit.SECONDS)
             if (isCancelled()) throw ContentException.Cancelled("cancelled")

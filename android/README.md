@@ -26,15 +26,19 @@ flock /tmp/claude-1000/offlinka-app-build.lock nice -n 10 timeout 3600 ./gradlew
 
 ## Release signing
 
-Never in git. Either env vars `OFFLINKA_KEYSTORE`, `OFFLINKA_KEYSTORE_PASSWORD`, `OFFLINKA_KEY_ALIAS`, `OFFLINKA_KEY_PASSWORD`, or a properties file (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`) at `$OFFLINKA_KEYSTORE_PROPERTIES` or `android/keystore.properties` (git-ignored). Without either, release is signed with the debug key and the build says so.
+Only from env vars, never from a file in the tree: `OFFLINKA_KEYSTORE`, `OFFLINKA_KEYSTORE_PASSWORD`, `OFFLINKA_KEY_ALIAS`, `OFFLINKA_KEY_PASSWORD`. A release build (APK or AAB) without them fails in `checkReleaseSigning`; it never falls back to the debug key. Debug builds, unit tests and lint need nothing. Read the key password in the shell, never print it.
 
 ## Decisions worth knowing
 
 - **No INTERNET permission.** WebView loads only what `ContentServer` answers; any other host gets an empty 403.
 - **Never writes to the drive.** Read-only SAF descriptors (ZIMs and `.offidx` indexes are handed to the core as detached fds; the core reads with `pread`, no `mmap`, so a pulled drive is an `Io` error, never SIGBUS). The only copy the app makes is a PDF opened from the guides (app cache).
 - **compileSdk/targetSdk 36** (Google Play requirement since 2026-08-31, SPEC updated); AndroidX versions are the newest whose AAR metadata still allows compileSdk 36 (`gradle/libs.versions.toml`).
+- **Index builds keep the screen on, no foreground service** (decided round 3: a dataSync service needs a Play Console declaration and review). While any index is built and the app is visible, `FLAG_KEEP_SCREEN_ON`; the note says "Nechte aplikaci otevřenou". A killed build starts that book over. The index folder is cleaned on every load: only indexes of books in a remembered drive's last listing stay, `*.part` goes, a phone-built index goes when the drive ships its own `.offidx`. An `Io` error with the drive still there skips that book only; "Ve frontě" / "Málo místa" show in book details, "Zastavit přípravu" there too (it forgets the English request).
+- **Retired books** are closed (`closeFile`) on the IO dispatcher, never on the main thread: a read hanging on a pulled drive would hold the close.
+- **One origin, no service workers:** every page gets a script that unregisters service workers, and service-worker fetches are refused (403). Dialer/mail links and file downloads need a user gesture.
+- **Search inside the guides:** h2/h3 headings of the guides book are indexed in memory (GuideSections), so "krvaceni" finds "První pomoc › Silné krvácení"; the guides group leads when it matches.
 - **Search indexes on the phone:** drives without `.offidx` get them built in `noBackupFilesDir/indexes` (core `build_index`, file name = ZIM name + size, so a new edition rebuilds and the old one's index is deleted), UI-language Wikipedia first, every book except English top1m; that one only from its details (warning, phones with 3 GB+ RAM, request kept across restarts). Progress on Home and in Search, cancellable, never blocks reading. Index tables preload when Search opens.
-- **Retired books** (unplug, rescan) get `closeFile()` only, after the new state is published; the UniFFI cleaner frees them once unreferenced. A WebView read on a retired book gets Io → 503 → the reader reloads.
+- **Retired books** (unplug, rescan) get `closeFile()` only, after the new state is published; the UniFFI cleaner frees them once unreferenced. A WebView read on a retired book gets Io → 503 → the reader reloads. Books opened but never published are destroyed at once.
 - **Memory:** one 48 MB cluster cache for all books (32 MB on low-RAM phones); `onTrimMemory` → core `trimMemory()`.
 - **Startup:** the UI-language Wikipedia opens first and Home shows at once; the other books open in parallel (3 at a time) and fill in.
 - **Bundled guides:** `app/src/main/assets/offlinka_cs_prirucky.zim` (from the drive release) is copied to app storage on first start, so První pomoc works with the drive unplugged.

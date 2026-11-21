@@ -44,7 +44,8 @@ Install: `adb install -r offlinka-<version>-universal.apk` (or from the drive's 
 - [ ] Pull the drive during the first start "Hledám knihy…": no crash, ends on a calm screen.
 - [ ] Unplugged screen: "Otevřít první pomoc" opens the guides bundled in the app (works with the drive out); back returns to the unplugged screen.
 - [ ] Back gesture on the unplugged screen moves the app to the background (does not navigate hidden pages).
-- [ ] Kill the app while an article is open (Developer options → Don't keep activities, or `adb shell am kill cz.offlinka.app` from the background), reopen: the article comes back once the drive is ready, not as "Článek tu není".
+- [ ] Kill the app while a **Wikivoyage or map page** is open (not the Czech Wikipedia, which opens first: Developer options → Don't keep activities, or `adb shell am kill cz.offlinka.app` from the background), reopen: the page comes back once its book has opened, not as "Článek tu není". Same right after start: tap a saved Wikivoyage article in the first seconds.
+- [ ] TalkBack on, pull the drive while an article is open: TalkBack reads only the "Flashka je odpojená" screen, never the article underneath.
 - [ ] Repeat the unplug test 5× in a row: no crash, no growing memory (Settings → Developer options → Memory, optional).
 
 ## 4. Two drives
@@ -74,6 +75,11 @@ Install: `adb install -r offlinka-<version>-universal.apk` (or from the drive's 
 - [ ] Missing article (a red link): calm "Článek tu není" page.
 - [ ] Rotate the phone in the reader: the article stays, no reload to the top.
 - [ ] Switch the app language while an article is open (Nastavení → Jazyk): the app restarts the screen and the article is still there.
+- [ ] After switching the language, open a game (2048) and a map: they run (timers not frozen); same after changing the system font size.
+- [ ] "Zpět" is never greyed out: open an article from Search and tap "Zpět": Search comes back with the query and the scroll position; from Home it returns Home.
+- [ ] Reader bar: "Uložit" saves (filled icon, "Uloženo"), tapping the book name opens its main page, book details are in the ⋮ menu.
+- [ ] Mapa Česka: no bottom bar, a floating "Zpět" pill top left.
+- [ ] A guide page's phone number opens the dialer only when tapped; a page cannot open the dialer or a PDF viewer on its own.
 
 ## 6. Maps and games (JavaScript + their own assets)
 
@@ -88,8 +94,11 @@ Install: `adb install -r offlinka-<version>-universal.apk` (or from the drive's 
 - [ ] Typing "cesky krumlov" (no diacritics) shows "Český Krumlov" first, while typing, no visible lag per key (target ≤ 100 ms with the drive's search index).
 - [ ] Results are grouped by book, Czech Wikipedia first; "Zobrazit další" limits to one book.
 - [ ] Recent searches appear when the field is empty; removing one works; Nastavení → "Vymazat nedávno hledané" clears them.
-- [ ] Drive without `.offidx` files (all drives sold so far): after opening, Home and Search show "Připravuji hledání bez háčků… N %"; reading and searching keep working meanwhile; when done, "cesky krumlov" finds Český Krumlov. Time for the cs maxi: ____ min. The X stops it for this session; kill the app mid-way and reopen: it continues.
-- [ ] English Wikipedia (top1m) is never indexed by itself: Knihovna → its details show "Hledání bez háčků" with the warning and "Připravit hledání"; tap it, keep reading meanwhile. Time: ____ min, peak app memory: ____ MB, phone temperature OK. Not offered on phones under 3 GB RAM.
+- [ ] Drive without `.offidx` files (all drives sold so far): right after opening, "krvaceni" already finds "První pomoc › Silné krvácení" (guides first, instant). Under the Home search field: "Hledání se připravuje (N %). Zatím pište s háčky a čárkami. Nechte aplikaci otevřenou." — one percentage only (the UI-language Wikipedia), the screen does not turn off meanwhile; reading and searching keep working. Then once: "Hledání je připravené…". Time for the cs maxi: ____ min. The X only hides the note; kill the app mid-way and reopen: it continues (from 0 % for that book).
+- [ ] Book details of a book waiting for its index: "Ve frontě" with "Zastavit přípravu"; stopping it keeps it stopped after a restart only for the English one (request forgotten).
+- [ ] Fill the phone until < 400 MB free: details say "Málo místa"; free space, restart: the build continues.
+- [ ] English Wikipedia (top1m) is never indexed by itself: Knihovna → its details show "Lepší hledání" with the warning (phone on the charger, app open) and "Připravit hledání"; tap it and keep the app open. Time: ____ min, peak app memory: ____ MB, phone temperature OK. Not offered on phones under 3 GB RAM.
+- [ ] After a drive with `.offidx` files is plugged in, the phone's own index copies for those books disappear (Settings → Apps → Offlinka → Storage drops).
 - [ ] Drive with `.offidx` files: Knihovna → details → "Pro technickou podporu" says "Rychlé hledání: Ano" right away, nothing is built. App memory after opening (Settings → Apps → Offlinka → Memory): ____ MB.
 - [ ] Multi-word search with no title match ("krvácení z nosu u dětí"): results for the longest word with the note "Výsledky pro „krvácení“".
 - [ ] Pull the drive while typing a search with the index attached: no crash.
@@ -113,3 +122,12 @@ Install: `adb install -r offlinka-<version>-universal.apk` (or from the drive's 
 - [ ] Tablet / USB-C iPad-size Android (if available): layout uses 3 columns on Home, reader text width is limited.
 - [ ] 16 KB page size device (Pixel 8+ with Android 15 16 KB mode, optional): app starts (native lib is page-aligned).
 - [ ] Battery: 30 min of reading with the drive plugged in, note battery drop: ____ %.
+
+## Round 3 additions
+
+- [ ] Long-press the app icon: "První pomoc" and "Výpadek proudu" shortcuts; each opens the guide page with no drive plugged in, and with the drive the normal reader.
+- [ ] First start: Uložené already holds the two guides; Home shows "Vyzkoušejte hned" (Sněžka, map, first aid, 2048), each link opens, the X hides the card for good.
+- [ ] Slovak phone: Mapa Slovenska is the second tile, Mapa Česka later; "Vysoké Tatry" in "Vyskúšajte hneď".
+- [ ] Czech article typography: "v Praze", "s ním", "10 km" never break at the line end (look at a long article at 200 % text size).
+- [ ] Pick the Knihovna folder, later the Telefon folder of the same drive: Nastavení shows one drive "OFFLINKA", not two.
+- [ ] Connect screen on a small phone (360×640 dp) at the largest font: "Vybrat flashku" is visible without scrolling or the illustration is hidden.

@@ -1,4 +1,3 @@
-import java.util.Properties
 import org.gradle.api.file.DirectoryProperty
 
 plugins {
@@ -8,15 +7,17 @@ plugins {
     alias(libs.plugins.room)
 }
 
-// Release signing never lives in git: env vars win, else a keystore.properties file
-// (path in OFFLINKA_KEYSTORE_PROPERTIES, default android/keystore.properties, which is git-ignored)
-// with storeFile, storePassword, keyAlias, keyPassword.
-val keystoreProps = Properties().apply {
-    val f = System.getenv("OFFLINKA_KEYSTORE_PROPERTIES")?.let(::File) ?: rootProject.file("keystore.properties")
-    if (f.isFile) f.inputStream().use(::load)
-}
-fun signing(prop: String, env: String): String? = System.getenv(env) ?: keystoreProps.getProperty(prop)
-val releaseStoreFile = signing("storeFile", "OFFLINKA_KEYSTORE")
+// Release signing comes only from the environment, never from a file in the tree:
+// OFFLINKA_KEYSTORE, OFFLINKA_KEYSTORE_PASSWORD, OFFLINKA_KEY_ALIAS, OFFLINKA_KEY_PASSWORD.
+// A release build without them fails (checkReleaseSigning); debug builds use the SDK's debug key.
+val releaseSigningEnv = listOf("OFFLINKA_KEYSTORE", "OFFLINKA_KEYSTORE_PASSWORD", "OFFLINKA_KEY_ALIAS", "OFFLINKA_KEY_PASSWORD")
+    .associateWith { System.getenv(it)?.takeIf(String::isNotEmpty) }
+val releaseSigningMissing = releaseSigningEnv.filterValues { it == null }.keys
+
+// CI (GitHub Actions sets CI=true) or -Pofflinka.unsignedRelease=true builds an UNSIGNED release to check
+// that R8 and resource shrinking work. Never on a developer machine by accident: there it must fail.
+val unsignedReleaseAllowed = System.getenv("CI") == "true" ||
+    (project.findProperty("offlinka.unsignedRelease") as String?) == "true"
 
 android {
     namespace = "cz.offlinka.app"
@@ -26,8 +27,8 @@ android {
         applicationId = "cz.offlinka.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Only the ABIs the Rust core is built for (scripts/build-android-core.sh). JNA would otherwise add
         // armeabi/mips/x86 copies of its dispatcher and such a phone would install an app without the core.
@@ -43,12 +44,12 @@ android {
     }
 
     signingConfigs {
-        if (releaseStoreFile != null) {
+        if (releaseSigningMissing.isEmpty()) {
             create("release") {
-                storeFile = file(releaseStoreFile)
-                storePassword = signing("storePassword", "OFFLINKA_KEYSTORE_PASSWORD")
-                keyAlias = signing("keyAlias", "OFFLINKA_KEY_ALIAS")
-                keyPassword = signing("keyPassword", "OFFLINKA_KEY_PASSWORD")
+                storeFile = file(releaseSigningEnv.getValue("OFFLINKA_KEYSTORE")!!)
+                storePassword = releaseSigningEnv.getValue("OFFLINKA_KEYSTORE_PASSWORD")
+                keyAlias = releaseSigningEnv.getValue("OFFLINKA_KEY_ALIAS")
+                keyPassword = releaseSigningEnv.getValue("OFFLINKA_KEY_PASSWORD")
             }
         }
     }
@@ -62,9 +63,8 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug").also {
-                logger.warn("offlinka: no release keystore configured, release is signed with the debug key")
-            }
+            // Never falls back to the debug key: without the env vars checkReleaseSigning stops the build.
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 
@@ -230,3 +230,18 @@ val checkNativeLibs = tasks.register<CheckNativeLibs>("checkNativeLibs") {
     jniLibs.set(layout.projectDirectory.dir("src/main/jniLibs"))
 }
 tasks.matching { it.name == "preReleaseBuild" }.configureEach { dependsOn(checkNativeLibs) }
+
+// A release (APK or AAB) without the signing env vars fails loudly instead of producing an unsigned or
+// debug-signed build. Unit tests, lint and debug builds do not need them.
+val checkReleaseSigning by tasks.registering {
+    val missing = releaseSigningMissing.toList()
+    val unsignedOk = unsignedReleaseAllowed
+    doLast {
+        if (missing.isNotEmpty() && unsignedOk) {
+            logger.warn("offlinka: CI build, release is UNSIGNED (not installable, not for distribution)")
+        } else if (missing.isNotEmpty()) {
+            throw GradleException("Release signing: set ${missing.joinToString()} (the key never lives in the repository).")
+        }
+    }
+}
+tasks.matching { it.name == "preReleaseBuild" }.configureEach { dependsOn(checkReleaseSigning) }

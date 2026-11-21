@@ -163,9 +163,10 @@ object BookSelector {
             "en" -> 40
             else -> 45
         }
+        // The map of the UI's country comes second, the other one after the medicine book.
         BookKind.MAPS -> when (n.region) {
-            MapRegion.CZECHIA -> 10
-            MapRegion.SLOVAKIA -> 60
+            MapRegion.SLOVAKIA -> if (ui == "sk") 10 else 60
+            MapRegion.CZECHIA -> if (ui == "sk") 60 else 10
             else -> 65
         }
         BookKind.GUIDES -> 20
@@ -186,8 +187,9 @@ object BookSelector {
      */
     fun indexPriority(n: ZimName, ui: String): Int? = when {
         onDemandIndex(n) -> null
-        n.kind == BookKind.WIKIPEDIA -> if (uiLanguage(n.language) == ui) 0 else 1
-        n.kind == BookKind.GUIDES -> 2
+        // The guides take no time and hold the emergency pages: first.
+        n.kind == BookKind.GUIDES -> 0
+        n.kind == BookKind.WIKIPEDIA -> if (uiLanguage(n.language) == ui) 1 else 2
         n.kind == BookKind.MAPS || n.kind == BookKind.GAMES || n.kind == BookKind.OTHER -> 4
         else -> 3
     }

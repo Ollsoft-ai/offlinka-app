@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press on the app icon: the emergency guides bundled in the app, no drive needed.
+     targetPackage must be the application id, so the debug build has its own copy (src/debug). -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="first_aid"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_first_aid"
+        android:shortcutShortLabel="@string/home_quick_first_aid"
+        android:shortcutLongLabel="@string/home_quick_first_aid">
+        <intent
+            android:action="cz.offlinka.app.OPEN_GUIDE"
+            android:targetPackage="cz.offlinka.app.debug"
+            android:targetClass="cz.offlinka.app.MainActivity">
+            <extra android:name="path" android:value="prvni-pomoc.html" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="power_cut"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_power"
+        android:shortcutShortLabel="@string/home_quick_prepare"
+        android:shortcutLongLabel="@string/home_quick_prepare">
+        <intent
+            android:action="cz.offlinka.app.OPEN_GUIDE"
+            android:targetPackage="cz.offlinka.app.debug"
+            android:targetClass="cz.offlinka.app.MainActivity">
+            <extra android:name="path" android:value="vypadek-proudu.html" />
+        </intent>
+    </shortcut>
+</shortcuts>

@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+
 package cz.offlinka.app.ui
 
 import android.graphics.BitmapFactory
@@ -26,6 +28,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import cz.offlinka.ui.model.TryNowItem
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -35,7 +41,16 @@ import kotlinx.coroutines.withContext
 private val SharingStarted.Companion.Ui get() = WhileSubscribed(5_000)
 
 class HomeViewModel(private val graph: AppGraph) : ViewModel() {
-    val state: StateFlow<HomeState> = combine(graph.shelf.state, graph.db.history().recent(1), graph.shelf.indexing) { shelf, recent, idx ->
+    /** "Vyzkoušejte hned" links whose pages exist in the books on hand (checked off the main thread). */
+    private val tryNow: Flow<List<TryNowItem>> = combine(graph.shelf.state, graph.settings.values) { s, v -> s to v.tryNowDismissed }
+        .mapLatest { (s, dismissed) ->
+            if (dismissed || s !is ShelfState.Ready) emptyList() else withContext(Dispatchers.IO) { TryNow.items(graph) }
+        }
+        .distinctUntilChanged()
+
+    val state: StateFlow<HomeState> = combine(
+        graph.shelf.state, graph.db.history().recent(1), graph.searchNote, tryNow,
+    ) { shelf, recent, note, tryItems ->
         val ready = shelf as? ShelfState.Ready
         val tiles = ready?.tiles.orEmpty()
         val last = recent.firstOrNull()?.takeIf { ready?.byId?.containsKey(it.bookId) == true }
@@ -45,11 +60,16 @@ class HomeViewModel(private val graph: AppGraph) : ViewModel() {
             continueBook = last?.let { ready?.byId?.get(it.bookId)?.ui },
             hasGuides = graph.shelf.servedBooks().values.any { it.ui.kind == BookKind.GUIDES },
             hasRandom = ready?.books?.any { it.ui.kind == BookKind.WIKIPEDIA } == true,
-            indexProgress = idx?.let { (it.fraction * 100).toInt().coerceIn(0, 99) },
+            searchNote = note,
+            tryNow = tryItems,
         )
     }.stateIn(viewModelScope, SharingStarted.Ui, HomeState(emptyList()))
 
     fun retry(book: BookUi) = graph.shelf.retry(book.id)
+
+    fun dismissTryNow() = graph.settings.dismissTryNow()
+
+    fun dismissNote() = graph.dismissSearchNote()
 
     /** URL for a quick link, or null when the book is missing. */
     suspend fun quickLink(link: QuickLink): String? = withContext(Dispatchers.IO) {
@@ -92,15 +112,16 @@ class LibraryViewModel(private val graph: AppGraph) : ViewModel() {
 class BookDetailsViewModel(private val graph: AppGraph, private val bookId: String, private val fileName: String?) : ViewModel() {
     private val illustration = MutableStateFlow<ImageBitmap?>(null)
 
-    val state: StateFlow<BookDetailsState?> = combine(graph.shelf.state, illustration, graph.shelf.indexing) { shelf, img, idx ->
+    /** Re-evaluated when the user starts or stops a build (the request lives in preferences). */
+    private val requests = MutableStateFlow(0)
+
+    val state: StateFlow<BookDetailsState?> = combine(
+        graph.shelf.state, illustration, graph.shelf.indexing, graph.shelf.indexRun, requests,
+    ) { shelf, img, _, _, _ ->
         val ready = shelf as? ShelfState.Ready ?: return@combine null
         val open = ready.byId[bookId]
         if (open != null && (fileName == null || open.ui.fileName == fileName)) {
-            BookDetailsState(
-                open.ui, img,
-                canBuildIndex = !open.ui.hasIndex && graph.heavyIndexAllowed && graph.shelf.canBuildOnDemand(open),
-                indexProgress = idx?.takeIf { it.bookId == bookId }?.let { (it.fraction * 100).toInt().coerceIn(0, 99) },
-            )
+            BookDetailsState(open.ui, img, index = graph.indexInfo(open))
         } else {
             ready.replaced.firstOrNull { it.id == bookId && (fileName == null || it.fileName == fileName) }
                 ?.let { BookDetailsState(it, null, replaced = true) }
@@ -108,7 +129,16 @@ class BookDetailsViewModel(private val graph: AppGraph, private val bookId: Stri
         }
     }.stateIn(viewModelScope, SharingStarted.Ui, null)
 
-    fun buildIndex() = graph.shelf.buildIndexNow(bookId)
+    fun buildIndex() {
+        graph.shelf.buildIndexNow(bookId)
+        requests.value++
+    }
+
+    /** "Zastavit přípravu": stops this book's index and forgets the request (the others go on). */
+    fun stopIndex() {
+        graph.shelf.stopIndex(bookId)
+        requests.value++
+    }
 
     init {
         viewModelScope.launch {

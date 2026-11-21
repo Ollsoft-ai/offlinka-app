@@ -64,7 +64,14 @@ data class AboutState(
 )
 
 @Composable
-fun AboutScreen(state: AboutState, onBack: () -> Unit, modifier: Modifier = Modifier, onCopyEmail: (String) -> Unit = {}) {
+fun AboutScreen(
+    state: AboutState,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    onCopyEmail: (String) -> Unit = {},
+    /** Opens the privacy policy (a web page in the browser) at the given URL. */
+    onPrivacy: (String) -> Unit = {},
+) {
     val c = Offlinka.colors
     val locale = currentLocale()
     var notices by rememberSaveable { mutableStateOf(state.noticesOpen) }
@@ -103,6 +110,21 @@ fun AboutScreen(state: AboutState, onBack: () -> Unit, modifier: Modifier = Modi
                     Text(stringResource(R.string.about_privacy_title), style = Offlinka.type.subhead, color = c.ink)
                     Spacer(Modifier.height(4.dp))
                     Text(stringResource(R.string.about_privacy_body), style = Offlinka.type.body, color = c.ink2)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            val privacyUrl = stringResource(R.string.about_privacy_url)
+            GroupCard {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(role = Role.Button) { onPrivacy(privacyUrl) }
+                        .heightIn(min = 56.dp)
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(stringResource(R.string.about_privacy_link), style = Offlinka.type.subhead, color = c.ink, modifier = Modifier.weight(1f))
+                    Icon(OfflinkaIcons.ChevronRight, null, tint = c.ink2, modifier = Modifier.size(22.dp))
                 }
             }
 

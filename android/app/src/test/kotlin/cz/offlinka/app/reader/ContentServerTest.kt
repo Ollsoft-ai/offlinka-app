@@ -10,7 +10,12 @@ import java.io.ByteArrayInputStream
 import java.io.IOException
 
 class ContentServerTest {
-    private class B(override val content: ContentBook, override val isWiki: Boolean, override val isMap: Boolean = false) : ServedBook {
+    private class B(
+        override val content: ContentBook,
+        override val isWiki: Boolean,
+        override val isMap: Boolean = false,
+        override val language: String = "",
+    ) : ServedBook {
         override val mainPath: String? get() = content.info.mainPath
     }
 
@@ -22,7 +27,7 @@ class ContentServerTest {
     private val server = ContentServer(
         books = {
             mapOf(
-                "wikipedia_cs_all" to B(wiki, true),
+                "wikipedia_cs_all" to B(wiki, true, language = "cs"),
                 "maps_en_czech-republic" to B(maps, false, isMap = true),
                 "offlinka_cs_prirucky" to B(guides, false),
             )
@@ -31,9 +36,9 @@ class ContentServerTest {
         look = { ReaderLook(dark) },
         notFoundPage = { d -> "<p>missing ${if (d) "dark" else "light"}</p>" },
         onDriveError = { errors += it },
-        driveReady = { driveReady },
+        pending = { id -> id in pending },
     )
-    private var driveReady = true
+    private val pending = mutableSetOf<String>()
 
     private fun get(url: String, mainFrame: Boolean = true, headers: Map<String, String> = emptyMap()) =
         server.serve(url, "GET", headers, mainFrame)
@@ -46,7 +51,7 @@ class ContentServerTest {
         assertThat(r.charset).isEqualTo("utf-8")
         val html = r.bytes().decodeToString()
         assertThat(html).contains("/_offlinka/reader.css")
-        assertThat(html).contains("window.__offlinka={theme:'dark',scale:1.00}")
+        assertThat(html).contains("window.__offlinka={theme:'dark',scale:1.00,lang:'cs'}")
         assertThat(html).contains("/_offlinka/inject.js")
         assertThat(html.indexOf("reader.css")).isLessThan(html.indexOf("</head>"))
         assertThat(html.indexOf("reader.css")).isGreaterThan(html.indexOf("<title>"))
@@ -167,11 +172,12 @@ class ContentServerTest {
         assertThat(thrown).isInstanceOf(java.io.IOException::class.java)
     }
 
-    @Test fun `before the books are open, pages are 503 so the reader reloads them later`() {
-        driveReady = false
-        assertThat(get(ReaderUrls.article("wikipedia_xx_all", "Praha")).status).isEqualTo(503)
-        driveReady = true
+    @Test fun `a book that is still opening answers 503 so the reader reloads it, not a 404`() {
+        pending += "wikivoyage_en_europe"
+        assertThat(get(ReaderUrls.article("wikivoyage_en_europe", "Praha")).status).isEqualTo(503)
         assertThat(get(ReaderUrls.article("wikipedia_xx_all", "Praha")).status).isEqualTo(404)
+        pending.clear()
+        assertThat(get(ReaderUrls.article("wikivoyage_en_europe", "Praha")).status).isEqualTo(404)
     }
 
     @Test fun `big media without an extension is streamed with a sniffed type`() {
@@ -201,6 +207,25 @@ class ContentServerTest {
         assertThat(html).contains("/_offlinka/map-bridge.js")
         assertThat(html.indexOf("map-bridge.js")).isLessThan(html.indexOf("./a.js"))
         assertThat(html).doesNotContain("reader.css")
+    }
+
+    @Test fun `no page can keep a service worker`() {
+        val sw = server.serveServiceWorker(ReaderUrls.article("maps_en_czech-republic", "sw.js"))
+        assertThat(sw.status).isEqualTo(403)
+        // Every HTML page (not only Wikipedia) unregisters old workers before its own scripts run.
+        for (url in listOf(ReaderUrls.article("offlinka_cs_prirucky", "prvni-pomoc.html"), ReaderUrls.article("wikipedia_cs_all", "Praha"))) {
+            val html = get(url).bytes().decodeToString()
+            assertThat(html).contains("getRegistrations")
+        }
+        val map = get(ReaderUrls.article("maps_en_czech-republic", "index.html")).bytes().decodeToString()
+        assertThat(map.indexOf("getRegistrations")).isLessThan(map.indexOf("map-bridge.js"))
+    }
+
+    @Test fun `Czech books tell the reader script their language for typography`() {
+        val html = get(ReaderUrls.article("wikipedia_cs_all", "Praha")).bytes().decodeToString()
+        assertThat(html).contains("lang:'cs'")
+        assertThat(HtmlInjector.snippet(ReaderLook(false), "en")).contains("lang:'en'")
+        assertThat(HtmlInjector.snippet(ReaderLook(false), "")).doesNotContain("lang:")
     }
 
     @Test fun `sniffing recognises common media`() {

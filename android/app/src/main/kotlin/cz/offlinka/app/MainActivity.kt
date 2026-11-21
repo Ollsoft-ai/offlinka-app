@@ -7,6 +7,13 @@ import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
+import android.view.WindowManager
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -70,6 +77,17 @@ class MainActivity : AppCompatActivity() {
         graph.fontScale = resources.configuration.fontScale
         reader = ReaderController(this, graph.server, graph.shelf, graph.scope, graph.readerPage, graph.retainedReader)
         reader.restoreState(savedInstanceState)
+        if (savedInstanceState == null) handleIntent(intent)
+        // While a search index is built the screen stays on: Android would otherwise freeze or kill the
+        // backgrounded app and the build would start over (no foreground service: decided, see android/README.md).
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                graph.shelf.indexing.map { it != null }.distinctUntilChanged().collect { building ->
+                    if (building) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
+            }
+        }
         setContent {
             OfflinkaTheme(darkTheme = isSystemInDarkTheme()) {
                 CompositionLocalProvider(LocalReaderController provides reader) {
@@ -89,7 +107,8 @@ class MainActivity : AppCompatActivity() {
         if (shelf is ShelfState.Ready) everReady = true
         // "Flashku nevidím" shown after a tap with no USB volume mounted; the next tap opens the picker anyway.
         var noVolumeShown by rememberSaveable { mutableStateOf(false) }
-        var guides by rememberSaveable { mutableStateOf(false) }
+        // The bundled guides over everything (no drive): the page to show, or null.
+        var guides by rememberSaveable { mutableStateOf<String?>(null) }
         val nav = rememberNavController()
         val back by nav.currentBackStackEntryAsState()
 
@@ -115,6 +134,19 @@ class MainActivity : AppCompatActivity() {
         }
         if (driveVisible == true && noVolumeShown) noVolumeShown = false
 
+        // App-icon shortcut (První pomoc, Výpadek proudu): the reader when the books are open, else the bundled guides.
+        val request by graph.openRequest.collectAsStateWithLifecycle()
+        LaunchedEffect(request, shelf is ShelfState.Ready, back != null) {
+            val url = request ?: return@LaunchedEffect
+            if (shelf is ShelfState.Loading) return@LaunchedEffect
+            graph.openRequest.value = null
+            if (shelf is ShelfState.Ready && back != null) {
+                nav.navigate(Routes.reader(url, fresh = true)) { launchSingleTop = true }
+            } else {
+                guides = url
+            }
+        }
+
         val connect: ConnectState? = when (val s = shelf) {
             is ShelfState.Ready -> null
             ShelfState.NoDrive -> ConnectState(
@@ -129,7 +161,7 @@ class MainActivity : AppCompatActivity() {
         // Status bar icons: light on the forest heroes, dark on paper screens (in the light theme).
         val dark = Offlinka.colors.isDark
         val route = back?.destination?.route
-        val onHero = guides.not() && (connect != null || route == null || route == Routes.HOME || route == Routes.ABOUT)
+        val onHero = guides == null && (connect != null || route == null || route == Routes.HOME || route == Routes.ABOUT)
         val view = androidx.compose.ui.platform.LocalView.current
         SideEffect {
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !dark && !onHero
@@ -140,10 +172,13 @@ class MainActivity : AppCompatActivity() {
                 // Hidden from touch and TalkBack while the connect screen covers it.
                 AppNavHost(
                     graph, nav, onChangeDrive = ::pickNow,
-                    modifier = if (connect != null || guides) Modifier.clearAndSetSemantics {} else Modifier,
+                    modifier = if (connect != null || guides != null) Modifier.clearAndSetSemantics {} else Modifier,
                 )
             }
-            if (connect != null && !guides) {
+            // The reader's WebView is a classic View: hide it from TalkBack explicitly while covered.
+            val covered = connect != null || guides != null
+            SideEffect { reader.setCovered(covered) }
+            if (connect != null && guides == null) {
                 // Back on the cover screen leaves the app instead of moving the hidden pages.
                 BackHandler { moveTaskToBack(true) }
                 Box(
@@ -160,25 +195,44 @@ class MainActivity : AppCompatActivity() {
                                 pickNow()
                             }
                         },
-                        onOpenGuides = { guides = true },
+                        onOpenGuides = { guides = firstAidUrl() },
                     )
                 }
             }
-            if (guides) {
-                BundledGuides(onClose = { guides = false })
-            }
+            guides?.let { url -> BundledGuides(url, onClose = { guides = null }) }
         }
     }
 
     /** A second, separate WebView for the bundled guides, so the hidden reader keeps its own page. */
     @Composable
-    private fun BundledGuides(onClose: () -> Unit) {
+    private fun BundledGuides(url: String, onClose: () -> Unit) {
         val controller = remember {
             ReaderController(this, graph.server, graph.shelf, graph.scope, MutableStateFlow(PageInfo()), RetainedReaderState())
         }
         DisposableEffect(Unit) { onDispose { controller.destroy() } }
-        val guides = graph.shelf.builtin
-        GuidesReader(graph, controller, guides?.let { ReaderUrls.article(it.id, it.mainPath ?: "") }, onClose)
+        GuidesReader(graph, controller, url, onClose)
+    }
+
+    /** Both entry points without a drive (Connect, Unplugged) open the first-aid cards. */
+    private fun firstAidUrl(): String =
+        ReaderUrls.article(graph.shelf.builtin?.id ?: GUIDES_ID, cz.offlinka.app.ui.TryNow.FIRST_AID)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    /** App-icon shortcuts: `cz.offlinka.app.OPEN_GUIDE` with the page in extra `path`. */
+    private fun handleIntent(intent: Intent?) {
+        if (intent?.action != ACTION_OPEN_GUIDE) return
+        val path = intent.getStringExtra(EXTRA_PATH)?.takeIf { it.matches(Regex("[a-z0-9-]+\\.html")) } ?: return
+        graph.openRequest.value = ReaderUrls.article(graph.shelf.builtin?.id ?: GUIDES_ID, path)
+    }
+
+    companion object {
+        const val ACTION_OPEN_GUIDE = "cz.offlinka.app.OPEN_GUIDE"
+        const val EXTRA_PATH = "path"
+        const val GUIDES_ID = "offlinka_cs_prirucky"
     }
 
     private fun pickNow() {

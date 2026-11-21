@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -106,6 +107,8 @@ data class ReaderState(
     val canSave: Boolean = true,
     /** The "Obsah" sheet: null = closed, empty = the article has no sections. */
     val contents: List<TocEntry>? = null,
+    /** A map viewer: no bar, only a floating "Zpět" pill top left. */
+    val isMap: Boolean = false,
 )
 
 object TextZoom {
@@ -157,10 +160,11 @@ fun ReaderScreen(
             if (find != null) {
                 FindBar(find, onFindQuery, onFindNext, onCloseFind)
             } else {
-                ReaderTopBar(state, onHome, onToggleSave, onSearch, onBookDetails, onHistory, onForward)
+                ReaderTopBar(state, onHome, onMainPage, onSearch, onBookDetails, onHistory, onForward)
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 content()
+                if (state.isMap) BackPill(onBack, Modifier.align(Alignment.TopStart).padding(12.dp))
                 val p = state.progress
                 if (p != null && showProgress) {
                     LinearProgressIndicator(
@@ -172,10 +176,12 @@ fun ReaderScreen(
                     )
                 }
             }
-            ReaderBottomBar(state, onBack, onContents, onOpenFind, onToggleTextPanel, onMainPage)
+            // Maps get the whole screen: only the floating "Zpět" pill.
+            if (!state.isMap) ReaderBottomBar(state, onBack, onContents, onOpenFind, onToggleTextPanel, onToggleSave)
         }
         if (state.showTextPanel && !state.isApp) {
-            SheetOverlay(onDismiss = onToggleTextPanel, dismissLabel = stringResource(R.string.action_close)) {
+            // Non-modal: no scrim, the article above stays visible as the live preview.
+            TextPanelCard(onToggleTextPanel, Modifier.align(Alignment.BottomCenter)) {
                 TextPanel(state, onTextZoom, onTheme)
             }
         }
@@ -200,7 +206,7 @@ fun ReaderScreen(
 private fun ReaderTopBar(
     state: ReaderState,
     onHome: () -> Unit,
-    onToggleSave: () -> Unit,
+    onMainPage: () -> Unit,
     onSearch: () -> Unit,
     onBookDetails: () -> Unit,
     onHistory: () -> Unit,
@@ -214,7 +220,13 @@ private fun ReaderTopBar(
             Modifier
                 .weight(1f)
                 .clip(RoundedCornerShape(8.dp))
-                .clickable(enabled = state.book != null, role = Role.Button, onClick = onBookDetails)
+                // The book's name opens its main page (details are in the ⋮ menu).
+                .clickable(
+                    enabled = state.book != null,
+                    role = Role.Button,
+                    onClickLabel = stringResource(R.string.reader_main_page),
+                    onClick = onMainPage,
+                )
                 .heightIn(min = 48.dp)
                 .padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -243,16 +255,6 @@ private fun ReaderTopBar(
                 )
             }
         }
-        if (!state.isApp && state.canSave) {
-            val savedDesc = stringResource(if (state.saved) R.string.cd_saved_on else R.string.cd_saved_off)
-            BarIconButton(
-                if (state.saved) OfflinkaIcons.BookmarkFilled else OfflinkaIcons.Bookmark,
-                stringResource(if (state.saved) R.string.reader_unsave else R.string.reader_save),
-                onToggleSave,
-                tint = if (state.saved) c.accent else c.ink,
-                modifier = Modifier.semantics { stateDescription = savedDesc },
-            )
-        }
         Box {
             BarIconButton(OfflinkaIcons.More, stringResource(R.string.action_more), { menu = true }, tint = c.ink)
             DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = c.surface) {
@@ -260,6 +262,9 @@ private fun ReaderTopBar(
                     MenuItem(stringResource(R.string.action_forward), OfflinkaIcons.Forward) { menu = false; onForward() }
                 }
                 MenuItem(stringResource(R.string.cd_search), OfflinkaIcons.Search) { menu = false; onSearch() }
+                if (state.book != null) {
+                    MenuItem(stringResource(R.string.reader_main_page), state.book.icon) { menu = false; onMainPage() }
+                }
                 MenuItem(stringResource(R.string.reader_history), OfflinkaIcons.History) { menu = false; onHistory() }
                 MenuItem(stringResource(R.string.library_details), OfflinkaIcons.Info) { menu = false; onBookDetails() }
             }
@@ -512,7 +517,7 @@ private fun ReaderBottomBar(
     onContents: () -> Unit,
     onOpenFind: () -> Unit,
     onToggleTextPanel: () -> Unit,
-    onMainPage: () -> Unit,
+    onToggleSave: () -> Unit,
 ) {
     val c = Offlinka.colors
     Column(Modifier.fillMaxWidth().background(c.surface).windowInsetsPadding(WindowInsets.navigationBars).imePadding()) {
@@ -522,13 +527,23 @@ private fun ReaderBottomBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            ToolbarItem(OfflinkaIcons.Back, stringResource(R.string.reader_bar_back), stringResource(R.string.action_back), onBack, enabled = state.canGoBack)
+            // "Zpět" is never disabled: without page history it leaves the reader (back to Search or Home).
+            ToolbarItem(OfflinkaIcons.Back, stringResource(R.string.reader_bar_back), stringResource(R.string.action_back), onBack)
             if (!state.isApp) {
                 ToolbarItem(OfflinkaIcons.Toc, stringResource(R.string.reader_bar_contents), stringResource(R.string.reader_contents), onContents)
                 ToolbarItem(OfflinkaIcons.FindInPage, stringResource(R.string.reader_bar_find), stringResource(R.string.reader_find), onOpenFind)
                 ToolbarItem(OfflinkaIcons.TextSize, stringResource(R.string.reader_bar_text), stringResource(R.string.reader_text_size), onToggleTextPanel)
+                if (state.canSave) {
+                    ToolbarItem(
+                        if (state.saved) OfflinkaIcons.BookmarkFilled else OfflinkaIcons.Bookmark,
+                        stringResource(if (state.saved) R.string.reader_bar_saved else R.string.reader_bar_save),
+                        stringResource(if (state.saved) R.string.reader_unsave else R.string.reader_save),
+                        onToggleSave,
+                        tint = if (state.saved) c.accent else null,
+                        state = stringResource(if (state.saved) R.string.cd_saved_on else R.string.cd_saved_off),
+                    )
+                }
             }
-            ToolbarItem(state.book?.icon ?: OfflinkaIcons.BookWikipedia, stringResource(R.string.reader_bar_main), stringResource(R.string.reader_main_page), onMainPage)
         }
     }
 }
@@ -541,21 +556,26 @@ private fun androidx.compose.foundation.layout.RowScope.ToolbarItem(
     description: String,
     onClick: () -> Unit,
     enabled: Boolean = true,
+    tint: androidx.compose.ui.graphics.Color? = null,
+    state: String? = null,
 ) {
     val c = Offlinka.colors
-    val tint = if (enabled) c.ink else c.ink.copy(alpha = 0.35f)
+    val iconTint = tint ?: if (enabled) c.ink else c.ink.copy(alpha = 0.35f)
     Column(
         Modifier
             .weight(1f)
             .clip(RoundedCornerShape(8.dp))
             .clickable(enabled = enabled, role = Role.Button, onClickLabel = description, onClick = onClick)
-            .semantics(mergeDescendants = true) { contentDescription = description }
+            .semantics(mergeDescendants = true) {
+                contentDescription = description
+                if (state != null) stateDescription = state
+            }
             .heightIn(min = 56.dp)
             .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
+        Icon(icon, null, tint = iconTint, modifier = Modifier.size(24.dp))
         Spacer(Modifier.height(3.dp))
         Text(
             label,
@@ -564,5 +584,55 @@ private fun androidx.compose.foundation.layout.RowScope.ToolbarItem(
             maxLines = 2,
             textAlign = TextAlign.Center,
         )
+    }
+}
+
+/** The map viewer's only control: a floating "Zpět" pill (the map keeps the whole screen). */
+@Composable
+private fun BackPill(onBack: () -> Unit, modifier: Modifier = Modifier) {
+    val c = Offlinka.colors
+    val shape = RoundedCornerShape(24.dp)
+    Row(
+        modifier
+            .hardShadow(Offlinka.elevation.card, shape)
+            .clip(shape)
+            .background(c.surface)
+            .border(1.5.dp, c.outline, shape)
+            .clickable(role = Role.Button, onClickLabel = stringResource(R.string.action_back), onClick = onBack)
+            .heightIn(min = 48.dp)
+            .padding(start = 12.dp, end = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(OfflinkaIcons.Back, null, tint = c.ink, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.reader_bar_back), style = Offlinka.type.subhead, color = c.ink)
+    }
+}
+
+/** The text-size panel: sheet look, but no scrim and no modal touch blocking above it. */
+@Composable
+private fun TextPanelCard(onClose: () -> Unit, modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    val c = Offlinka.colors
+    val shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    Column(
+        modifier
+            .widthIn(max = 720.dp)
+            .fillMaxWidth()
+            .hardShadow(Offlinka.elevation.raised, shape)
+            .clip(shape)
+            .background(c.surface)
+            .border(1.5.dp, c.outline, shape)
+            .windowInsetsPadding(WindowInsets.navigationBars),
+    ) {
+        Box(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 16.dp), content = content)
+            BarIconButton(
+                OfflinkaIcons.Close,
+                stringResource(R.string.action_close),
+                onClose,
+                tint = c.ink2,
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 4.dp),
+            )
+        }
     }
 }

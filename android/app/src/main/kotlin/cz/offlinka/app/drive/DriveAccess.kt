@@ -13,6 +13,18 @@ import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.InputStream
 
+/** What a SAF tree URI says about the drive it points into. */
+object DriveTrees {
+    /** "1234-ABCD" of a tree on that volume ("1234-ABCD:Knihovna"); the whole id when it has no colon. */
+    fun volumeId(tree: Uri): String = treeDocId(tree).substringBefore(':')
+
+    /** The folder inside the volume that was picked: "" for the root, "Knihovna" for that folder. */
+    fun pickedPath(tree: Uri): String = treeDocId(tree).let { if (':' in it) it.substringAfter(':') else "" }
+
+    private fun treeDocId(tree: Uri): String =
+        runCatching { DocumentsContract.getTreeDocumentId(tree) }.getOrNull() ?: tree.lastPathSegment.orEmpty()
+}
+
 /** One entry of a drive folder. */
 data class DocEntry(val id: String, val name: String, val isDir: Boolean, val size: Long)
 
@@ -33,6 +45,9 @@ interface DriveAccess {
 
     /** Display name of the picked folder (the drive label when the root was picked). Null when unreachable. */
     fun label(tree: Uri): String?
+
+    /** The volume's own label ("OFFLINKA") when a folder inside it was picked; null when unknown. */
+    fun volumeLabel(tree: Uri): String? = null
 
     /** Children of [dirId] (or of the picked folder when null). Throws [IOException] when the drive is gone. */
     fun list(tree: Uri, dirId: String?): List<DocEntry>
@@ -70,6 +85,19 @@ class SafDriveAccess(private val context: Context) : DriveAccess {
         }
     } catch (e: Exception) {
         Log.i(TAG, "label($tree) failed: $e")
+        null
+    }
+
+    override fun volumeLabel(tree: Uri): String? = try {
+        val volume = DriveTrees.volumeId(tree)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            context.getSystemService(StorageManager::class.java)?.storageVolumes
+                ?.firstOrNull { it.uuid.equals(volume, ignoreCase = true) }
+                ?.getDescription(context)
+        } else {
+            null
+        }
+    } catch (e: Exception) {
         null
     }
 

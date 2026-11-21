@@ -85,4 +85,11 @@ object Samples {
     )
 
     val drives = listOf(DriveUi("content://drive", "OFFLINKA", 14, true, edition = "2026-11", totalBytes = 34_299_000_000))
+
+    val tryNow = listOf(
+        cz.offlinka.ui.model.TryNowItem(cz.offlinka.ui.model.TryNowKind.ARTICLE, "Sněžka", "wikipedia_cs_all", "Sněžka"),
+        cz.offlinka.ui.model.TryNowItem(cz.offlinka.ui.model.TryNowKind.MAP, "", "maps_en_czech-republic", "index.html"),
+        cz.offlinka.ui.model.TryNowItem(cz.offlinka.ui.model.TryNowKind.FIRST_AID, "", "offlinka_cs_prirucky", "prvni-pomoc.html"),
+        cz.offlinka.ui.model.TryNowItem(cz.offlinka.ui.model.TryNowKind.GAME, "", "offlinka_mul_hry", "2048/index.html"),
+    )
 }

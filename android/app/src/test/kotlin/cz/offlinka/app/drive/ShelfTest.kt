@@ -291,8 +291,9 @@ class ShelfTest {
         assertThat(first.tiles.first { it.id == "offlinka_cs_prirucky" }.state).isEqualTo(BookState.OPENING)
         gate.countDown()
         val all = waitFor(parallel) { r -> r.tiles.all { it.state == BookState.OPEN } }
+        // Slovak UI: the Czech map moves behind the Czech Wikipedia (the Slovak map would be second).
         assertThat(all.tiles.map { it.id }).containsExactly(
-            "wikipedia_sk_all", "maps_en_czech-republic", "offlinka_cs_prirucky", "wikipedia_cs_all",
+            "wikipedia_sk_all", "offlinka_cs_prirucky", "wikipedia_cs_all", "maps_en_czech-republic",
         ).inOrder()
         assertThat(all.books).hasSize(4)
     }
@@ -355,7 +356,8 @@ class ShelfTest {
         )
         s.onPicked(tree)
         advanceUntilIdle()
-        assertThat(source.built).containsExactly("wikipedia_cs_all", "offlinka_cs_prirucky", "maps_en_czech-republic").inOrder()
+        // The guides first (instant, emergency pages), then the UI-language Wikipedia, then the rest.
+        assertThat(source.built).containsExactly("offlinka_cs_prirucky", "wikipedia_cs_all", "maps_en_czech-republic").inOrder()
         val r = s.state.value as ShelfState.Ready
         assertThat(r.byId.getValue("wikipedia_cs_all").ui.hasIndex).isTrue()
         assertThat(r.tiles.first { it.id == "wikipedia_cs_all" }.hasIndex).isTrue()
@@ -386,16 +388,15 @@ class ShelfTest {
         assertThat((s.state.value as ShelfState.Ready).books.all { it.ui.hasIndex }).isTrue()
     }
 
-    @Test fun `a new edition rebuilds its index and drops the old edition's`() = runTest(dispatcher) {
+    @Test fun `a new edition rebuilds its index and the old edition's index is removed`() = runTest(dispatcher) {
         val dir = Files.createTempDirectory("idx").toFile()
         val old = File(dir, Shelf.indexFileName("wikipedia_cs_all_maxi-offlinka_2026-05.zim", 9L)).apply { writeText("old") }
-        val other = File(dir, Shelf.indexFileName("offlinka_cs_prirucky.zim", 7L)).apply { writeText("guides") }
         val s = shelf(indexDir = dir)
         s.onPicked(drives.add("content://ext/tree/1234-ABCD%3A", "OFFLINKA", "Knihovna/wikipedia_cs_all_maxi-offlinka_2026-09.zim" to 10L))
         advanceUntilIdle()
         assertThat(source.built).contains("wikipedia_cs_all")
         assertThat(old.exists()).isFalse()
-        assertThat(other.exists()).isTrue()
+        assertThat(File(dir, Shelf.indexFileName("wikipedia_cs_all_maxi-offlinka_2026-09.zim", 10L)).isFile).isTrue()
     }
 
     @Test fun `building an index can be cancelled and leaves the book usable`() = runTest(dispatcher) {

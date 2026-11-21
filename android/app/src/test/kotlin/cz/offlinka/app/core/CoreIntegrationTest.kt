@@ -173,6 +173,62 @@ class CoreIntegrationTest {
         assertThat(games.get(games.info.mainPath!!).data.size).isGreaterThan(0)
     }
 
+    @Test fun `the guides bundled in the app never send anyone to Kiwix`() {
+        // The app edition (scripts/build-app-guides.py): what a store reviewer without the drive opens.
+        val asset = File("src/main/assets/offlinka_cs_prirucky.zim")
+        assumeTrue(asset.isFile)
+        source.openPath(asset.path).use { book ->
+            val main = book.info.mainPath!!
+            val seen = linkedSetOf<String>()
+            val queue = ArrayDeque(listOf(main))
+            while (queue.isNotEmpty()) {
+                val path = queue.removeFirst()
+                if (!seen.add(path)) continue
+                val res = book.get(path)
+                if (!res.mime.startsWith("text/") && !res.mime.contains("css") && !res.mime.contains("javascript")) continue
+                val text = res.data.toString(Charsets.UTF_8)
+                assertThat(text.lowercase()).doesNotContain("kiwix")
+                if (res.mime.startsWith("text/html")) {
+                    // Relative links of the book only (no data:, tel:, https:, anchors).
+                    Regex("""(?:href|src)="([^"]+)"""").findAll(text).map { it.groupValues[1].substringBefore('#').substringBefore('?') }
+                        .filter { it.isNotEmpty() && ':' !in it && !it.startsWith("/") }
+                        .forEach { link -> queue += java.net.URI(path).resolve(link).path.removePrefix("/") }
+                }
+            }
+            assertThat(seen).containsAtLeast("prvni-pomoc.html", "vypadek-proudu.html")
+            assertThat(seen.none { it.startsWith("jak-") || it.startsWith("zacni-zde") }).isTrue()
+            assertThat(book.info.title.lowercase()).doesNotContain("kiwix")
+            assertThat(book.info.description.lowercase()).doesNotContain("kiwix")
+        }
+    }
+
+    @Test fun `guide sections of the real guides book are found without accents`() {
+        val guides = books.getValue("offlinka_cs_prirucky").content
+        val sections = cz.offlinka.app.search.GuideSections.build(guides, "offlinka_cs_prirucky")
+        val hit = sections.search("krvaceni").first()
+        assertThat(hit.title).isEqualTo("První pomoc › Silné krvácení")
+        assertThat(hit.path).isEqualTo("prvni-pomoc.html#krvaceni")
+        assertThat(sections.search("popaleniny").map { it.path }).contains("prvni-pomoc.html#popaleniny")
+        // Every section's page exists.
+        sections.sections.map { it.path.substringBefore('#') }.distinct().forEach { guides.get(it) }
+    }
+
+    @Test fun `the first-run card links exist in the real books`() {
+        val cs = books["wikipedia_cs_all"]?.content
+        assumeTrue(cs != null)
+        assertThat(cs!!.contentLength(cz.offlinka.app.ui.TryNow.ARTICLE.getValue("cs").first)).isGreaterThan(0L)
+        books["wikipedia_sk_all"]?.content?.let { sk ->
+            assertThat(sk.contentLength(cz.offlinka.app.ui.TryNow.ARTICLE.getValue("sk").first)).isGreaterThan(0L)
+        }
+        assertThat(books.getValue("offlinka_cs_prirucky").content.contentLength(cz.offlinka.app.ui.TryNow.FIRST_AID)).isGreaterThan(0L)
+        assertThat(books.getValue("offlinka_mul_hry").content.contentLength(cz.offlinka.app.ui.TryNow.GAME)).isGreaterThan(0L)
+        for (map in listOf("maps_en_czech-republic_2026-06.zim", "maps_en_slovakia_2026-06.zim")) {
+            val f = File(drive, "Knihovna/$map")
+            if (!f.isFile) continue
+            source.openPath(f.path).use { m -> assertThat(m.contentLength(m.info.mainPath!!)).isGreaterThan(0L) }
+        }
+    }
+
     @Test fun `guides pages behind the home quick links exist`() {
         val guides = books.getValue("offlinka_cs_prirucky").content
         for (p in listOf("prvni-pomoc.html", "vypadek-proudu.html")) {

@@ -27,6 +27,8 @@ interface ServedBook {
     val isWiki: Boolean
     /** A MapLibre map viewer: gets the worker fetch bridge. */
     val isMap: Boolean get() = false
+    /** Two-letter language of the text (`cs`, `sk` get Czech/Slovak typography in articles). */
+    val language: String get() = ""
 }
 
 /** Reader assets bundled with the app (`assets/reader/`). */
@@ -48,8 +50,11 @@ class ContentServer(
     private val look: () -> ReaderLook,
     private val notFoundPage: (dark: Boolean) -> String,
     private val onDriveError: (IOException) -> Unit,
-    /** False while the drive's books are not open (start, unplugged): unknown books are then "come back later". */
-    private val driveReady: () -> Boolean = { true },
+    /**
+     * True while a book is not served yet but may be soon (it is still opening, the shelf is loading or
+     * waiting for the drive): its pages are then 503 "come back later", never "Článek tu není".
+     */
+    private val pending: (bookId: String) -> Boolean = { false },
 ) {
     private val redirects = java.util.Collections.synchronizedMap(
         object : LinkedHashMap<String, Boolean>(64, 0.75f, true) {
@@ -67,7 +72,7 @@ class ContentServer(
         if (target.bookId == ReaderUrls.ASSETS) return asset(target.path)
         // Any failure below (a book closed under us, a panic in the core) must answer, never crash the WebView thread.
         return try {
-            val book = books()[target.bookId] ?: return if (driveReady()) notFound(mainFrame) else error503()
+            val book = books()[target.bookId] ?: return if (pending(target.bookId)) error503() else notFound(mainFrame)
             if (target.path.isEmpty()) {
                 val main = book.mainPath ?: return notFound(mainFrame)
                 return replaceWith(url, ReaderUrls.article(target.bookId, main))
@@ -109,10 +114,12 @@ class ContentServer(
         }
         val (mime, charset) = splitMime(res.mime)
         var data = res.data
-        if (mime == "text/html" && book.isWiki) {
-            data = HtmlInjector.inject(data, look())
-        } else if (mime == "text/html" && book.isMap && mainFrame) {
-            data = HtmlInjector.injectFirst(data, MAP_BRIDGE)
+        if (mime == "text/html") {
+            data = when {
+                book.isWiki -> HtmlInjector.injectFirst(HtmlInjector.inject(data, look(), book.language), NO_SERVICE_WORKERS)
+                book.isMap && mainFrame -> HtmlInjector.injectFirst(data, NO_SERVICE_WORKERS + MAP_BRIDGE)
+                else -> HtmlInjector.injectFirst(data, NO_SERVICE_WORKERS)
+            }
         }
         return Served(
             200, "OK", mime, charset ?: if (mime.startsWith("text/") || mime.endsWith("javascript")) "utf-8" else null,
@@ -174,6 +181,10 @@ class ContentServer(
         return Served(404, "Not Found", "text/html", "utf-8", baseHeaders("text/html"), ByteArrayInputStream(body))
     }
 
+    /** Every service-worker fetch is refused (see ReaderController.interceptServiceWorkers). */
+    fun serveServiceWorker(url: String): Served =
+        Served(403, "Forbidden", "text/plain", "utf-8", emptyMap(), ByteArrayInputStream(ByteArray(0)))
+
     private fun error503() =
         Served(503, "Service Unavailable", "text/plain", "utf-8", emptyMap(), ByteArrayInputStream(ByteArray(0)))
 
@@ -192,6 +203,14 @@ class ContentServer(
 
         /** Script that lets map viewers' web workers fetch tiles through the page (assets/reader/map-bridge.js). */
         val MAP_BRIDGE = "<script src=\"/${ReaderUrls.ASSETS}/map-bridge.js\"></script>"
+
+        /**
+         * All books share one origin: no page may keep a service worker that would answer other books.
+         * Unregisters old ones and makes register() fail (its script fetch is refused anyway).
+         */
+        const val NO_SERVICE_WORKERS = "<script>(function(){var s=navigator.serviceWorker;if(!s)return;" +
+            "try{s.getRegistrations().then(function(r){r.forEach(function(x){x.unregister()})})}catch(e){}" +
+            "try{s.register=function(){return Promise.reject(new Error('no service workers'))}}catch(e){}})()</script>"
 
         /** MIME type from an entry's first bytes, for entries without a file extension. */
         fun sniff(head: ByteArray): String? {

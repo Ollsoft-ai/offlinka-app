@@ -17,6 +17,25 @@ class ReaderUrlsTest {
             .isEqualTo(ReaderUrls.Target("maps", "index.html"))
     }
 
+    @Test fun `characters Chromium leaves raw in paths are still our pages`() {
+        // java.net.URI rejected these: such pages got a 403 and their links looked external.
+        for (raw in listOf("A|B", "x^2", "Pole[1]", "C++_(jazyk)")) {
+            val url = "https://offlinka.local/wikipedia_cs_all/$raw"
+            assertThat(ReaderUrls.isOurs(url)).isTrue()
+            assertThat(ReaderUrls.parse(url)).isEqualTo(ReaderUrls.Target("wikipedia_cs_all", raw))
+        }
+        assertThat(ReaderUrls.host("https://cs.wikipedia.org/wiki/A|B")).isEqualTo("cs.wikipedia.org")
+        assertThat(ReaderUrls.wikimediaTarget("https://cs.wikipedia.org/wiki/Pole[1]")?.second).isEqualTo("Pole[1]")
+        assertThat(ReaderUrls.isOurs("https://offlinka.local.evil.com/x")).isFalse()
+        assertThat(ReaderUrls.isOurs("https://user@offlinka.local:443/x")).isTrue()
+    }
+
+    @Test fun `a guide section keeps its anchor as a fragment`() {
+        assertThat(ReaderUrls.articleAt("offlinka_cs_prirucky", "prvni-pomoc.html#krvaceni"))
+            .isEqualTo("https://offlinka.local/offlinka_cs_prirucky/prvni-pomoc.html#krvaceni")
+        assertThat(ReaderUrls.articleAt("wikipedia_cs_all", "Praha")).isEqualTo(ReaderUrls.article("wikipedia_cs_all", "Praha"))
+    }
+
     @Test fun `book root has an empty path`() {
         assertThat(ReaderUrls.parse("https://offlinka.local/wikipedia_cs_all/")?.path).isEmpty()
         assertThat(ReaderUrls.parse("https://offlinka.local/wikipedia_cs_all")?.path).isEmpty()

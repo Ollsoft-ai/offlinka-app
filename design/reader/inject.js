@@ -7,13 +7,45 @@
  * (Android: evaluateJavascript, iOS: evaluateJavaScript). Before the first call it uses the values in
  * window.__offlinka (the app may prepend "window.__offlinka={theme:'dark',scale:1.1};" to the script).
  *   theme: "light" | "dark" | "system"     scale: 0.8 … 1.6 (1 = 17 px body text)
+ *   lang: the book's 2-letter language; "cs" / "sk" get Czech typesetting (no line break after a
+ *   one-letter preposition or between a number and its unit), done once on load, text nodes only.
  * The stylesheet is scoped to body.mediawiki, so maps, games and our own guides keep their look. */
 (function () {
   var CSS = "/_offlinka/reader.css";
-  var state = { theme: "system", scale: 1 };
+  var state = { theme: "system", scale: 1, lang: "" };
   if (window.__offlinka) {
     if (window.__offlinka.theme) state.theme = window.__offlinka.theme;
     if (window.__offlinka.scale) state.scale = window.__offlinka.scale;
+    if (window.__offlinka.lang) state.lang = String(window.__offlinka.lang);
+  }
+
+  // Czech/Slovak typesetting: a non-breaking space after one-letter words (k s v z o u a i) and between a
+  // number and the word or unit after it ("10 km", "1 000 obyvatel" stays readable). Two passes, because
+  // in "a v Praze" both words need it and one regex pass cannot reuse the space between them.
+  var NBSP = "\u00A0";
+  var ONE = /(^|[\s\u00A0(\[„"‚'])([KkSsVvZzOoUuAaIi]) /g;
+  var NUM = /(\d) (?=[A-Za-z\u00C0-\u017E%°])/g;
+  var QUICK = /(^|[\s(\[„"‚'])[KkSsVvZzOoUuAaIi] |\d [A-Za-z\u00C0-\u017E%°]/;
+  function nbspText(t) {
+    if (!QUICK.test(t)) return t;
+    return t.replace(ONE, "$1$2" + NBSP).replace(ONE, "$1$2" + NBSP).replace(NUM, "$1" + NBSP);
+  }
+  window.offlinkaNbsp = nbspText;   // for tests
+  var SKIP = { SCRIPT: 1, STYLE: 1, TEXTAREA: 1, CODE: 1, PRE: 1, KBD: 1, SAMP: 1, MATH: 1 };
+  function typeset() {
+    if (state.lang !== "cs" && state.lang !== "sk") return;
+    var root = document.body;
+    if (!root || !document.createTreeWalker) return;
+    var walker = document.createTreeWalker(root, 4 /* NodeFilter.SHOW_TEXT */, null);
+    var n;
+    while ((n = walker.nextNode())) {
+      var v = n.nodeValue;
+      if (!v || v.length < 3) continue;
+      var p = n.parentNode;
+      if (p && (SKIP[p.nodeName] || (p.closest && p.closest("pre, code, textarea, kbd, samp, math")))) continue;
+      var t = nbspText(v);
+      if (t !== v) n.nodeValue = t;
+    }
   }
 
   function systemDark() { return !!(window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches); }
@@ -65,6 +97,6 @@
   }
 
   applyClasses();
-  function onReady() { ensureCss(); hidePlaceholders(); }
+  function onReady() { ensureCss(); hidePlaceholders(); typeset(); }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", onReady); else onReady();
 })();

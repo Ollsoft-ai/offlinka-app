@@ -399,19 +399,19 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Flashka je zapojená"
+            "value": "Flashka je zapojená."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "USB kľúč je zapojený"
+            "value": "USB kľúč je zapojený."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Drive connected"
+            "value": "The drive is plugged in."
           }
         }
       }
@@ -526,7 +526,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "In the next screen, pick OFFLINKA and tap Open."
+            "value": "On the next screen, pick OFFLINKA and tap Open."
           }
         }
       }
@@ -698,19 +698,19 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vyberte hlavní složku flashky s názvem OFFLINKA, ne složku uvnitř."
+            "value": "Vyberte složku OFFLINKA, nebo v ní složku Knihovna."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vyberte hlavný priečinok USB kľúča s názvom OFFLINKA, nie priečinok v ňom."
+            "value": "Vyberte priečinok OFFLINKA alebo v ňom priečinok Knihovna."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pick the drive's top folder, OFFLINKA, not a folder inside it."
+            "value": "Pick the OFFLINKA folder, or the Knihovna folder inside it."
           }
         }
       }
@@ -744,19 +744,19 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Klepněte na Vybrat znovu a v dalším okně na „Povolit“."
+            "value": "Klepněte na „Vybrat znovu“ a v dalším okně na „Povolit“."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ťuknite na Vybrať znova a v ďalšom okne na „Povoliť“."
+            "value": "Ťuknite na „Vybrať znova“ a v ďalšom okne na „Povoliť“."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tap Pick again, then “Allow” on the next screen."
+            "value": "Tap “Choose again”, then “Allow” on the next screen."
           }
         }
       }
@@ -796,7 +796,7 @@
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Keď sa USB kľúč nezobrazuje"
+            "value": "Ak sa USB kľúč nezobrazuje"
           }
         },
         "en": {
@@ -882,13 +882,13 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "iPhone 14 a starší mají konektor Lightning. Do něj flashka nepasuje."
+            "value": "iPhone 14 a starší mají konektor Lightning. Do něj flashka nepasuje."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "iPhone 14 a starší majú konektor Lightning. USB kľúč doň nezapojíte."
+            "value": "iPhone 14 a starší majú konektor Lightning. USB kľúč doň nezapojíte."
           }
         },
         "en": {
@@ -1578,7 +1578,7 @@
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lekárske články, po anglicky"
+            "value": "Lekárske články, po anglicky"
           }
         },
         "en": {
@@ -1595,13 +1595,13 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Od celé země po ulice"
+            "value": "Od celé země po ulice"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Od celej krajiny po ulice"
+            "value": "Od celej krajiny po ulice"
           }
         },
         "en": {
@@ -1624,7 +1624,7 @@
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prvá pomoc, výpadok prúdu, návody (po česky)"
+            "value": "Prvá pomoc, výpadok prúdu, návody (po česky)"
           }
         },
         "en": {
@@ -1641,19 +1641,19 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Šachy, dáma, piškvorky a další"
+            "value": "2048 a dáma"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Šach, dáma, piškvorky a ďalšie"
+            "value": "2048 a dáma"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chess, draughts, sudoku and more"
+            "value": "2048 and draughts"
           }
         }
       }
@@ -1693,7 +1693,7 @@
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Citáty a príslovia (po česky)"
+            "value": "Citáty a príslovia (po česky)"
           }
         },
         "en": {
@@ -1762,7 +1762,7 @@
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Význam, výslovnosť a skloňovanie (po česky)"
+            "value": "Význam, výslovnosť a skloňovanie (po česky)"
           }
         },
         "en": {
@@ -1779,13 +1779,13 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Průvodce po Evropě, anglicky"
+            "value": "Průvodce po Evropě, anglicky"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sprievodca po Európe, po anglicky"
+            "value": "Sprievodca po Európe, po anglicky"
           }
         },
         "en": {
@@ -1969,7 +1969,7 @@
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mäkčene a dĺžne písať nemusíte: „cesky krumlov“ nájde Český Krumlov."
+            "value": "Mäkčene a dĺžne písať nemusíte: „vysoke tatry“ nájde Vysoké Tatry."
           }
         },
         "en": {
@@ -2170,13 +2170,13 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$lld z %2$lld"
+            "value": "%1$lld z %2$lld"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$lld z %2$lld"
+            "value": "%1$lld z %2$lld"
           }
         },
         "en": {
@@ -2561,7 +2561,7 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tahle stránka na flashce chybí."
+            "value": "Tato stránka na flashce není."
           }
         },
         "sk": {
@@ -3300,25 +3300,25 @@
               "one": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld kniha"
+                  "value": "%1$lld kniha"
                 }
               },
               "few": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld knihy"
+                  "value": "%1$lld knihy"
                 }
               },
               "many": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld knihy"
+                  "value": "%1$lld knihy"
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld knih"
+                  "value": "%1$lld knih"
                 }
               }
             }
@@ -3330,25 +3330,25 @@
               "one": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld kniha"
+                  "value": "%1$lld kniha"
                 }
               },
               "few": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld knihy"
+                  "value": "%1$lld knihy"
                 }
               },
               "many": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld knihy"
+                  "value": "%1$lld knihy"
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld kníh"
+                  "value": "%1$lld kníh"
                 }
               }
             }
@@ -3383,25 +3383,25 @@
               "one": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld článek"
+                  "value": "%1$lld článek"
                 }
               },
               "few": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld články"
+                  "value": "%1$lld články"
                 }
               },
               "many": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld článku"
+                  "value": "%1$lld článku"
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld článků"
+                  "value": "%1$lld článků"
                 }
               }
             }
@@ -3413,25 +3413,25 @@
               "one": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld článok"
+                  "value": "%1$lld článok"
                 }
               },
               "few": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld články"
+                  "value": "%1$lld články"
                 }
               },
               "many": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld článku"
+                  "value": "%1$lld článku"
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld článkov"
+                  "value": "%1$lld článkov"
                 }
               }
             }
@@ -4107,7 +4107,7 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Takhle bude vypadat text článků."
+            "value": "Takto bude vypadat text článků."
           }
         },
         "sk": {
@@ -4538,6 +4538,52 @@
         }
       }
     },
+    "about_privacy_link": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zásady ochrany soukromí"
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zásady ochrany súkromia"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Privacy policy"
+          }
+        }
+      }
+    },
+    "about_privacy_url": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "https://offlinka.cz/aplikace/soukromi"
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "https://offlinka.sk/aplikacia/sukromie"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "https://offlinka.cz/en/app/privacy"
+          }
+        }
+      }
+    },
     "about_licences_title": {
       "extractionState": "manual",
       "localizations": {
@@ -4567,19 +4613,19 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Texty Wikipedie a sesterských projektů: autoři Wikipedie, licence CC BY-SA 4.0"
+            "value": "Texty Wikipedie a sesterských projektů: autoři Wikipedie, licence CC BY-SA 4.0"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Texty Wikipédie a sesterských projektov: autori Wikipédie, licencia CC BY-SA 4.0"
+            "value": "Texty Wikipédie a sesterských projektov: autori Wikipédie, licencia CC BY-SA 4.0"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wikipedia and sister project texts: Wikipedia contributors, CC BY-SA 4.0"
+            "value": "Wikipedia and sister project texts: Wikipedia contributors, CC BY-SA 4.0"
           }
         }
       }
@@ -4659,19 +4705,19 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Písmo Archivo: The Archivo Project Authors, licence SIL OFL 1.1"
+            "value": "Písmo Archivo: The Archivo Project Authors, licence SIL OFL 1.1"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Písmo Archivo: The Archivo Project Authors, licencia SIL OFL 1.1"
+            "value": "Písmo Archivo: The Archivo Project Authors, licencia SIL OFL 1.1"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Archivo typeface: The Archivo Project Authors, SIL OFL 1.1"
+            "value": "Archivo typeface: The Archivo Project Authors, SIL OFL 1.1"
           }
         }
       }
@@ -4682,19 +4728,19 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aplikace Offlinka © 2026 Ollcee s.r.o."
+            "value": "Aplikace Offlinka © 2026 Ollsoft s.r.o."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aplikácia Offlinka © 2026 Ollcee s.r.o."
+            "value": "Aplikácia Offlinka © 2026 Ollsoft s.r.o."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Offlinka app © 2026 Ollcee s.r.o."
+            "value": "Offlinka app © 2026 Ollsoft s.r.o."
           }
         }
       }
@@ -4797,19 +4843,19 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vyrábí Ollcee s.r.o., Praha"
+            "value": "Vyrábí Ollcee s.r.o., Praha"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vyrába Ollcee s.r.o., Praha"
+            "value": "Vyrába Ollcee s.r.o., Praha"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Made by Ollcee s.r.o., Prague"
+            "value": "Made by Ollcee s.r.o., Prague"
           }
         }
       }
@@ -4820,7 +4866,7 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tohle se nepovedlo otevřít"
+            "value": "Nepodařilo se otevřít"
           }
         },
         "sk": {
@@ -4843,19 +4889,19 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Soubor na flashce může být poškozený. Zkuste flashku vytáhnout a zapojit znovu."
+            "value": "Knihu se nepodařilo otevřít. Zkuste to znovu. Když to nepomůže, vytáhněte flashku a zapojte ji znovu."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Súbor na USB kľúči môže byť poškodený. Skúste USB kľúč vytiahnuť a zapojiť znova."
+            "value": "Knihu sa nepodarilo otvoriť. Skúste to znova. Ak to nepomôže, vytiahnite USB kľúč a zapojte ho znova."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The file on the drive may be damaged. Try unplugging the drive and plugging it back in."
+            "value": "The book didn't open. Try again. If that doesn't help, unplug the drive and plug it back in."
           }
         }
       }
@@ -4866,7 +4912,7 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tenhle typ souboru aplikace neumí otevřít."
+            "value": "Tento typ souboru aplikace neumí otevřít."
           }
         },
         "sk": {
@@ -5056,7 +5102,7 @@
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Keď telefón nedovolí vybrať celý USB kľúč, otvorte ho a vyberte priečinok Knihovna."
+            "value": "Ak telefón nedovolí vybrať celý USB kľúč, otvorte ho a vyberte priečinok „Knihovna“."
           }
         },
         "en": {
@@ -5073,19 +5119,19 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Starší telefony s Androidem 8 až 10 někdy flashku vůbec nepřečtou. Pak pomůže počítač: PDF příručky jsou ve složce 3 Nouzové příručky."
+            "value": "Některé telefony s Androidem 8 až 10 flashku nepřečtou. Nouzové příručky ale najdete přímo v aplikaci a zbytek otevřete v počítači."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Staršie telefóny s Androidom 8 až 10 niekedy USB kľúč vôbec neprečítajú. Vtedy pomôže počítač: PDF príručky sú v priečinku 3 Nouzové příručky."
+            "value": "Niektoré telefóny s Androidom 8 až 10 USB kľúč neprečítajú. Núdzové príručky však nájdete priamo v aplikácii a zvyšok otvoríte v počítači."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Older phones with Android 8 to 10 sometimes can't read the drive at all. A computer helps then: the PDF guides are in the folder 3 Nouzové příručky."
+            "value": "Some phones with Android 8 to 10 can't read the drive. The emergency guides are built into the app, and a computer opens the rest."
           }
         }
       }
@@ -5096,19 +5142,19 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Flashku vidím. Klepněte na Vybrat flashku."
+            "value": "Flashku vidím. Klepněte na „Vybrat flashku“."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "USB kľúč vidím. Ťuknite na Vybrať USB kľúč."
+            "value": "USB kľúč vidím. Ťuknite na „Vybrať USB kľúč“."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The drive is here. Tap Pick the drive."
+            "value": "Drive found. Tap “Choose drive”."
           }
         }
       }
@@ -5188,19 +5234,19 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Připravuji hledání bez háčků… %1$lld %%"
+            "value": "Hledání se připravuje (%1$lld %%). Zatím pište s háčky a čárkami."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pripravujem hľadanie bez mäkčeňov… %1$lld %%"
+            "value": "Hľadanie sa pripravuje (%1$lld %%). Zatiaľ píšte s mäkčeňmi a dĺžňami."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Preparing accent-free search… %1$lld %%"
+            "value": "Search is getting ready (%1$lld%%). For now, type with accents."
           }
         }
       }
@@ -5372,19 +5418,19 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hledání bez háčků"
+            "value": "Lepší hledání"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hľadanie bez mäkčeňov"
+            "value": "Lepšie hľadanie"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Accent-free search"
+            "value": "Better search"
           }
         }
       }
@@ -5395,19 +5441,19 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tahle kniha je velká. Příprava trvá asi 10 minut a v telefonu zabere 220 MB. Telefon se při tom zahřeje, nechte ho v nabíječce. Číst můžete i mezitím."
+            "value": "Najde články podle kteréhokoli slova v názvu. Příprava trvá asi 10 minut a zabere 220 MB. Telefon se při tom zahřeje, nechte ho v nabíječce a aplikaci otevřenou. Číst můžete i mezitím."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Táto kniha je veľká. Príprava trvá asi 10 minút a v telefóne zaberie 220 MB. Telefón sa pri tom zahreje, nechajte ho v nabíjačke. Čítať môžete aj medzitým."
+            "value": "Nájde články podľa ktoréhokoľvek slova v názve. Príprava trvá asi 10 minút a zaberie 220 MB. Telefón sa pri tom zahreje, nechajte ho v nabíjačke a aplikáciu otvorenú. Čítať môžete aj medzitým."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This book is big. Preparing takes about 10 minutes and uses 220 MB on the phone. The phone gets warm, so keep it on the charger. You can read in the meantime."
+            "value": "Finds articles by any word in the title. Preparing takes about 10 minutes and 220 MB. The phone gets warm, so keep it on the charger and the app open. You can read in the meantime."
           }
         }
       }
@@ -5464,19 +5510,19 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nejde otevřít"
+            "value": "Nejde otevřít. Zkusit znovu?"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nedá sa otvoriť"
+            "value": "Nedá sa otvoriť. Skúsiť znova?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Can't open"
+            "value": "Can't open. Try again?"
           }
         }
       }
@@ -5500,6 +5546,374 @@
           "stringUnit": {
             "state": "translated",
             "value": "Forget this drive"
+          }
+        }
+      }
+    },
+    "index_keep_open": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nechte aplikaci otevřenou."
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nechajte aplikáciu otvorenú."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep the app open."
+          }
+        }
+      }
+    },
+    "search_no_results_indexing": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hledání se ještě připravuje. Zatím napište slovo s háčky a čárkami, třeba „krvácení“."
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hľadanie sa ešte pripravuje. Zatiaľ napíšte slovo s mäkčeňmi a dĺžňami, napríklad „krvácanie“."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search is still getting ready. For now, type Czech words with accents."
+          }
+        }
+      }
+    },
+    "search_ready": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hledání je připravené. Háčky a čárky už psát nemusíte."
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hľadanie je pripravené. Mäkčene a dĺžne už písať nemusíte."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search is ready. Accents are now optional."
+          }
+        }
+      }
+    },
+    "help_group_not_seen": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telefon flashku nevidí"
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telefón USB kľúč nevidí"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The phone doesn't see the drive"
+          }
+        }
+      }
+    },
+    "help_group_wrong_window": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Okno ukazuje něco jiného"
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Okno ukazuje niečo iné"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The window shows something else"
+          }
+        }
+      }
+    },
+    "index_queued": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ve frontě"
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "V poradí"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Queued"
+          }
+        }
+      }
+    },
+    "index_queued_body": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Začne, až se připraví ostatní knihy."
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Začne, keď sa pripravia ostatné knihy."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It starts when the other books are ready."
+          }
+        }
+      }
+    },
+    "index_low_space": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Málo místa"
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Málo miesta"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not enough space"
+          }
+        }
+      }
+    },
+    "index_low_space_body": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "V telefonu je málo místa. Uvolněte asi 300 MB a zkuste to znovu."
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "V telefóne je málo miesta. Uvoľnite asi 300 MB a skúste to znova."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The phone is low on space. Free about 300 MB and try again."
+          }
+        }
+      }
+    },
+    "index_stop": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zastavit přípravu"
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zastaviť prípravu"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop preparing"
+          }
+        }
+      }
+    },
+    "reader_bar_save": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uložit"
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uložiť"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save"
+          }
+        }
+      }
+    },
+    "reader_bar_saved": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uloženo"
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uložené"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved"
+          }
+        }
+      }
+    },
+    "try_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vyzkoušejte hned"
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vyskúšajte hneď"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try it now"
+          }
+        }
+      }
+    },
+    "try_map": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prohlédněte si mapu"
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prezrite si mapu"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Explore the map"
+          }
+        }
+      }
+    },
+    "try_first_aid": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "První pomoc"
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prvá pomoc"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "First aid"
+          }
+        }
+      }
+    },
+    "try_game": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zahrajte si 2048"
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zahrajte si 2048"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Play 2048"
           }
         }
       }

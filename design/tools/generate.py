@@ -393,12 +393,20 @@ NBSP = "\u00a0"
 
 
 def typography(s, lang):
-    """Czech/Slovak typesetting rules: no line break after a one-letter word, between a number and its unit,
-    in "USB kľúč" and in "iPhone 14" / "Android 8". The sources keep plain spaces; outputs get U+00A0."""
+    """Typesetting rules; the sources keep plain spaces, outputs get U+00A0.
+    Every language: licence names (CC BY-SA 4.0, SIL OFL 1.1), "© 2026" and "Ollcee s.r.o." never break.
+    Czech/Slovak also: no break after a one-letter word or "po", between a number (or a {placeholder}) and
+    the word or unit after it, in "USB kľúč" and in "iPhone 14" / "Android 8"."""
+    s = re.sub(r"CC BY-SA (\d)", "CC" + NBSP + "BY-SA" + NBSP + r"\1", s)
+    s = re.sub(r"SIL OFL (\d)", "SIL" + NBSP + "OFL" + NBSP + r"\1", s)
+    s = re.sub(r"© (\d{4})", "©" + NBSP + r"\1", s)
+    s = re.sub(r" (s\.r\.o\.)", NBSP + r"\1", s)
     if lang not in ("cs", "sk"):
         return s
     s = re.sub(r"(?<!\w)([KkSsVvZzOoUuAaIi]) ", r"\1" + NBSP, s)
+    s = re.sub(r"(?<!\w)([Pp]o) ", r"\1" + NBSP, s)
     s = re.sub(r"(\d|\})[ ](%|GB|MB|kB|km\b|m\b)", r"\1" + NBSP + r"\2", s)
+    s = re.sub(r"(?<![\w.,])(\d+|\{\w+\}) (?=[^\W\d_])", r"\1" + NBSP, s)
     s = re.sub(r"USB (kľúč\w*)", "USB" + NBSP + r"\1", s)
     s = re.sub(r"(iPhone|Android\w*) (\d+)", r"\1" + NBSP + r"\2", s)
     return s

@@ -28,14 +28,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.draw.alpha
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -44,6 +41,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -53,6 +51,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cz.offlinka.ui.R
 import cz.offlinka.ui.components.BookBadge
+import cz.offlinka.ui.components.BookStateLine
+import cz.offlinka.ui.components.StatefulBadge
+import cz.offlinka.ui.components.Hairline
+import cz.offlinka.ui.components.BarIconButton
+import cz.offlinka.ui.components.BrandDialog
+import cz.offlinka.ui.components.SearchNoteBox
 import cz.offlinka.ui.components.HeroBox
 import cz.offlinka.ui.components.InkCard
 import cz.offlinka.ui.components.OfflinkaLogo
@@ -63,6 +67,9 @@ import cz.offlinka.ui.model.ArticleRef
 import cz.offlinka.ui.model.BookKind
 import cz.offlinka.ui.model.BookState
 import cz.offlinka.ui.model.BookUi
+import cz.offlinka.ui.model.TryNowKind
+import cz.offlinka.ui.model.TryNowItem
+import cz.offlinka.ui.model.SearchNote
 import cz.offlinka.ui.model.QuickLink
 import cz.offlinka.ui.model.bookDescription
 import cz.offlinka.ui.model.bookTitle
@@ -79,8 +86,10 @@ data class HomeState(
     val continueBook: BookUi? = null,
     val hasGuides: Boolean = true,
     val hasRandom: Boolean = true,
-    /** Accent-free search index being built on the phone, percent (a calm line, never blocking). */
-    val indexProgress: Int? = null,
+    /** Accent-free search being prepared / just ready: a note right under the search field. */
+    val searchNote: SearchNote? = null,
+    /** "Vyzkoušejte hned" links (first run, until dismissed); empty = no card. */
+    val tryNow: List<TryNowItem> = emptyList(),
 )
 
 @Composable
@@ -92,6 +101,10 @@ fun HomeScreen(
     onContinue: (ArticleRef) -> Unit,
     modifier: Modifier = Modifier,
     onRetryBook: (BookUi) -> Unit = {},
+    onTryNow: (TryNowItem) -> Unit = {},
+    onDismissTryNow: () -> Unit = {},
+    /** The note's X: hides it only (stopping lives in book details). */
+    onDismissNote: () -> Unit = {},
 ) {
     val c = Offlinka.colors
     var failed by remember { mutableStateOf<BookUi?>(null) }
@@ -103,6 +116,8 @@ fun HomeScreen(
         }
     }
     failed?.let { b -> RetryBookDialog(b, onRetry = { failed = null; onRetryBook(b) }, onDismiss = { failed = null }) }
+    // Large system fonts: the badge moves under the title and tiles go to one column.
+    val large = LocalDensity.current.fontScale >= LARGE_FONT
     Column(
         modifier
             .fillMaxSize()
@@ -121,7 +136,7 @@ fun HomeScreen(
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         OfflinkaLogo(Modifier.height(30.dp), onDark = true)
                         Spacer(Modifier.weight(1f))
-                        OfflineBadge()
+                        if (!large) OfflineBadge()
                     }
                     Spacer(Modifier.height(30.dp))
                     Text(
@@ -130,8 +145,16 @@ fun HomeScreen(
                         color = c.onHero,
                         modifier = Modifier.semantics { heading() },
                     )
+                    if (large) {
+                        Spacer(Modifier.height(6.dp))
+                        OfflineLine()
+                    }
                     Spacer(Modifier.height(18.dp))
                     SearchLauncher(onSearch)
+                    state.searchNote?.let { note ->
+                        Spacer(Modifier.height(12.dp))
+                        SearchNoteBox(note, onDismissNote, onHero = true)
+                    }
                 }
                 QuickLinks(state, onQuickLink)
                 Ridge()
@@ -148,6 +171,10 @@ fun HomeScreen(
             if (cont != null) {
                 Spacer(Modifier.height(10.dp))
                 ContinueCard(cont, state.continueBook, onContinue)
+            }
+            if (state.tryNow.isNotEmpty()) {
+                Spacer(Modifier.height(14.dp))
+                TryNowCard(state.tryNow, onTryNow, onDismissTryNow)
             }
             Row(
                 Modifier.fillMaxWidth().padding(top = 26.dp, bottom = 14.dp),
@@ -167,15 +194,7 @@ fun HomeScreen(
                     color = c.ink2,
                 )
             }
-            BookGrid(state.books, open)
-            state.indexProgress?.let { p ->
-                Text(
-                    stringResource(R.string.search_index_building, p),
-                    style = Offlinka.type.label,
-                    color = c.ink2,
-                    modifier = Modifier.padding(top = 14.dp),
-                )
-            }
+            BookGrid(state.books, open, oneColumn = large)
             Spacer(Modifier.height(28.dp))
         }
     }
@@ -196,6 +215,17 @@ private fun OfflineBadge() {
     }
 }
 
+/** "Funguje bez internetu" as a plain line under the title (large fonts: the badge would crowd the logo). */
+@Composable
+private fun OfflineLine() {
+    val c = Offlinka.colors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(9.dp).clip(RoundedCornerShape(5.dp)).background(c.ok))
+        Spacer(Modifier.size(8.dp))
+        Text(stringResource(R.string.status_offline), style = Offlinka.type.label, color = c.onHero2)
+    }
+}
+
 /** Looks like a search field; opens the search screen. */
 @Composable
 private fun SearchLauncher(onSearch: () -> Unit) {
@@ -204,7 +234,8 @@ private fun SearchLauncher(onSearch: () -> Unit) {
         onClick = onSearch,
         onClickLabel = stringResource(R.string.cd_search),
         shadow = Offlinka.elevation.raised,
-        border = c.outline,
+        // Dark theme: the field barely differs from the forest; a lighter outline marks the main action.
+        border = if (c.isDark) c.onHero3.copy(alpha = 0.6f) else c.outline,
         borderWidth = 2.dp,
         contentPadding = PaddingValues(0.dp),
         modifier = Modifier.fillMaxWidth(),
@@ -307,13 +338,14 @@ private fun ContinueCard(ref: ArticleRef, book: BookUi?, onContinue: (ArticleRef
     }
 }
 
-/** Czech Wikipedia (the first book) full width, the rest in a grid. */
+/** Czech Wikipedia (the first book) full width, the rest in a grid (one column at large font sizes). */
 @Composable
-private fun BookGrid(books: List<BookUi>, onOpenBook: (BookUi) -> Unit) {
+private fun BookGrid(books: List<BookUi>, onOpenBook: (BookUi) -> Unit, oneColumn: Boolean = false) {
     if (books.isEmpty()) return
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val columns = when {
-            maxWidth >= 600.dp -> 3
+            maxWidth >= 600.dp -> if (oneColumn) 2 else 3
+            oneColumn -> 1
             maxWidth >= 320.dp -> 2
             else -> 1
         }
@@ -338,13 +370,6 @@ private fun langTag(book: BookUi): String? = when {
     else -> null
 }
 
-/** Opening / failed books: dimmed, with a short state line instead of the description. */
-@Composable
-private fun stateLine(book: BookUi): String? = when (book.state) {
-    BookState.OPENING -> stringResource(R.string.library_opening)
-    BookState.FAILED -> stringResource(R.string.library_open_failed)
-    BookState.OPEN -> null
-}
 
 @Composable
 private fun WideBookTile(book: BookUi, onOpenBook: (BookUi) -> Unit) {
@@ -354,15 +379,19 @@ private fun WideBookTile(book: BookUi, onOpenBook: (BookUi) -> Unit) {
     InkCard(
         onClick = { onOpenBook(book) },
         onClickLabel = stringResource(R.string.cd_open_book, title),
-        modifier = Modifier.fillMaxWidth().alpha(if (book.state == BookState.OPEN) 1f else 0.62f),
+        modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 18.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            BookBadge(book.icon, tone.background, tone.foreground)
+            StatefulBadge(book, tone.background, tone.foreground)
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, style = Offlinka.type.title.copy(fontSize = 21.sp, lineHeight = 26.sp), color = c.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(stateLine(book) ?: bookDescription(book), style = Offlinka.type.body, color = c.ink2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (book.state == BookState.OPEN) {
+                    Text(bookDescription(book), style = Offlinka.type.body, color = c.ink2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                } else {
+                    BookStateLine(book.state, Offlinka.type.body)
+                }
             }
             langTag(book)?.let {
                 Spacer(Modifier.width(8.dp))
@@ -380,35 +409,88 @@ private fun BookTile(book: BookUi, modifier: Modifier, onOpenBook: (BookUi) -> U
     InkCard(
         onClick = { onOpenBook(book) },
         onClickLabel = stringResource(R.string.cd_open_book, title),
-        modifier = modifier.alpha(if (book.state == BookState.OPEN) 1f else 0.62f),
+        modifier = modifier,
         contentPadding = PaddingValues(start = 16.dp, end = 12.dp, top = 16.dp, bottom = 18.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-            BookBadge(book.icon, tone.background, tone.foreground)
+            StatefulBadge(book, tone.background, tone.foreground)
             Spacer(Modifier.weight(1f))
             langTag(book)?.let { Tag(it) }
         }
         Spacer(Modifier.height(16.dp))
         Text(title, style = Offlinka.type.title, color = c.ink, maxLines = 3, overflow = TextOverflow.Ellipsis)
         Spacer(Modifier.height(4.dp))
-        Text(stateLine(book) ?: bookDescription(book), style = Offlinka.type.bodySmall, color = c.ink2, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        if (book.state == BookState.OPEN) {
+            Text(bookDescription(book), style = Offlinka.type.bodySmall, color = c.ink2, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        } else {
+            BookStateLine(book.state, Offlinka.type.bodySmall)
+        }
     }
 }
 
-/** A book that could not be opened: the calm error and "Zkusit znovu". */
+/** A book that could not be opened: the calm error and "Zkusit znovu", in the brand dialog. */
 @Composable
 internal fun RetryBookDialog(book: BookUi, onRetry: () -> Unit, onDismiss: () -> Unit) {
-    val c = Offlinka.colors
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(bookTitle(book), style = Offlinka.type.title) },
-        text = { Text(stringResource(R.string.error_body), style = Offlinka.type.body) },
-        confirmButton = {
-            TextButton(onClick = onRetry) { Text(stringResource(R.string.action_retry), style = Offlinka.type.label, color = c.link) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close), style = Offlinka.type.label, color = c.ink) }
-        },
-        containerColor = c.surface,
+    BrandDialog(
+        icon = OfflinkaIcons.Warning,
+        title = stringResource(R.string.error_title),
+        body = bookTitle(book) + "\n" + stringResource(R.string.error_body),
+        primary = stringResource(R.string.action_retry),
+        onPrimary = onRetry,
+        onDismiss = onDismiss,
     )
 }
+
+/** "Vyzkoušejte hned": four links that work right away (first run, until closed). */
+@Composable
+private fun TryNowCard(items: List<TryNowItem>, onTryNow: (TryNowItem) -> Unit, onDismiss: () -> Unit) {
+    val c = Offlinka.colors
+    InkCard(
+        modifier = Modifier.fillMaxWidth(),
+        shadow = null,
+        border = c.line,
+        contentPadding = PaddingValues(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.try_title),
+                style = Offlinka.type.title,
+                color = c.ink,
+                modifier = Modifier.weight(1f).semantics { heading() },
+            )
+            BarIconButton(OfflinkaIcons.Close, stringResource(R.string.action_close), onDismiss, tint = c.ink2)
+        }
+        items.forEachIndexed { i, item ->
+            if (i > 0) Hairline(color = c.lineSoft, modifier = Modifier.padding(start = 52.dp, end = 12.dp))
+            val (icon, family) = when (item.kind) {
+                TryNowKind.ARTICLE -> OfflinkaIcons.BookWikipedia to BookFamily.Wiki
+                TryNowKind.MAP -> OfflinkaIcons.BookMaps to BookFamily.Maps
+                TryNowKind.FIRST_AID -> OfflinkaIcons.FirstAid to BookFamily.Aid
+                TryNowKind.GAME -> OfflinkaIcons.BookGames to BookFamily.Games
+            }
+            val label = when (item.kind) {
+                TryNowKind.ARTICLE -> item.label
+                TryNowKind.MAP -> stringResource(R.string.try_map)
+                TryNowKind.FIRST_AID -> stringResource(R.string.try_first_aid)
+                TryNowKind.GAME -> stringResource(R.string.try_game)
+            }
+            val tone = bookTone(family, c.isDark)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(role = Role.Button) { onTryNow(item) }
+                    .heightIn(min = 52.dp)
+                    .padding(end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BookBadge(icon, tone.background, tone.foreground, size = 36.dp)
+                Spacer(Modifier.width(16.dp))
+                Text(label, style = Offlinka.type.subhead, color = c.ink, modifier = Modifier.weight(1f))
+                Icon(OfflinkaIcons.ChevronRight, null, tint = c.ink2)
+            }
+        }
+    }
+}
+
+private const val LARGE_FONT = 1.3f

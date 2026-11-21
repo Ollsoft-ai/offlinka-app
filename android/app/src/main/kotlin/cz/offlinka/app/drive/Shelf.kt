@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -47,6 +48,7 @@ class OpenBook(
     override val mainPath: String? get() = content.info.mainPath
     override val isWiki: Boolean get() = ui.kind.isWiki
     override val isMap: Boolean get() = ui.kind == BookKind.MAPS
+    override val language: String get() = ui.language
 }
 
 sealed interface ShelfState {
@@ -82,6 +84,9 @@ sealed interface ShelfState {
 /** On-device search index being built. */
 data class IndexProgress(val bookId: String, val fraction: Double)
 
+/** Books waiting for an index, and whether the last attempt stopped for lack of space on the phone. */
+data class IndexRun(val queued: Set<String> = emptySet(), val lowSpace: Boolean = false)
+
 /** Remembers drive names, so an unplugged drive keeps its label in Settings. */
 interface DriveMemory {
     fun label(tree: String): String?
@@ -91,6 +96,11 @@ interface DriveMemory {
     /** Books whose heavy search index the user asked for (English top1m); kept so a restart resumes it. */
     fun indexRequests(): Set<String> = emptySet()
     fun requestIndex(bookId: String) {}
+    fun cancelIndexRequest(bookId: String) {}
+
+    /** Names of the phone-built indexes this drive's books use (its last listing), so they survive an unplug. */
+    fun indexesOf(tree: String): Set<String>? = null
+    fun rememberIndexes(tree: String, names: Set<String>) {}
 }
 
 class InMemoryDriveMemory : DriveMemory {
@@ -98,9 +108,16 @@ class InMemoryDriveMemory : DriveMemory {
     private val requests = mutableSetOf<String>()
     override fun label(tree: String) = labels[tree]
     override fun remember(tree: String, label: String) { labels[tree] = label }
-    override fun forget(tree: String) { labels.remove(tree) }
+    override fun forget(tree: String) {
+        labels.remove(tree)
+        synchronized(indexes) { indexes.remove(tree) }
+    }
+    private val indexes = mutableMapOf<String, Set<String>>()
     override fun indexRequests(): Set<String> = synchronized(requests) { requests.toSet() }
     override fun requestIndex(bookId: String) { synchronized(requests) { requests += bookId } }
+    override fun cancelIndexRequest(bookId: String) { synchronized(requests) { requests -= bookId } }
+    override fun indexesOf(tree: String): Set<String>? = synchronized(indexes) { indexes[tree] }
+    override fun rememberIndexes(tree: String, names: Set<String>) { synchronized(indexes) { indexes[tree] = names } }
 }
 
 /**
@@ -131,7 +148,16 @@ class Shelf(
     val state: StateFlow<ShelfState> = _state.asStateFlow()
 
     private val _indexing = MutableStateFlow<IndexProgress?>(null)
+    /** The index being built right now (one at a time). */
     val indexing: StateFlow<IndexProgress?> = _indexing.asStateFlow()
+
+    private val _indexRun = MutableStateFlow(IndexRun())
+    /** Queue and space state of the index builder, for "Ve frontě" / "Málo místa". */
+    val indexRun: StateFlow<IndexRun> = _indexRun.asStateFlow()
+
+    private val _indexed = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    /** Book ids whose index was just built and attached (the one-time "Hledání je připravené"). */
+    val indexed: SharedFlow<String> = _indexed
 
     private val lock = Mutex()
     private val publish = Mutex()
@@ -152,6 +178,16 @@ class Shelf(
 
     /** The current books, or null while there is no drive. Safe from any thread. */
     val ready: ShelfState.Ready? get() = _state.value as? ShelfState.Ready
+
+    /**
+     * A page of [bookId] cannot be served yet but may be soon (the book is still opening, or the shelf is
+     * loading or waiting for the drive): answer 503 so the reader reloads it, not "Článek tu není".
+     */
+    fun isPending(bookId: String): Boolean = when (val s = _state.value) {
+        is ShelfState.Ready -> s.tiles.any { it.id == bookId && it.state == BookState.OPENING }
+        ShelfState.Loading, ShelfState.Unplugged -> true
+        else -> false
+    }
 
     /** Books the reader may serve now: the drive's, or only the bundled guides without a drive. */
     fun servedBooks(): Map<String, OpenBook> =
@@ -187,6 +223,7 @@ class Shelf(
                 // With books open (Settings → "Vybrat jinou flashku") they stay usable while the new drive is scanned.
                 val hadBooks = _state.value is ShelfState.Ready
                 if (!hadBooks) _state.value = ShelfState.Loading
+                val wasGranted = withContext(io) { runCatching { tree in drives.grantedTrees() }.getOrDefault(false) }
                 val persisted = withContext(io) {
                     runCatching { drives.persist(tree) }.onFailure { Log.w(TAG, "persist failed", it) }.isSuccess
                 }
@@ -197,7 +234,10 @@ class Shelf(
                     !persisted -> ConnectProblem.NO_ACCESS
                     else -> null
                 }
-                if (problem != null && problem != ConnectProblem.NO_ACCESS && persisted) withContext(io) { drives.release(tree) }
+                // Only a new grant is given back; a drive already in use keeps its permission (a listing can fail briefly).
+                if (problem != null && problem != ConnectProblem.NO_ACCESS && persisted && !wasGranted) {
+                    withContext(io) { drives.release(tree) }
+                }
                 when {
                     problem == null -> loadLocked()
                     // The books already open stay; the problem is a short message instead of the connect screen.
@@ -224,8 +264,12 @@ class Shelf(
     fun forget(tree: String) {
         scope.launch {
             withContext(io) {
-                drives.release(Uri.parse(tree))
-                memory.forget(tree)
+                val volume = DriveTrees.volumeId(Uri.parse(tree))
+                val trees = (drives.grantedTrees().filter { DriveTrees.volumeId(it) == volume } + Uri.parse(tree)).distinct()
+                trees.forEach { t ->
+                    drives.release(t)
+                    memory.forget(t.toString())
+                }
             }
             reload()
         }
@@ -239,8 +283,15 @@ class Shelf(
             val tile = now.tiles.firstOrNull { it.id == bookId && it.state == BookState.FAILED } ?: return@launch
             val choice = BookSelector.select(l.files, uiLanguage()).firstOrNull { it.key == bookId } ?: return@launch
             publishTile(now.generation, tile.copy(state = BookState.OPENING), null)
-            val opened = withContext(io) { openChoice(choice, l) }
-            publishTile(now.generation, opened?.ui ?: tile.copy(state = BookState.FAILED), opened)
+            var opened: OpenBook? = null
+            var published = false
+            try {
+                opened = withContext(io) { openChoice(choice, l) }
+                published = publishTile(now.generation, opened?.ui ?: tile.copy(state = BookState.FAILED), opened)
+            } finally {
+                // Never published (unplugged or reloaded meanwhile): nobody references it, free it now.
+                if (!published) opened?.let { destroyLater(it) }
+            }
         }
     }
 
@@ -262,7 +313,7 @@ class Shelf(
                         indexJob?.cancel()
                         // Publish first, close after: a WebView thread must never get a closed book.
                         _state.value = ShelfState.Unplugged
-                        closeBooks(now)
+                        retire(now)
                         watchForReturn()
                     }
                 }
@@ -291,6 +342,13 @@ class Shelf(
     /** Stops building search indexes for this session. */
     fun cancelIndexing() {
         indexCancelled = true
+    }
+
+    /** Book details → "Zastavit přípravu": stop this book's index now, forget the request, go on with the others. */
+    fun stopIndex(bookId: String) {
+        memory.cancelIndexRequest(bookId)
+        stoppedIndex += bookId
+        updateQueue()
     }
 
     private fun reachableTrees(): List<Uri> = drives.grantedTrees().filter { reachable(it) }
@@ -337,25 +395,25 @@ class Shelf(
         val trees = withContext(io) { drives.grantedTrees() }
         if (trees.isEmpty()) {
             _state.value = ShelfState.NoDrive
-            (before as? ShelfState.Ready)?.let { closeBooks(it) }
+            (before as? ShelfState.Ready)?.let { retire(it) }
             return
         }
         if (before !is ShelfState.Ready) _state.value = ShelfState.Loading
-        val l = withContext(io) { scan(trees) }
+        val l = withContext(io) { scan(trees).also { cleanupIndexes(it) } }
         if (l.reachable.isEmpty()) {
             _state.value = if (before is ShelfState.Ready || before is ShelfState.Unplugged) {
                 ShelfState.Unplugged.also { watchForReturn() }
             } else {
                 ShelfState.Problem(ConnectProblem.NOT_FOUND).also { watchForReturnFromProblem() }
             }
-            (before as? ShelfState.Ready)?.let { closeBooks(it) }
+            (before as? ShelfState.Ready)?.let { retire(it) }
             return
         }
         val ui = uiLanguage()
         val choices = BookSelector.select(l.files, ui)
         if (choices.isEmpty()) {
             _state.value = ShelfState.Problem(ConnectProblem.WRONG_FOLDER)
-            (before as? ShelfState.Ready)?.let { closeBooks(it) }
+            (before as? ShelfState.Ready)?.let { retire(it) }
             return
         }
         listing = l
@@ -400,18 +458,30 @@ class Shelf(
         )
         // Publish first, close the old books after: in-flight WebView requests switch to the new ones.
         publish.withLock { _state.value = readyState }
-        (before as? ShelfState.Ready)?.let { closeBooks(it) }
+        (before as? ShelfState.Ready)?.let { retire(it) }
         openJob = scope.launch {
             coroutineScope {
                 val limited = io.limitedParallelism(openParallelism)
                 for (c in opening) {
                     launch(limited) {
-                        val b = openChoice(c, l)
-                        val tile = b?.ui ?: uiFor(c.name, c.zim.name, c.zim.size, c.zim.folder, l.labels[c.zim.driveIndex])
-                            .copy(state = BookState.FAILED)
-                        if (!publishTile(gen, tile, b)) b?.content?.let { runCatching { it.close() } }
+                        var b: OpenBook? = null
+                        var published = false
+                        try {
+                            b = openChoice(c, l)
+                            val tile = b?.ui ?: uiFor(c.name, c.zim.name, c.zim.size, c.zim.folder, l.labels[c.zim.driveIndex])
+                                .copy(state = BookState.FAILED)
+                            published = publishTile(gen, tile, b)
+                        } finally {
+                            // Opened but never published (reload, unplug, cancel): nobody holds it, free it now.
+                            if (!published) b?.let { destroyLater(it) }
+                        }
                     }
                 }
+            }
+            // A drive pulled during the first scan leaves only failed tiles: show the unplugged cover now.
+            val now = ready
+            if (now != null && now.generation == gen && now.tiles.any { it.state == BookState.FAILED }) {
+                if (withContext(io) { reachableTrees().isEmpty() }) reportIoError(IOException("drive gone while opening"))
             }
             startIndexing(gen)
         }
@@ -425,35 +495,43 @@ class Shelf(
         val now = _state.value as? ShelfState.Ready ?: return@withLock false
         if (now.generation != gen || gen != generation) return@withLock false
         if (book != null && now.byId[book.id] == null) withContext(io) { runCatching { now.library.add(book.content) } }
-        _state.value = now.copy(
-            tiles = now.tiles.map { if (it.id == tile.id) tile else it },
-            books = if (book != null) now.books.filter { it.id != book.id } + book else now.books,
+        if (gen != generation) return@withLock false
+        // Compare-and-set: an Unplugged (or newer) state written meanwhile is never overwritten by this old one.
+        _state.compareAndSet(
+            now,
+            now.copy(
+                tiles = now.tiles.map { if (it.id == tile.id) tile else it },
+                books = if (book != null) now.books.filter { it.id != book.id } + book else now.books,
+            ),
         )
-        true
     }
 
+    /** One row per physical drive: Knihovna and Telefon picked separately on the same volume are one drive. */
     private fun drivesUi(trees: List<Uri>, l: Listing, choices: List<BookChoice>): List<DriveUi> =
-        trees.mapIndexed { i, t ->
-            val key = t.toString()
-            val label = l.labels[i] ?: memory.label(key)
+        trees.indices.groupBy { DriveTrees.volumeId(trees[it]) }.values.map { idx ->
+            val label = idx.firstNotNullOfOrNull { l.labels[it] } ?: idx.firstNotNullOfOrNull { memory.label(trees[it].toString()) }
             DriveUi(
-                id = key,
+                id = trees[idx.first()].toString(),
                 name = label ?: DEFAULT_LABEL,
-                bookCount = choices.count { it.zim.driveIndex == i },
-                connected = t in l.reachable,
-                edition = l.editions.getOrNull(i),
-                totalBytes = l.files.filter { it.driveIndex == i && it.name.endsWith(".zim", true) }.sumOf { it.size },
+                bookCount = choices.count { it.zim.driveIndex in idx },
+                connected = idx.any { trees[it] in l.reachable },
+                edition = idx.firstNotNullOfOrNull { l.editions.getOrNull(it) },
+                totalBytes = l.files.filter { it.driveIndex in idx && it.name.endsWith(".zim", true) }.sumOf { it.size },
             )
         }
 
     /** Files whose index failed to build or attach this session (not retried until the next start). */
     private val failedIndex: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf())
+    /** Books the user stopped in book details this session. */
+    private val stoppedIndex: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf())
     @Volatile private var indexJobGen = -1
 
-    /** Book details → "Připravit hledání bez háčků" for a book that is not indexed automatically. */
+    /** Book details → "Připravit hledání" for a book that is not indexed automatically (English top1m). */
     fun buildIndexNow(bookId: String) {
         memory.requestIndex(bookId)
+        stoppedIndex -= bookId
         indexCancelled = false
+        updateQueue()
         ready?.let { startIndexing(it.generation) }
     }
 
@@ -462,22 +540,28 @@ class Shelf(
         indexDir != null && !book.builtin && BookSelector.onDemandIndex(ZimName.parse(book.ui.fileName)) &&
             book.id !in memory.indexRequests()
 
-    /** The next book to index: automatic ones by priority, then those the user asked for. */
-    private fun nextIndexTarget(ui: String): OpenBook? {
-        val now = ready ?: return null
+    /** Books still waiting for an index, in build order (automatic ones by priority, then those asked for). */
+    private fun indexTargets(ui: String): List<OpenBook> {
+        val now = ready ?: return emptyList()
+        if (indexDir == null) return emptyList()
         val asked = memory.indexRequests()
         return now.books
-            .filter { !it.builtin && !it.ui.hasIndex && it.ui.fileName !in failedIndex }
+            .filter { !it.builtin && !it.ui.hasIndex && it.ui.fileName !in failedIndex && it.id !in stoppedIndex }
             .mapNotNull { b ->
                 val p = BookSelector.indexPriority(ZimName.parse(b.ui.fileName), ui) ?: if (b.id in asked) 10 else null
                 p?.let { b to it }
             }
-            .minWithOrNull(compareBy({ it.second }, { it.first.ui.sizeBytes }))?.first
+            .sortedWith(compareBy({ it.second }, { it.first.ui.sizeBytes }))
+            .map { it.first }
+    }
+
+    private fun updateQueue(lowSpace: Boolean = _indexRun.value.lowSpace) {
+        _indexRun.value = IndexRun(indexTargets(uiLanguage()).map { it.id }.toSet(), lowSpace)
     }
 
     /**
      * Builds missing search indexes one by one into app storage (never on the drive), in the background.
-     * Reading never waits for it; a restart simply continues with what is still missing.
+     * Reading never waits for it; a restart continues with what is still missing (a killed build starts over).
      */
     private fun startIndexing(gen: Int) {
         val dir = indexDir ?: return
@@ -487,32 +571,51 @@ class Shelf(
         indexJob = scope.launch(io) {
             previous?.cancelAndJoin()
             val ui = uiLanguage()
+            updateQueue(lowSpace = false)
             while (isActive && gen == generation && !indexCancelled) {
-                val b = nextIndexTarget(ui) ?: break
+                val b = indexTargets(ui).firstOrNull() ?: break
                 val size = listing?.files?.firstOrNull { it.name == b.ui.fileName }?.size ?: b.ui.sizeBytes
                 val file = File(dir, indexFileName(b.ui.fileName, size))
                 if (!file.isFile) {
                     dir.mkdirs()
-                    if (dir.usableSpace < minFreeForIndex) break
+                    if (dir.usableSpace < minFreeForIndex) {
+                        updateQueue(lowSpace = true)
+                        break
+                    }
                     _indexing.value = IndexProgress(b.id, 0.0)
                     try {
                         source.buildIndex(
                             b.content, file.path,
                             onProgress = { f -> _indexing.value = IndexProgress(b.id, f) },
-                            isCancelled = { !isActive || gen != generation || indexCancelled },
+                            isCancelled = { !isActive || gen != generation || indexCancelled || b.id in stoppedIndex },
                         )
                     } catch (e: ContentException.Cancelled) {
+                        _indexing.value = null
+                        if (b.id in stoppedIndex) {
+                            updateQueue()
+                            continue
+                        }
                         break
                     } catch (e: ContentException.Io) {
-                        // A rescan retired this book (its file is closed) or the drive is gone.
-                        if (gen == generation) reportIoError(e)
-                        break
+                        _indexing.value = null
+                        File(file.path + ".part").delete()
+                        if (gen != generation) break
+                        // A bad sector or a full phone: skip this book. Only a gone drive stops everything.
+                        if (reachableTrees().isEmpty()) {
+                            reportIoError(e)
+                            break
+                        }
+                        Log.w(TAG, "index of ${b.id} failed, going on", e)
+                        failedIndex += b.ui.fileName
+                        updateQueue()
+                        continue
                     } catch (e: Exception) {
+                        _indexing.value = null
                         Log.w(TAG, "index of ${b.id} not built", e)
                         failedIndex += b.ui.fileName
+                        updateQueue()
                         continue
                     }
-                    removeOtherEditions(dir, b.id, file)
                 }
                 val attached = runCatching { b.content.attachIndexPath(file.path) }
                     .onFailure {
@@ -520,17 +623,37 @@ class Shelf(
                         file.delete()
                         failedIndex += b.ui.fileName
                     }.isSuccess
-                if (attached) publishTile(gen, b.ui.copy(hasIndex = true), OpenBook(b.ui.copy(hasIndex = true), b.content, b.coreId))
+                _indexing.value = null
+                if (attached && publishTile(gen, b.ui.copy(hasIndex = true), OpenBook(b.ui.copy(hasIndex = true), b.content, b.coreId))) {
+                    _indexed.tryEmit(b.id)
+                }
+                updateQueue()
             }
             _indexing.value = null
+            if (!_indexRun.value.lowSpace) _indexRun.value = IndexRun(emptySet(), false)
         }
     }
 
-    /** A new edition got its index: the old edition's index of the same book is dead weight. */
-    private fun removeOtherEditions(dir: File, bookId: String, keep: File) {
-        dir.listFiles()?.filter { f ->
-            f != keep && f.name.endsWith(".offidx") && runCatching { ZimName.parse(f.name.substringBeforeLast('-') + ".zim").key }.getOrNull() == bookId
-        }?.forEach { it.delete() }
+    /**
+     * Keeps the index folder to what the drives still use: an index survives while a remembered drive's last
+     * listing has its book (so unplugging a second drive keeps its indexes), half-built `.part` files go, and
+     * a phone-built index goes once the drive ships its own `.offidx`.
+     */
+    private fun cleanupIndexes(l: Listing) {
+        val dir = indexDir ?: return
+        val shipped = l.files.filter { it.name.endsWith(".offidx", true) }
+            .associateBy { Triple(it.driveIndex, it.folder, it.name.substringBeforeLast('.').lowercase()) }
+        l.trees.forEachIndexed { i, t ->
+            if (t !in l.reachable) return@forEachIndexed
+            val names = l.files.filter { it.driveIndex == i && it.name.endsWith(".zim", true) && BookSelector.indexFor(it, shipped) == null }
+                .map { indexFileName(it.name, it.size) }.toSet()
+            runCatching { memory.rememberIndexes(t.toString(), names) }
+        }
+        val keep = l.trees.flatMap { memory.indexesOf(it.toString()).orEmpty() }.toSet()
+        dir.listFiles()?.forEach { f ->
+            val stale = f.name.endsWith(".part") || (f.name.endsWith(".offidx") && f.name !in keep)
+            if (stale && f.delete()) Log.i(TAG, "removed index ${f.name}")
+        }
     }
 
     /** Search opened: load the in-memory part of every attached index now, off the UI thread. */
@@ -556,7 +679,13 @@ class Shelf(
         val labels = mutableListOf<String?>()
         val editions = MutableList<String?>(trees.size) { null }
         trees.forEachIndexed { index, tree ->
-            val label = runCatching { drives.label(tree) }.getOrNull()
+            val folderName = runCatching { drives.label(tree) }.getOrNull()
+            // A folder inside the drive was picked (Knihovna, Telefon): name the drive, not the folder.
+            val label = if (DriveTrees.pickedPath(tree).isEmpty()) {
+                folderName
+            } else {
+                runCatching { drives.volumeLabel(tree) }.getOrNull() ?: DEFAULT_LABEL
+            }
             labels += label
             val root = try {
                 drives.list(tree, null)
@@ -579,8 +708,8 @@ class Shelf(
             add(
                 root,
                 when {
-                    label.equals("Knihovna", true) -> DriveFolder.LIBRARY
-                    label.equals("Telefon", true) -> DriveFolder.PHONE
+                    folderName.equals("Knihovna", true) -> DriveFolder.LIBRARY
+                    folderName.equals("Telefon", true) -> DriveFolder.PHONE
                     else -> DriveFolder.PICKED
                 },
             )
@@ -665,8 +794,16 @@ class Shelf(
      * leak) and later reads fail softly with Io (served as 503, the reader reloads). The native objects
      * are freed by the UniFFI cleaner once nothing references them.
      */
-    private fun closeBooks(ready: ShelfState.Ready) {
-        ready.books.filter { !it.builtin }.forEach { b -> runCatching { b.content.closeFile() } }
+    private fun retire(ready: ShelfState.Ready) {
+        val books = ready.books.filter { !it.builtin }
+        if (books.isEmpty()) return
+        // Off the main thread: closing waits for reads in progress, which hang while USB retries on a pulled drive.
+        scope.launch(io + NonCancellable) { books.forEach { b -> runCatching { b.content.closeFile() } } }
+    }
+
+    /** A book that was never published: no other thread can hold it, so it is destroyed (off the main thread). */
+    private fun destroyLater(b: OpenBook) {
+        scope.launch(io + NonCancellable) { runCatching { b.content.close() } }
     }
 
     /** Book to use for "Náhodný článek" and the default search scope: the UI-language Wikipedia when present. */

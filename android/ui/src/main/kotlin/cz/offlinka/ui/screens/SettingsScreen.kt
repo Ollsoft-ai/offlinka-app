@@ -139,17 +139,7 @@ fun SettingsScreen(
                     }
                     GroupDivider()
                     NavRow(OfflinkaIcons.Folder, stringResource(R.string.settings_drive_change), null, onChangeDrive)
-                    GroupDivider()
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(OfflinkaIcons.PhoneCopy, null, tint = c.ink3, modifier = Modifier.size(26.dp))
-                        Spacer(Modifier.width(16.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(stringResource(R.string.settings_keep_copy_title), style = Offlinka.type.subhead, color = c.ink3)
-                            Text(stringResource(R.string.settings_keep_copy_body), style = Offlinka.type.bodySmall, color = c.ink3)
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        Tag(stringResource(R.string.settings_soon), color = c.warnInk, background = c.warnBg, border = c.warnBg)
-                    }
+                    // "Kopie v telefonu" stays hidden until the feature ships (a "Brzy" row looks unfinished).
                 }
 
                 SectionLabel(stringResource(R.string.settings_section_privacy))

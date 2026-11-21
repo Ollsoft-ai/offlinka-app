@@ -16,6 +16,8 @@ data class SettingsValues(
     val theme: ThemeMode = ThemeMode.SYSTEM,
     val textZoom: Int = 100,
     val saveHistory: Boolean = true,
+    /** "Vyzkoušejte hned" was closed (or used) once: never shown again. */
+    val tryNowDismissed: Boolean = false,
 )
 
 /**
@@ -32,7 +34,20 @@ class Settings(private val prefs: SharedPreferences, private val locales: Locale
         theme = runCatching { ThemeMode.valueOf(prefs.getString(KEY_THEME, null) ?: "SYSTEM") }.getOrDefault(ThemeMode.SYSTEM),
         textZoom = prefs.getInt(KEY_ZOOM, 100).coerceIn(TextZoom.MIN, TextZoom.MAX),
         saveHistory = prefs.getBoolean(KEY_HISTORY, true),
+        tryNowDismissed = prefs.getBoolean(KEY_TRY_NOW, false),
     )
+
+    fun dismissTryNow() {
+        prefs.edit { putBoolean(KEY_TRY_NOW, true) }
+        _values.value = _values.value.copy(tryNowDismissed = true)
+    }
+
+    /** True exactly once per install: Uložené gets the two emergency guides pre-filled. */
+    fun takeFirstRunSeed(): Boolean {
+        if (prefs.getBoolean(KEY_SEEDED, false)) return false
+        prefs.edit { putBoolean(KEY_SEEDED, true) }
+        return true
+    }
 
     fun setTheme(mode: ThemeMode) {
         prefs.edit { putString(KEY_THEME, mode.name) }
@@ -70,6 +85,8 @@ class Settings(private val prefs: SharedPreferences, private val locales: Locale
         const val KEY_THEME = "theme"
         const val KEY_ZOOM = "text_zoom"
         const val KEY_HISTORY = "save_history"
+        const val KEY_TRY_NOW = "try_now_dismissed"
+        const val KEY_SEEDED = "saved_seeded"
     }
 }
 

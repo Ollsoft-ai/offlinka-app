@@ -40,6 +40,9 @@ import cz.offlinka.ui.screens.SettingsState
 import cz.offlinka.ui.theme.Offlinka
 import cz.offlinka.ui.theme.OfflinkaTheme
 import cz.offlinka.ui.model.BookState
+import cz.offlinka.ui.model.IndexInfo
+import cz.offlinka.ui.model.IndexPhase
+import cz.offlinka.ui.model.SearchNote
 import cz.offlinka.ui.model.TocEntry
 import org.junit.Rule
 import org.junit.Test
@@ -48,11 +51,11 @@ import org.junit.runners.Parameterized
 import java.util.TimeZone
 
 /** One variant of the device: UI language and light/dark. */
-data class Variant(val name: String, val locale: String, val dark: Boolean, val fontScale: Float = 1f) {
+data class Variant(val name: String, val locale: String, val dark: Boolean, val fontScale: Float = 1f, val smallPhone: Boolean = false) {
     override fun toString() = name
 
     fun paparazzi() = Paparazzi(
-        deviceConfig = DeviceConfig.PIXEL_5.copy(
+        deviceConfig = (if (smallPhone) SMALL_PHONE else DeviceConfig.PIXEL_5).copy(
             locale = locale,
             nightMode = if (dark) NightMode.NIGHT else NightMode.NOTNIGHT,
             softButtons = false,
@@ -68,7 +71,19 @@ data class Variant(val name: String, val locale: String, val dark: Boolean, val 
         val EN_LIGHT = Variant("en-light", "en", false)
         val EN_DARK = Variant("en-dark", "en", true)
         val SK_LIGHT = Variant("sk-light", "sk", false)
+        val SK_DARK = Variant("sk-dark", "sk", true)
         val CS_LARGE = Variant("cs-font160", "cs", false, fontScale = 1.6f)
+        val SMALL = Variant("cs-360x640", "cs", false, smallPhone = true)
+        val SMALL_LARGE = Variant("cs-360x640-font160", "cs", false, fontScale = 1.6f, smallPhone = true)
+
+        /** A budget phone: 360 × 640 dp (720 × 1280 px at xhdpi). */
+        val SMALL_PHONE = DeviceConfig.PIXEL_5.copy(
+            screenWidth = 720,
+            screenHeight = 1280,
+            xdpi = 320,
+            ydpi = 320,
+            density = com.android.resources.Density.XHIGH,
+        )
     }
 }
 
@@ -80,12 +95,16 @@ class ScreensTest(private val v: Variant) {
     companion object {
         @JvmStatic
         @Parameterized.Parameters(name = "{0}")
-        fun variants() = listOf(Variant.CS_LIGHT, Variant.CS_DARK, Variant.EN_LIGHT, Variant.EN_DARK)
+        fun variants() = listOf(Variant.CS_LIGHT, Variant.CS_DARK, Variant.EN_LIGHT, Variant.EN_DARK, Variant.SK_DARK)
     }
 
     @get:Rule val paparazzi = v.paparazzi()
 
-    private fun snap(content: @Composable () -> Unit) = paparazzi.snapshot { OfflinkaTheme(darkTheme = v.dark, content = content) }
+    /** Slovak dark exists only for the store's dark reader screenshot ([reader]). */
+    private fun snap(skDark: Boolean = false, content: @Composable () -> Unit) {
+        org.junit.Assume.assumeTrue(v != Variant.SK_DARK || skDark)
+        paparazzi.snapshot { OfflinkaTheme(darkTheme = v.dark, content = content) }
+    }
 
     @Test fun connect() = snap { ConnectScreen(ConnectState(), onPick = noop) }
 
@@ -106,7 +125,7 @@ class ScreensTest(private val v: Variant) {
         )
     }
 
-    @Test fun reader() = snap {
+    @Test fun reader() = snap(skDark = true) {
         ReaderScreen(
             ReaderState(title = "Praha", book = Samples.csWiki, canGoBack = true, saved = true),
             onHome = noop, onBack = noop, onForward = noop, onToggleSave = noop, onSearch = noop, onOpenFind = noop,
@@ -181,12 +200,16 @@ class ScreenStatesTest(private val v: Variant) {
     companion object {
         @JvmStatic
         @Parameterized.Parameters(name = "{0}")
-        fun variants() = listOf(Variant.CS_LIGHT, Variant.CS_DARK)
+        fun variants() = listOf(Variant.CS_LIGHT, Variant.CS_DARK, Variant.SK_LIGHT, Variant.EN_LIGHT)
     }
 
     @get:Rule val paparazzi = v.paparazzi()
 
-    private fun snap(content: @Composable () -> Unit) = paparazzi.snapshot { OfflinkaTheme(darkTheme = v.dark, content = content) }
+    /** States are Czech only, except the store screenshots (map, guides) that need every language. */
+    private fun snap(allLanguages: Boolean = false, content: @Composable () -> Unit) {
+        org.junit.Assume.assumeTrue(v.locale == "cs" || allLanguages)
+        paparazzi.snapshot { OfflinkaTheme(darkTheme = v.dark, content = content) }
+    }
 
     @Test fun connectWrongFolder() = snap {
         ConnectScreen(ConnectState(problem = ConnectProblem.WRONG_FOLDER), onPick = noop)
@@ -247,14 +270,26 @@ class ScreenStatesTest(private val v: Variant) {
         ) { ArticleMock() }
     }
 
-    @Test fun readerMap() = snap {
+    @Test fun readerMap() = snap(allLanguages = true) {
+        val map = if (v.locale == "sk") Samples.mapSk else Samples.mapCz
         ReaderScreen(
-            ReaderState(title = "Czech Republic", book = Samples.mapCz, isApp = true),
+            ReaderState(title = if (v.locale == "sk") "Slovakia" else "Czech Republic", book = map, isApp = true, isMap = true),
             onHome = noop, onBack = noop, onForward = noop, onToggleSave = noop, onSearch = noop, onOpenFind = noop,
             onFindQuery = {}, onFindNext = {}, onCloseFind = noop, onToggleTextPanel = noop, onTextZoom = {},
             onTheme = {}, onMainPage = noop, onBookDetails = noop, onHistory = noop, onDismissExternal = noop,
             onCopyLink = {},
         ) { Column(Modifier.fillMaxSize().background(Offlinka.colors.surfaceMuted)) {} }
+    }
+
+    /** The bundled first-aid guide in the reader (store screenshot "První pomoc funguje i bez flashky"). */
+    @Test fun readerGuides() = snap(allLanguages = true) {
+        ReaderScreen(
+            ReaderState(title = "První pomoc – rychlé karty", book = Samples.guides, canGoBack = true, saved = true),
+            onHome = noop, onBack = noop, onForward = noop, onToggleSave = noop, onSearch = noop, onOpenFind = noop,
+            onFindQuery = {}, onFindNext = {}, onCloseFind = noop, onToggleTextPanel = noop, onTextZoom = {},
+            onTheme = {}, onMainPage = noop, onBookDetails = noop, onHistory = noop, onDismissExternal = noop,
+            onCopyLink = {},
+        ) { ArticleMock() }
     }
 
     @Test fun savedEmpty() = snap {
@@ -308,7 +343,7 @@ class ScreenStatesTest(private val v: Variant) {
 
     @Test fun searchIndexingAndRetry() = snap {
         SearchScreen(
-            SearchState(query = "krvácení z nosu u dětí", groups = Samples.searchGroups.take(1), retriedWord = "krvácení", indexProgress = 42),
+            SearchState(query = "krvácení z nosu u dětí", groups = Samples.searchGroups.take(1), retriedWord = "krvácení", searchNote = SearchNote(percent = 42), accentFreeReady = false),
             onQueryChange = {}, onSubmit = noop, onHit = {}, onRecent = {}, onRemoveRecent = {}, onScope = {}, onBack = noop,
             autoFocus = false,
         )
@@ -334,7 +369,76 @@ class ScreenStatesTest(private val v: Variant) {
     @Test fun bookDetailsIndexOffer() = snap {
         Box(Modifier.fillMaxSize()) {
             LibraryScreen(LibraryState(Samples.books, Samples.phoneEditions, Samples.drives.first()), onOpen = {}, onDetails = {})
-            BookDetailsSheet(BookDetailsState(Samples.enWiki.copy(hasIndex = false), canBuildIndex = true), onDismiss = noop, onOpen = noop)
+            BookDetailsSheet(BookDetailsState(Samples.enWiki.copy(hasIndex = false), index = IndexInfo(IndexPhase.OFFER)), onDismiss = noop, onOpen = noop)
+        }
+    }
+
+    @Test fun readerSaved() = snap {
+        ReaderScreen(
+            ReaderState(title = "Praha", book = Samples.csWiki, saved = true),
+            onHome = noop, onBack = noop, onForward = noop, onToggleSave = noop, onSearch = noop, onOpenFind = noop,
+            onFindQuery = {}, onFindNext = {}, onCloseFind = noop, onToggleTextPanel = noop, onTextZoom = {},
+            onTheme = {}, onMainPage = noop, onBookDetails = noop, onHistory = noop, onDismissExternal = noop,
+            onCopyLink = {},
+        ) { ArticleMock() }
+    }
+
+    @Test fun searchNoteReady() = snap {
+        SearchScreen(
+            SearchState(searchNote = SearchNote(ready = true), recent = listOf("Sněžka")),
+            onQueryChange = {}, onSubmit = noop, onHit = {}, onRecent = {}, onRemoveRecent = {}, onScope = {}, onBack = noop,
+            autoFocus = false,
+        )
+    }
+
+    @Test fun searchBuildingRecent() = snap {
+        SearchScreen(
+            SearchState(searchNote = SearchNote(percent = 40), accentFreeReady = false, recent = listOf("Sněžka")),
+            onQueryChange = {}, onSubmit = noop, onHit = {}, onRecent = {}, onRemoveRecent = {}, onScope = {}, onBack = noop,
+            autoFocus = false,
+        )
+    }
+
+    @Test fun searchNoResultsWhileIndexing() = snap {
+        SearchScreen(
+            SearchState(query = "krvaceni", searchNote = SearchNote(percent = 12), accentFreeReady = false),
+            onQueryChange = {}, onSubmit = noop, onHit = {}, onRecent = {}, onRemoveRecent = {}, onScope = {}, onBack = noop,
+            autoFocus = false,
+        )
+    }
+
+    @Test fun homeTryNowAndNote() = snap {
+        WithTabs(MainTab.HOME) {
+            HomeScreen(
+                HomeState(Samples.books, searchNote = SearchNote(percent = 40), tryNow = Samples.tryNow),
+                onSearch = noop, onOpenBook = {}, onQuickLink = {}, onContinue = {},
+            )
+        }
+    }
+
+    @Test fun libraryOpeningAndFailed() = snap {
+        WithTabs(MainTab.LIBRARY) {
+            LibraryScreen(
+                LibraryState(
+                    Samples.books.mapIndexed { i, b -> b.copy(state = when (i) { 0 -> BookState.OPENING; 1 -> BookState.FAILED; else -> BookState.OPEN }) },
+                    drive = Samples.drives.first(),
+                ),
+                onOpen = {}, onDetails = {},
+            )
+        }
+    }
+
+    @Test fun bookDetailsQueued() = snap { DetailsWithIndex(IndexInfo(IndexPhase.QUEUED)) }
+
+    @Test fun bookDetailsBuilding() = snap { DetailsWithIndex(IndexInfo(IndexPhase.BUILDING, 37)) }
+
+    @Test fun bookDetailsLowSpace() = snap { DetailsWithIndex(IndexInfo(IndexPhase.LOW_SPACE)) }
+
+    @Composable
+    private fun DetailsWithIndex(index: IndexInfo) {
+        Box(Modifier.fillMaxSize()) {
+            LibraryScreen(LibraryState(Samples.books, Samples.phoneEditions, Samples.drives.first()), onOpen = {}, onDetails = {})
+            BookDetailsSheet(BookDetailsState(Samples.enWiki.copy(hasIndex = false), index = index), onDismiss = noop, onOpen = noop)
         }
     }
 
@@ -450,5 +554,29 @@ class LocaleAndFontTest(private val v: Variant) {
             onQueryChange = {}, onSubmit = noop, onHit = {}, onRecent = {}, onRemoveRecent = {}, onScope = {}, onBack = noop,
             autoFocus = false,
         )
+    }
+}
+
+/** A 360 × 640 dp budget phone at 100 % and 160 % font: the connect button must stay on screen. */
+@RunWith(Parameterized::class)
+class SmallPhoneTest(private val v: Variant) {
+    companion object {
+        @JvmStatic
+        @Parameterized.Parameters(name = "{0}")
+        fun variants() = listOf(Variant.SMALL, Variant.SMALL_LARGE)
+    }
+
+    @get:Rule val paparazzi = v.paparazzi()
+
+    private fun snap(content: @Composable () -> Unit) = paparazzi.snapshot { OfflinkaTheme(darkTheme = v.dark, content = content) }
+
+    @Test fun connect() = snap { ConnectScreen(ConnectState(canOpenGuides = true), onPick = noop) }
+
+    @Test fun connectDriveSeen() = snap { ConnectScreen(ConnectState(driveSeen = true, canOpenGuides = true), onPick = noop) }
+
+    @Test fun home() = snap {
+        WithTabs(MainTab.HOME) {
+            HomeScreen(HomeState(Samples.books, searchNote = SearchNote(percent = 40)), onSearch = noop, onOpenBook = {}, onQuickLink = {}, onContinue = {})
+        }
     }
 }

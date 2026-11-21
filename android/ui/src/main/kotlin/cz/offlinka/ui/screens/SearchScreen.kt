@@ -3,6 +3,7 @@ package cz.offlinka.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,7 +57,10 @@ import cz.offlinka.ui.components.MessageState
 import cz.offlinka.ui.components.PaperBar
 import cz.offlinka.ui.components.SectionLabel
 import cz.offlinka.ui.components.TextLink
+import cz.offlinka.ui.components.SearchNoteBox
+import cz.offlinka.ui.model.BookKind
 import cz.offlinka.ui.model.BookUi
+import cz.offlinka.ui.model.SearchNote
 import cz.offlinka.ui.model.SearchGroup
 import cz.offlinka.ui.model.SearchHit
 import cz.offlinka.ui.model.bookTitle
@@ -78,8 +82,13 @@ data class SearchState(
     val perGroup: Int = 4,
     /** Nothing matched the whole query, so these results are for its longest word. */
     val retriedWord: String? = null,
-    /** Accent-free search index being built on the phone, percent. */
-    val indexProgress: Int? = null,
+    /** Accent-free search being prepared / just ready (see [SearchNote]). */
+    val searchNote: SearchNote? = null,
+    /**
+     * The UI-language Wikipedia has its accent-free index. Until then search_tip is hidden and
+     * "no results" says to type with accents for now.
+     */
+    val accentFreeReady: Boolean = true,
 ) {
     val showRecent: Boolean get() = query.isBlank()
     val noResults: Boolean get() = query.isNotBlank() && !searching && groups.all { it.hits.isEmpty() }
@@ -98,7 +107,8 @@ fun SearchScreen(
     modifier: Modifier = Modifier,
     autoFocus: Boolean = true,
     onClearRecent: () -> Unit = {},
-    onCancelIndex: () -> Unit = {},
+    /** The note's X: hides it only (stopping lives in book details). */
+    onDismissNote: () -> Unit = {},
 ) {
     val c = Offlinka.colors
     Column(modifier.fillMaxSize().background(c.bg)) {
@@ -113,11 +123,9 @@ fun SearchScreen(
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
             val scope = state.scope
-            state.indexProgress?.let { p ->
+            state.searchNote?.let { note ->
                 item(key = "index") {
-                    InfoNote(stringResource(R.string.search_index_building, p), Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
-                        BarIconButton(OfflinkaIcons.Close, stringResource(R.string.action_cancel), onCancelIndex, tint = c.ink2)
-                    }
+                    SearchNoteBox(note, onDismissNote, Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp))
                 }
             }
             if (scope != null) {
@@ -155,15 +163,18 @@ fun SearchScreen(
                             RecentRow(q, onClick = { onRecent(q) }, onRemove = { onRemoveRecent(q) })
                         }
                     }
-                    item(key = "tip") {
-                        InfoNote(stringResource(R.string.search_tip), Modifier.padding(horizontal = 16.dp, vertical = 20.dp))
+                    // "Háčky psát nemusíte" only once it is true (the UI-language Wikipedia has its index).
+                    if (state.accentFreeReady) {
+                        item(key = "tip") {
+                            InfoNote(stringResource(R.string.search_tip), Modifier.padding(horizontal = 16.dp, vertical = 20.dp))
+                        }
                     }
                 }
                 state.noResults -> item(key = "none") {
                     MessageState(
                         OfflinkaIcons.Search,
                         stringResource(R.string.search_no_results_title),
-                        stringResource(R.string.search_no_results_body),
+                        stringResource(if (state.accentFreeReady) R.string.search_no_results_body else R.string.search_no_results_indexing),
                     )
                 }
                 else -> state.groups.filter { it.hits.isNotEmpty() }.forEach { group ->
@@ -171,6 +182,7 @@ fun SearchScreen(
                     val shown = if (limited) group.hits.take(state.perGroup) else group.hits
                     item(key = "g-${group.book.id}") { GroupHeader(group.book) }
                     items(shown, key = { "h-${group.book.id}-${it.path}-${it.title}" }) { hit ->
+                        // Long press puts the title into the search field (the old ↖ button was tapped by mistake).
                         HitRow(hit, state.query, onClick = { onHit(hit) }, onFill = { onQueryChange(hit.title) })
                     }
                     if (limited && group.hits.size > shown.size) {
@@ -288,13 +300,20 @@ private fun InfoNote(text: String, modifier: Modifier = Modifier, trailing: @Com
 private fun GroupHeader(book: BookUi) {
     val c = Offlinka.colors
     val tone = bookTone(book.kind.family, c.isDark)
+    // The emergency guides stand out in the aid colour.
+    val aid = book.kind == BookKind.GUIDES
     Row(
         Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BookBadge(book.icon, tone.background, tone.foreground, size = 30.dp)
         Spacer(Modifier.width(12.dp))
-        Text(bookTitle(book), style = Offlinka.type.label, color = c.ink2, modifier = Modifier.semantics { heading() })
+        Text(
+            bookTitle(book),
+            style = if (aid) Offlinka.type.label.copy(fontWeight = FontWeight.Bold) else Offlinka.type.label,
+            color = if (aid) tone.foreground else c.ink2,
+            modifier = Modifier.semantics { heading() },
+        )
     }
 }
 
@@ -304,9 +323,14 @@ private fun HitRow(hit: SearchHit, query: String, onClick: () -> Unit, onFill: (
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(role = Role.Button, onClick = onClick)
+            .combinedClickable(
+                role = Role.Button,
+                onClick = onClick,
+                onLongClickLabel = stringResource(R.string.search_fill),
+                onLongClick = onFill,
+            )
             .heightIn(min = 60.dp)
-            .padding(start = 58.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+            .padding(start = 58.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
@@ -325,7 +349,6 @@ private fun HitRow(hit: SearchHit, query: String, onClick: () -> Unit, onFill: (
                 }
             }
         }
-        BarIconButton(OfflinkaIcons.FillQuery, stringResource(R.string.search_fill), onFill, tint = c.ink2)
     }
     Hairline(color = c.line)
 }

@@ -112,6 +112,17 @@ fun formatSize(bytes: Long, locale: Locale): String {
     }
 }
 
+/** Rounded for list lines: "10 GB", "3,5 GB", "393 MB" (number and unit never split). */
+fun formatSizeShort(bytes: Long, locale: Locale): String {
+    val nf = NumberFormat.getNumberInstance(locale)
+    return when {
+        bytes >= 9_500_000_000L -> { nf.maximumFractionDigits = 0; nf.format(bytes / 1e9) + "\u00A0GB" }
+        bytes >= 1_000_000_000L -> { nf.maximumFractionDigits = 1; nf.format(bytes / 1e9) + "\u00A0GB" }
+        bytes >= 1_000_000L -> { nf.maximumFractionDigits = 0; nf.format(bytes / 1e6) + "\u00A0MB" }
+        else -> { nf.maximumFractionDigits = 0; nf.format(maxOf(1.0, bytes / 1e3)) + "\u00A0kB" }
+    }
+}
+
 /** "2 104 553" with the locale's grouping. */
 fun formatCount(n: Long, locale: Locale): String = NumberFormat.getIntegerInstance(locale).format(n)
 

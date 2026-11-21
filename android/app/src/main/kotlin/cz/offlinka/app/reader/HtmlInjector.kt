@@ -10,9 +10,9 @@ object HtmlInjector {
     private val headClose = Regex("</head\\s*>", RegexOption.IGNORE_CASE)
     private val headOpen = Regex("<head(\\s[^>]*)?>", RegexOption.IGNORE_CASE)
 
-    fun snippet(look: ReaderLook): String =
+    fun snippet(look: ReaderLook, lang: String = ""): String =
         "<link id=\"offlinka-reader-css\" rel=\"stylesheet\" href=\"/${ReaderUrls.ASSETS}/reader.css\">" +
-            "<script>window.__offlinka=${look(look)};</script>" +
+            "<script>window.__offlinka=${look(look, lang)};</script>" +
             "<script src=\"/${ReaderUrls.ASSETS}/inject.js\"></script>" +
             TITLE_WATCH
 
@@ -24,9 +24,10 @@ object HtmlInjector {
         "var h=document.querySelector('h1');if(!h||!window.offlinkaApp||!window.IntersectionObserver)return;" +
         "new IntersectionObserver(function(e){offlinkaApp.postMessage(e[0].isIntersecting?'0':'1')}).observe(h)})</script>"
 
-    fun inject(html: ByteArray, look: ReaderLook): ByteArray {
+    /** [lang] = the book's two-letter language; `cs`/`sk` turn on Czech typography (inject.js). */
+    fun inject(html: ByteArray, look: ReaderLook, lang: String = ""): ByteArray {
         val text = html.toString(Charsets.UTF_8)
-        val tag = snippet(look)
+        val tag = snippet(look, lang)
         val close = headClose.find(text)
         val out = when {
             close != null -> text.substring(0, close.range.first) + tag + text.substring(close.range.first)
@@ -47,8 +48,9 @@ object HtmlInjector {
     /** Applies theme and text scale to an open page without reloading. */
     fun lookScript(look: ReaderLook): String = "window.offlinkaReader&&window.offlinkaReader(${look(look)})"
 
-    private fun look(look: ReaderLook): String {
+    private fun look(look: ReaderLook, lang: String = ""): String {
         val scale = "%.2f".format(java.util.Locale.ROOT, look.scale.coerceIn(0.8f, 2f))
-        return "{theme:'${if (look.dark) "dark" else "light"}',scale:$scale}"
+        val l = lang.filter { it in 'a'..'z' }.take(3)
+        return "{theme:'${if (look.dark) "dark" else "light"}',scale:$scale" + (if (l.isNotEmpty()) ",lang:'$l'" else "") + "}"
     }
 }

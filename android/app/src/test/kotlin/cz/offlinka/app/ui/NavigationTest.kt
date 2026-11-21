@@ -3,6 +3,7 @@ package cz.offlinka.app.ui
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -105,9 +106,12 @@ class NavigationTest {
         assertThat(route()).isEqualTo(Routes.READER)
         assertThat(nav.currentBackStackEntry?.arguments?.getString("url"))
             .isEqualTo(ReaderUrls.article("wikipedia_cs_all", "Český_Krumlov"))
-        // Back from the reader returns home, not to the search.
-        compose.runOnUiThread { nav.popBackStack() }
-        assertThat(route()).isEqualTo(Routes.HOME)
+        // "Zpět" on the first page is never dead: it returns to the search, query kept.
+        compose.onNodeWithText("Zpět").performClick()
+        compose.waitForIdle()
+        assertThat(route()).isEqualTo(Routes.SEARCH)
+        compose.onNode(hasSetTextAction()).assertTextContains("cesky")
+        compose.onNodeWithText("Český Krumlov").assertExists()
     }
 
     @Test fun `library details show the file and open the book`() {

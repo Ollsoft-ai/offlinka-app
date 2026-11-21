@@ -60,10 +60,17 @@ class MainActivityTest {
     private fun waitForText(text: String) =
         compose.waitUntil(10_000) { compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
 
+    /** Clicks a button that may sit in the scrolling column or pinned below it (compact screens). */
+    private fun tap(text: String) {
+        val node = compose.onNodeWithText(text)
+        runCatching { node.performScrollTo() }
+        node.performClick()
+    }
+
     @Test fun `first start asks for the drive and opens the system folder picker`() {
         waitForText("Zapojte flashku Offlinka")
         compose.activity.graph.driveVisible.value = null
-        compose.onNodeWithText("Vybrat flashku").performScrollTo().performClick()
+        tap("Vybrat flashku")
         val started = shadowOf(compose.activity).nextStartedActivityForResult
         assertThat(started.intent.action).isEqualTo(Intent.ACTION_OPEN_DOCUMENT_TREE)
     }
@@ -71,23 +78,37 @@ class MainActivityTest {
     @Test fun `with no USB volume mounted the first tap explains, the second opens the picker anyway`() {
         waitForText("Zapojte flashku Offlinka")
         compose.runOnUiThread { compose.activity.graph.driveVisible.value = false }
-        compose.onNodeWithText("Vybrat flashku").performScrollTo().performClick()
+        tap("Vybrat flashku")
         waitForText("Flashku nevidím")
         assertThat(shadowOf(compose.activity).nextStartedActivityForResult).isNull()
-        compose.onNodeWithText("Vybrat znovu").performScrollTo().performClick()
+        tap("Vybrat znovu")
         assertThat(shadowOf(compose.activity).nextStartedActivityForResult.intent.action).isEqualTo(Intent.ACTION_OPEN_DOCUMENT_TREE)
     }
 
     @Test fun `a mounted drive is pointed out`() {
         waitForText("Zapojte flashku Offlinka")
         compose.runOnUiThread { compose.activity.graph.driveVisible.value = true }
-        waitForText("Flashku vidím. Klepněte na Vybrat flashku.")
+        // Step 1 is marked done instead of a note that repeats the button.
+        waitForText("Flashka je zapojená.")
     }
 
     @Test fun `the help opens as a sheet`() {
         waitForText("Zapojte flashku Offlinka")
-        compose.onNodeWithText("Flashka se neukazuje?").performScrollTo().performClick()
+        tap("Flashka se neukazuje?")
         waitForText("Když se flashka neukazuje")
+    }
+
+    @Test fun `the screen stays on while a search index is built`() {
+        val source = compose.activity.graph.source as cz.offlinka.app.fakes.FakeContentSource
+        val gate = java.util.concurrent.CountDownLatch(1)
+        source.buildGate = gate
+        app.drives.granted += app.tree
+        compose.activity.graph.shelf.reloadAsync()
+        waitForText("Česká Wikipedie")
+        fun keptOn() = compose.activity.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON != 0
+        compose.waitUntil(10_000) { keptOn() }
+        gate.countDown()
+        compose.waitUntil(10_000) { !keptOn() }
     }
 
     @Test fun `a granted drive opens home, unplugging shows the calm screen and plugging back returns`() {
@@ -109,7 +130,7 @@ class MainActivityTest {
         waitForText("Flashka je odpojená")
 
         // The bundled guides open without the drive.
-        compose.onNodeWithText("Otevřít první pomoc").performScrollTo().performClick()
+        tap("Otevřít první pomoc")
         waitForText("Nouzové příručky")
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
         waitForText("Flashka je odpojená")

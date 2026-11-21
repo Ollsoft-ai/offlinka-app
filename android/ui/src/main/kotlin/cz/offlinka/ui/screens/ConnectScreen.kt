@@ -44,6 +44,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -87,12 +89,19 @@ fun ConnectScreen(
 ) {
     val c = Offlinka.colors
     var help by rememberSaveable { mutableStateOf(state.showHelp) }
+    // Short screens and large fonts: no picture, and "Vybrat flashku" is pinned at the bottom so it never
+    // ends up below the fold.
+    val config = LocalConfiguration.current
+    val compact = LocalDensity.current.fontScale >= 1.3f || config.screenHeightDp < 720
+    val pinned = compact && state.mode == ConnectMode.PICK
     Box(modifier.fillMaxSize().background(c.bg)) {
+      Column(Modifier.fillMaxSize()) {
         Column(
             Modifier
-                .fillMaxSize()
+                .weight(1f)
+                .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .windowInsetsPadding(WindowInsets.navigationBars),
+                .then(if (pinned) Modifier else Modifier.windowInsetsPadding(WindowInsets.navigationBars)),
         ) {
             HeroBox(Modifier.fillMaxWidth()) {
                 Column(
@@ -102,10 +111,15 @@ fun ConnectScreen(
                     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 6.dp)) {
                         OfflinkaLogo(Modifier.height(30.dp), onDark = true)
                     }
-                    DriveIllustration(
-                        unplugged = state.mode == ConnectMode.UNPLUGGED,
-                        modifier = Modifier.padding(top = 8.dp).size(width = 200.dp, height = 240.dp),
-                    )
+                    // The button must stay above the fold: the picture shrinks with the screen and
+                    // goes away on short screens or at large font sizes.
+                    if (!compact) {
+                        val h = (config.screenHeightDp * 0.25f).coerceIn(120f, 240f).dp
+                        DriveIllustration(
+                            unplugged = state.mode == ConnectMode.UNPLUGGED,
+                            modifier = Modifier.padding(top = 8.dp).size(width = h * (200f / 240f), height = h),
+                        )
+                    }
                     Ridge(Modifier.padding(top = 10.dp))
                 }
             }
@@ -117,30 +131,80 @@ fun ConnectScreen(
             ) {
                 when (state.mode) {
                     ConnectMode.SEARCHING -> Searching(state.slow)
-                    ConnectMode.UNPLUGGED -> Unplugged(onPick, if (state.canOpenGuides) onOpenGuides else null)
-                    ConnectMode.PICK -> Pick(state, onPick)
+                    ConnectMode.UNPLUGGED -> Unplugged(onPick)
+                    ConnectMode.PICK -> Pick(state, onPick, showButton = !pinned)
                 }
                 Spacer(Modifier.height(16.dp))
                 if (state.mode != ConnectMode.SEARCHING) {
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         TextLink(stringResource(R.string.connect_help_link), { help = true })
                     }
+                    // First aid works without the drive (phones that cannot read it, a drive left at home).
+                    if (state.canOpenGuides) {
+                        Spacer(Modifier.height(14.dp))
+                        OutlineButton(
+                            stringResource(R.string.unplugged_guides),
+                            onOpenGuides,
+                            Modifier.fillMaxWidth(),
+                            icon = OfflinkaIcons.FirstAid,
+                            shadow = true,
+                            big = true,
+                        )
+                    }
                 }
                 Spacer(Modifier.height(32.dp))
             }
         }
+        if (pinned) PinnedPick(state, onPick)
+      }
         if (help) {
             // No dispatcher in screenshot tests; in the app back closes the sheet.
             if (LocalOnBackPressedDispatcherOwner.current != null) BackHandler { help = false }
             SheetOverlay(onDismiss = { help = false }, dismissLabel = stringResource(R.string.action_close)) {
-                HelpSheet()
+                HelpSheet(onClose = { help = false })
             }
         }
     }
 }
 
+/** The paper bottom bar with "Vybrat flashku" and connect_remember (compact screens). */
 @Composable
-private fun Pick(state: ConnectState, onPick: () -> Unit) {
+private fun PinnedPick(state: ConnectState, onPick: () -> Unit) {
+    val c = Offlinka.colors
+    Column(Modifier.fillMaxWidth().background(c.bg).windowInsetsPadding(WindowInsets.navigationBars)) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(c.lineSoft))
+        Column(
+            Modifier
+                .align(Alignment.CenterHorizontally)
+                .widthIn(max = 560.dp)
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+        ) {
+            PickButton(state, onPick)
+        }
+    }
+}
+
+@Composable
+private fun PickButton(state: ConnectState, onPick: () -> Unit) {
+    val c = Offlinka.colors
+    PrimaryButton(
+        stringResource(if (state.problem == ConnectProblem.NONE) R.string.connect_button else R.string.connect_pick_again),
+        onPick,
+        Modifier.fillMaxWidth(),
+        icon = OfflinkaIcons.Drive,
+    )
+    Spacer(Modifier.height(8.dp))
+    Text(
+        stringResource(R.string.connect_remember),
+        style = Offlinka.type.bodySmall,
+        color = c.ink2,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+@Composable
+private fun Pick(state: ConnectState, onPick: () -> Unit, showButton: Boolean = true) {
     val c = Offlinka.colors
     Text(
         stringResource(R.string.connect_title),
@@ -163,39 +227,13 @@ private fun Pick(state: ConnectState, onPick: () -> Unit) {
         }
     } else {
         // With a problem the note replaces the steps, so the help link stays on screen.
-        Steps()
+        // A drive Android already sees marks step 1 done.
+        Steps(plugged = state.driveSeen)
     }
-    if (state.driveSeen) {
-        Spacer(Modifier.height(16.dp))
-        Note(OfflinkaIcons.Drive, c.accent, c.accentSoft, c.ok) {
-            Text(stringResource(R.string.connect_drive_seen), style = Offlinka.type.bodyStrong, color = c.ink)
-        }
+    if (showButton) {
+        Spacer(Modifier.height(24.dp))
+        PickButton(state, onPick)
     }
-    Spacer(Modifier.height(24.dp))
-    Box(
-        if (state.driveSeen) {
-            Modifier
-                .border(3.dp, c.ok, RoundedCornerShape(12.dp))
-                .padding(5.dp)
-        } else {
-            Modifier
-        },
-    ) {
-        PrimaryButton(
-            stringResource(if (state.problem == ConnectProblem.NONE) R.string.connect_button else R.string.connect_pick_again),
-            onPick,
-            Modifier.fillMaxWidth(),
-            icon = OfflinkaIcons.Drive,
-        )
-    }
-    Spacer(Modifier.height(10.dp))
-    Text(
-        stringResource(R.string.connect_remember),
-        style = Offlinka.type.bodySmall,
-        color = c.ink2,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth(),
-    )
 }
 
 /** A calm note: icon, tinted fill, outline. */
@@ -223,17 +261,28 @@ private fun Note(
 }
 
 @Composable
-private fun Steps() {
+private fun Steps(plugged: Boolean) {
     val c = Offlinka.colors
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         listOf(R.string.connect_step_plug, R.string.connect_step_pick_android).forEachIndexed { i, res ->
+            val done = plugged && i == 0
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier.size(40.dp).clip(RoundedCornerShape(20.dp)).background(c.accent),
+                    Modifier.size(40.dp).clip(RoundedCornerShape(20.dp)).background(if (done) c.ok else c.accent),
                     contentAlignment = Alignment.Center,
-                ) { Text("${i + 1}", style = Offlinka.type.subhead, color = c.onAccent) }
+                ) {
+                    if (done) {
+                        Icon(OfflinkaIcons.Check, null, tint = c.onAccent, modifier = Modifier.size(24.dp))
+                    } else {
+                        Text("${i + 1}", style = Offlinka.type.subhead, color = c.onAccent)
+                    }
+                }
                 Spacer(Modifier.width(16.dp))
-                Text(stringResource(res), style = Offlinka.type.body, color = c.ink)
+                Text(
+                    stringResource(if (done) R.string.status_drive_connected else res),
+                    style = if (done) Offlinka.type.bodyStrong else Offlinka.type.body,
+                    color = c.ink,
+                )
             }
         }
     }
@@ -254,7 +303,7 @@ private fun Searching(slow: Boolean) {
 }
 
 @Composable
-private fun Unplugged(onPick: () -> Unit, onOpenGuides: (() -> Unit)?) {
+private fun Unplugged(onPick: () -> Unit) {
     val c = Offlinka.colors
     Text(
         stringResource(R.string.unplugged_title),
@@ -274,31 +323,55 @@ private fun Unplugged(onPick: () -> Unit, onOpenGuides: (() -> Unit)?) {
     }
     Spacer(Modifier.height(28.dp))
     OutlineButton(stringResource(R.string.unplugged_pick_other), onPick, Modifier.fillMaxWidth(), icon = OfflinkaIcons.Drive, shadow = true, big = true)
-    if (onOpenGuides != null) {
-        Spacer(Modifier.height(14.dp))
-        OutlineButton(stringResource(R.string.unplugged_guides), onOpenGuides, Modifier.fillMaxWidth(), icon = OfflinkaIcons.FirstAid, shadow = true, big = true)
-    }
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.ColumnScope.HelpSheet() {
+private fun androidx.compose.foundation.layout.ColumnScope.HelpSheet(onClose: () -> Unit) {
     val c = Offlinka.colors
     Text(
         stringResource(R.string.help_title),
         style = Offlinka.type.headline,
         color = c.ink,
-        modifier = Modifier.padding(bottom = 12.dp).semantics { heading() },
+        modifier = Modifier.padding(bottom = 4.dp).semantics { heading() },
     )
     Column(Modifier.verticalScroll(rememberScrollState()).weight(1f, fill = false)) {
-        listOf(
-            R.string.help_1, R.string.help_2, R.string.help_picker_menu, R.string.help_pick_folder,
-            R.string.help_3_android, R.string.help_exfat, R.string.help_5,
-        ).forEach { res ->
-            Row(Modifier.padding(vertical = 6.dp)) {
-                Box(Modifier.padding(top = 9.dp).size(7.dp).clip(RoundedCornerShape(4.dp)).background(c.primary))
-                Spacer(Modifier.width(12.dp))
-                Text(stringResource(res), style = Offlinka.type.body, color = c.ink)
-            }
+        HelpGroup(
+            R.string.help_group_not_seen,
+            listOf(
+                OfflinkaIcons.Drive to R.string.help_1,
+                OfflinkaIcons.PhoneDrive to R.string.help_5,
+                OfflinkaIcons.Retry to R.string.help_2,
+                OfflinkaIcons.Settings to R.string.help_3_android,
+                OfflinkaIcons.FirstAid to R.string.help_exfat,
+            ),
+        )
+        HelpGroup(
+            R.string.help_group_wrong_window,
+            listOf(
+                OfflinkaIcons.More to R.string.help_picker_menu,
+                OfflinkaIcons.Folder to R.string.help_pick_folder,
+            ),
+        )
+    }
+    Spacer(Modifier.height(16.dp))
+    // Sticky: always reachable, however long the list.
+    OutlineButton(stringResource(R.string.action_close), onClose, Modifier.fillMaxWidth(), big = true)
+}
+
+@Composable
+private fun HelpGroup(title: Int, items: List<Pair<androidx.compose.ui.graphics.vector.ImageVector, Int>>) {
+    val c = Offlinka.colors
+    Text(
+        stringResource(title),
+        style = Offlinka.type.subhead,
+        color = c.ink2,
+        modifier = Modifier.padding(top = 14.dp, bottom = 4.dp).semantics { heading() },
+    )
+    items.forEach { (icon, res) ->
+        Row(Modifier.padding(vertical = 7.dp)) {
+            Icon(icon, null, tint = c.accent, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(12.dp))
+            Text(stringResource(res), style = Offlinka.type.body, color = c.ink)
         }
     }
 }
