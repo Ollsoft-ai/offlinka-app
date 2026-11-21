@@ -69,7 +69,11 @@ class ReaderController(
     private val scope: CoroutineScope,
     /** Lives in the app graph, so view models keep following the page after the activity is recreated. */
     private val _page: MutableStateFlow<PageInfo> = MutableStateFlow(PageInfo()),
+    /** Keeps the WebView's back/forward list across activity recreation in memory (never in the parcelled bundle). */
+    private val retained: RetainedReaderState = RetainedReaderState(),
 ) {
+    private val recovery = PageRecovery()
+    private var fontScale = context.resources.configuration.fontScale
     val page: StateFlow<PageInfo> = _page.asStateFlow()
 
     private val _find = MutableStateFlow<FindState?>(null)
@@ -85,6 +89,26 @@ class ReaderController(
     val webView: WebView
         get() = web ?: create().also { web = it }
 
+    init {
+        // When the drive's books open (again), apply a deferred restore and reload a page shown without them.
+        scope.launch {
+            var lastGeneration = -1
+            shelf.state.collect { s ->
+                val r = s as? cz.offlinka.app.drive.ShelfState.Ready ?: return@collect
+                if (r.generation == lastGeneration) return@collect
+                lastGeneration = r.generation
+                val w = web ?: return@collect
+                val pending = pendingState
+                if (pending != null) {
+                    pendingState = null
+                    w.restoreState(pending)
+                } else if (recovery.shouldReloadWhenReady()) {
+                    w.reload()
+                }
+            }
+        }
+    }
+
     /** Loads [url]. [fresh] starts a new reading session: back then leaves the reader instead of going to older pages. */
     fun load(url: String, fresh: Boolean) {
         val w = webView
@@ -97,7 +121,7 @@ class ReaderController(
         w.loadUrl(url)
     }
 
-    fun hasPage(): Boolean = web?.url != null || pendingState != null
+    fun hasPage(): Boolean = web?.url != null || pendingState != null || retained.bundle != null
 
     fun back() { web?.takeIf { it.canGoBack() }?.goBack() }
 
@@ -122,11 +146,28 @@ class ReaderController(
         return shelf.ready?.byId?.get(t.bookId)?.isWiki == true
     }
 
+    /** The system font scale changed (Settings → Display): the reader follows it. */
+    fun setFontScale(scale: Float) {
+        fontScale = scale
+        applyLook()
+    }
+
     private fun applyLook(url: String? = web?.url) {
         val w = web ?: return
         val wiki = isWikiPage(url)
-        w.settings.textZoom = if (wiki) 100 else zoom
-        if (wiki) w.evaluateJavascript(HtmlInjector.lookScript(ReaderLook(dark, zoom / 100f)), null)
+        w.settings.textZoom = if (wiki) 100 else ReaderZoom.textZoom(zoom, fontScale)
+        if (wiki) w.evaluateJavascript(HtmlInjector.lookScript(ReaderLook(dark, ReaderZoom.cssScale(zoom, fontScale))), null)
+    }
+
+    /** Headings of the article for the "Obsah" sheet: (anchor id, text, level 2..3). */
+    fun contents(onResult: (List<Heading>) -> Unit) {
+        val w = web ?: return onResult(emptyList())
+        w.evaluateJavascript(CONTENTS_SCRIPT) { json -> onResult(Heading.parse(json)) }
+    }
+
+    fun scrollTo(anchor: String) {
+        val id = anchor.replace("\\", "\\\\").replace("'", "\\'")
+        web?.evaluateJavascript("(function(){var e=document.getElementById('$id');if(e)e.scrollIntoView();})()", null)
     }
 
     fun openFind() {
@@ -148,24 +189,44 @@ class ReaderController(
         _find.value = null
     }
 
-    /** Stops JavaScript timers (games, maps) while the app is in the background. */
+    /** Stops JavaScript timers (games, maps) and media while the app is in the background. */
     fun pause() {
-        web?.onPause()
+        web?.let {
+            it.onPause()
+            it.pauseTimers()
+        }
     }
 
     fun resume() {
-        web?.onResume()
+        web?.let {
+            it.resumeTimers()
+            it.onResume()
+        }
     }
 
+    /**
+     * Activity is going away. The back/forward list stays in memory ([retained]); the parcelled bundle
+     * only gets the current URL, so a long history never hits TransactionTooLargeException.
+     */
     fun saveState(out: Bundle) {
-        val b = Bundle()
-        web?.saveState(b)
-        out.putBundle(STATE_KEY, b)
+        val w = web ?: return
+        retained.bundle = Bundle().also { w.saveState(it) }
+        w.url?.let { out.putString(URL_KEY, it) }
     }
 
+    /** New activity: restore the in-memory history, else (process was killed) reopen the last URL. */
     fun restoreState(saved: Bundle?) {
-        pendingState = saved?.getBundle(STATE_KEY)
+        val kept = retained.bundle
+        retained.bundle = null
+        if (kept != null) {
+            pendingState = kept
+        } else {
+            saved?.getString(URL_KEY)?.let { url -> pendingUrl = url }
+        }
     }
+
+    private var pendingUrl: String? = null
+    private var lastAutoReload = 0L
 
     /** Takes the WebView out of its old parent so a new screen can host it. */
     fun detachedWebView(): WebView = webView.also { (it.parent as? ViewGroup)?.removeView(it) }
@@ -224,8 +285,18 @@ class ReaderController(
             }
         }
         interceptServiceWorkers()
-        pendingState?.let { w.restoreState(it) }
-        pendingState = null
+        // Restore only with the books open; otherwise every restored page would be a 503 (see init).
+        if (shelf.ready != null) {
+            pendingState?.let { w.restoreState(it) }
+            pendingState = null
+        }
+        pendingUrl?.let { url ->
+            pendingUrl = null
+            if (pendingState == null) {
+                recovery.onPageStarted(shelf.ready != null)
+                w.loadUrl(url)
+            }
+        }
         return w
     }
 
@@ -285,7 +356,8 @@ class ReaderController(
         }
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
-            view.settings.textZoom = if (isWikiPage(url)) 100 else zoom
+            recovery.onPageStarted(shelf.ready != null)
+            view.settings.textZoom = if (isWikiPage(url)) 100 else ReaderZoom.textZoom(zoom, fontScale)
             _page.value = _page.value.copy(url = url, notFound = false, progress = 0, titleInBar = false)
             updateNav(view)
             if (_find.value != null) closeFind()
@@ -297,10 +369,12 @@ class ReaderController(
                 view.clearHistory()
             }
             updateNav(view)
+            // A redirect stub replaces itself at once: no history row for it.
+            val stub = url != null && server.wasRedirect(url)
             _page.value = _page.value.copy(
                 title = view.title?.takeUnless { it.isBlank() || it.startsWith("https://") } ?: _page.value.title,
                 progress = null,
-                visit = _page.value.visit + 1,
+                visit = if (stub) _page.value.visit else _page.value.visit + 1,
             )
         }
 
@@ -309,7 +383,15 @@ class ReaderController(
         }
 
         override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
-            if (request.isForMainFrame && errorResponse.statusCode == 404) _page.value = _page.value.copy(notFound = true)
+            if (!request.isForMainFrame) return
+            recovery.onMainFrameStatus(errorResponse.statusCode)
+            // A 503 while the books are open (a rescan swapped them under the request): try once more.
+            if (errorResponse.statusCode == 503 && shelf.ready != null && System.currentTimeMillis() - lastAutoReload > 5_000) {
+                lastAutoReload = System.currentTimeMillis()
+                recovery.shouldReloadWhenReady()
+                view.postDelayed({ view.reload() }, 300)
+            }
+            if (errorResponse.statusCode == 404 || errorResponse.statusCode == 503) _page.value = _page.value.copy(notFound = true)
         }
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceErrorCompat) {
@@ -319,9 +401,9 @@ class ReaderController(
 
     /** First of [books] that has [title]; the offline URL of it. */
     private fun resolveOffline(books: List<String>, title: String): String? {
-        val ready = shelf.ready ?: return null
+        val served = shelf.servedBooks()
         for (id in books) {
-            val book = ready.byId[id] ?: continue
+            val book = served[id] ?: continue
             val found = runCatching { book.content.get(title) }.getOrNull() ?: continue
             return ReaderUrls.article(id, found.path)
         }
@@ -343,7 +425,7 @@ class ReaderController(
         scope.launch {
             val file = withContext(Dispatchers.IO) {
                 runCatching {
-                    val book = shelf.ready?.byId?.get(target.bookId) ?: return@runCatching null
+                    val book = shelf.servedBooks()[target.bookId] ?: return@runCatching null
                     val res = book.content.get(target.path)
                     val dir = File(context.cacheDir, "shared").apply { mkdirs() }
                     dir.listFiles()?.forEach { it.delete() }
@@ -367,6 +449,12 @@ class ReaderController(
 
     private companion object {
         const val TAG = "OfflinkaReader"
-        const val STATE_KEY = "offlinka.webview"
+        const val URL_KEY = "offlinka.reader.url"
+
+        /** Collects h2/h3 of the article (giving each an id if it has none) as JSON. */
+        const val CONTENTS_SCRIPT = "(function(){var out=[];var n=0;" +
+            "document.querySelectorAll('h2,h3').forEach(function(h){var t=(h.textContent||'').trim();if(!t)return;" +
+            "if(!h.id)h.id='ofl-h-'+(n++);out.push({id:h.id,text:t.substring(0,120),level:h.tagName=='H2'?2:3});});" +
+            "return JSON.stringify(out);})()"
     }
 }

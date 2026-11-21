@@ -1,17 +1,18 @@
 [versions]
-# compileSdk/targetSdk 35 (SPEC): AndroidX versions are the newest whose AAR metadata still allows compileSdk 35.
+# compileSdk/targetSdk 36 (SPEC, Google Play since 2026-08-31): AndroidX versions are the newest whose AAR
+# metadata still allows compileSdk 36 (core 1.19, Compose 1.12, lifecycle 2.11 and navigation 2.10 need 37).
 agp = "9.5.2"
 kotlin = "2.4.21"
 ksp = "2.3.14"
 coroutines = "1.10.2"
 composeBom = "2026.06.01"
-coreKtx = "1.16.0"
-activity = "1.10.1"
-appcompat = "1.7.1"
-lifecycle = "2.9.4"
+coreKtx = "1.18.0"
+activity = "1.13.0"
+appcompat = "1.8.0"
+lifecycle = "2.10.0"
 navigation = "2.9.8"
 room = "2.8.5"
-webkit = "1.14.0"
+webkit = "1.18.0"
 jna = "5.19.1"
 junit = "4.13.2"
 robolectric = "4.18.1"

@@ -10,7 +10,7 @@ import java.io.ByteArrayInputStream
 import java.io.IOException
 
 class ContentServerTest {
-    private class B(override val content: ContentBook, override val isWiki: Boolean) : ServedBook {
+    private class B(override val content: ContentBook, override val isWiki: Boolean, override val isMap: Boolean = false) : ServedBook {
         override val mainPath: String? get() = content.info.mainPath
     }
 
@@ -23,7 +23,7 @@ class ContentServerTest {
         books = {
             mapOf(
                 "wikipedia_cs_all" to B(wiki, true),
-                "maps_en_czech-republic" to B(maps, false),
+                "maps_en_czech-republic" to B(maps, false, isMap = true),
                 "offlinka_cs_prirucky" to B(guides, false),
             )
         },
@@ -31,7 +31,9 @@ class ContentServerTest {
         look = { ReaderLook(dark) },
         notFoundPage = { d -> "<p>missing ${if (d) "dark" else "light"}</p>" },
         onDriveError = { errors += it },
+        driveReady = { driveReady },
     )
+    private var driveReady = true
 
     private fun get(url: String, mainFrame: Boolean = true, headers: Map<String, String> = emptyMap()) =
         server.serve(url, "GET", headers, mainFrame)
@@ -142,6 +144,74 @@ class ContentServerTest {
         assertThat(css.mime).isEqualTo("text/css")
         assertThat(get("https://offlinka.local/_offlinka/../secret", false).status).isEqualTo(404)
         assertThat(get("https://offlinka.local/_offlinka/nope.js", false).status).isEqualTo(404)
+    }
+
+    @Test fun `a closed book or a core panic answers 503 instead of crashing the WebView thread`() {
+        wiki.failWith = IllegalStateException("Book object has already been destroyed")
+        assertThat(get(ReaderUrls.article("wikipedia_cs_all", "Praha")).status).isEqualTo(503)
+        wiki.failWith = RuntimeException("InternalException: panicked at src/zim.rs")
+        assertThat(get(ReaderUrls.article("wikipedia_cs_all", "I/Praha.jpg"), false, mapOf("Range" to "bytes=0-9")).status).isEqualTo(503)
+    }
+
+    @Test fun `a stream whose book closes mid-way ends with an IOException`() {
+        val r = get(ReaderUrls.article("maps_en_czech-republic", "tiles.pmtiles"), false)
+        val buf = ByteArray(1024)
+        r.body.read(buf)
+        maps.failWith = IllegalStateException("closed")
+        var thrown: Throwable? = null
+        try {
+            while (r.body.read(buf) >= 0) { /* drain */ }
+        } catch (e: Throwable) {
+            thrown = e
+        }
+        assertThat(thrown).isInstanceOf(java.io.IOException::class.java)
+    }
+
+    @Test fun `before the books are open, pages are 503 so the reader reloads them later`() {
+        driveReady = false
+        assertThat(get(ReaderUrls.article("wikipedia_xx_all", "Praha")).status).isEqualTo(503)
+        driveReady = true
+        assertThat(get(ReaderUrls.article("wikipedia_xx_all", "Praha")).status).isEqualTo(404)
+    }
+
+    @Test fun `big media without an extension is streamed with a sniffed type`() {
+        val before = maps.gets
+        val r = get(ReaderUrls.article("maps_en_czech-republic", "media/clip"), false)
+        assertThat(r.status).isEqualTo(200)
+        assertThat(r.mime).isEqualTo("video/mp4")
+        assertThat(r.headers["Accept-Ranges"]).isEqualTo("bytes")
+        assertThat(r.bytes().size).isEqualTo(5 * 1024 * 1024)
+        assertThat(maps.gets).isEqualTo(before)
+        val range = get(ReaderUrls.article("maps_en_czech-republic", "media/clip"), false, mapOf("Range" to "bytes=0-99"))
+        assertThat(range.status).isEqualTo(206)
+        assertThat(range.mime).isEqualTo("video/mp4")
+        assertThat(maps.gets).isEqualTo(before) // never a full decompress for the MIME of a range
+    }
+
+    @Test fun `redirect stubs are remembered so they get no history row`() {
+        val url = ReaderUrls.article("wikipedia_cs_all", "Prag")
+        assertThat(server.wasRedirect(url)).isFalse()
+        get(url)
+        assertThat(server.wasRedirect(url)).isTrue()
+        assertThat(server.wasRedirect(ReaderUrls.article("wikipedia_cs_all", "Praha"))).isFalse()
+    }
+
+    @Test fun `map pages get the worker bridge before their own scripts`() {
+        val html = get(ReaderUrls.article("maps_en_czech-republic", "index.html")).bytes().decodeToString()
+        assertThat(html).contains("/_offlinka/map-bridge.js")
+        assertThat(html.indexOf("map-bridge.js")).isLessThan(html.indexOf("./a.js"))
+        assertThat(html).doesNotContain("reader.css")
+    }
+
+    @Test fun `sniffing recognises common media`() {
+        fun b(vararg x: Int) = ByteArray(x.size) { x[it].toByte() }
+        assertThat(ContentServer.sniff("....ftypisom".toByteArray())).isEqualTo("video/mp4")
+        assertThat(ContentServer.sniff(b(0x1A, 0x45, 0xDF, 0xA3))).isEqualTo("video/webm")
+        assertThat(ContentServer.sniff("OggS".toByteArray())).isEqualTo("audio/ogg")
+        assertThat(ContentServer.sniff("ID3....".toByteArray())).isEqualTo("audio/mpeg")
+        assertThat(ContentServer.sniff("RIFF....WEBP".toByteArray())).isEqualTo("image/webp")
+        assertThat(ContentServer.sniff("%PDF-1.7".toByteArray())).isEqualTo("application/pdf")
+        assertThat(ContentServer.sniff("hello".toByteArray())).isNull()
     }
 
     @Test fun `range header parsing`() {

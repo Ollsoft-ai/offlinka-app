@@ -95,7 +95,7 @@ class NavigationTest {
     }
 
     @Test fun `search finds an article and opens it`() {
-        compose.onNodeWithText("Hledat v Offlince").performClick()
+        compose.onNodeWithText("Hledat v\u00A0Offlince").performClick()
         compose.waitForIdle()
         assertThat(route()).isEqualTo(Routes.SEARCH)
         compose.onNode(hasSetTextAction()).performTextInput("cesky")
@@ -116,6 +116,8 @@ class NavigationTest {
         compose.onAllNodesWithContentDescription("Podrobnosti")[0].performClick()
         compose.waitForIdle()
         assertThat(route()).isEqualTo(Routes.BOOK)
+        compose.onNodeWithText("wikipedia_cs_all_maxi-offlinka_2026-09.zim").assertDoesNotExist()
+        compose.onNodeWithText("Pro technickou podporu").performScrollTo().performClick()
         compose.onNodeWithText("wikipedia_cs_all_maxi-offlinka_2026-09.zim").assertExists()
         compose.onNodeWithText("Otevřít úvodní stránku").performClick()
         compose.waitForIdle()
@@ -125,7 +127,7 @@ class NavigationTest {
     @Test fun `settings open about`() {
         compose.onNodeWithText("Nastavení").performClick()
         compose.waitForIdle()
-        compose.onNodeWithText("O aplikaci").performScrollTo().performClick()
+        compose.onNodeWithText("O\u00A0aplikaci").performScrollTo().performClick()
         compose.waitForIdle()
         assertThat(route()).isEqualTo(Routes.ABOUT)
         compose.onNodeWithText("Verze", substring = true).assertExists()

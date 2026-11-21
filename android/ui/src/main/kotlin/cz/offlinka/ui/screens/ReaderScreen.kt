@@ -72,6 +72,7 @@ import cz.offlinka.ui.components.Segmented
 import cz.offlinka.ui.components.SheetOverlay
 import cz.offlinka.ui.model.BookUi
 import cz.offlinka.ui.model.ThemeMode
+import cz.offlinka.ui.model.TocEntry
 import cz.offlinka.ui.model.bookTitle
 import cz.offlinka.ui.model.family
 import cz.offlinka.ui.model.icon
@@ -101,6 +102,10 @@ data class ReaderState(
     val isApp: Boolean = false,
     /** The article's own heading scrolled away: show its title in the bar instead of the book. */
     val showTitle: Boolean = false,
+    /** Saving needs the drive's book (not the guides shown without a drive). */
+    val canSave: Boolean = true,
+    /** The "Obsah" sheet: null = closed, empty = the article has no sections. */
+    val contents: List<TocEntry>? = null,
 )
 
 object TextZoom {
@@ -130,22 +135,34 @@ fun ReaderScreen(
     onDismissExternal: () -> Unit,
     onCopyLink: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onContents: () -> Unit = {},
+    onHeading: (TocEntry) -> Unit = {},
+    onCloseContents: () -> Unit = {},
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     content: @Composable () -> Unit,
 ) {
     val c = Offlinka.colors
+    // The progress bar only for loads that take a moment (no flicker on fast pages).
+    var showProgress by remember { mutableStateOf(false) }
+    LaunchedEffect(state.progress != null) {
+        showProgress = false
+        if (state.progress != null) {
+            kotlinx.coroutines.delay(300)
+            showProgress = true
+        }
+    }
     Box(modifier.fillMaxSize().background(c.bg)) {
         Column(Modifier.fillMaxSize()) {
             val find = state.find
             if (find != null) {
                 FindBar(find, onFindQuery, onFindNext, onCloseFind)
             } else {
-                ReaderTopBar(state, onHome, onToggleSave, onSearch, onBookDetails, onHistory)
+                ReaderTopBar(state, onHome, onToggleSave, onSearch, onBookDetails, onHistory, onForward)
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 content()
                 val p = state.progress
-                if (p != null) {
+                if (p != null && showProgress) {
                     LinearProgressIndicator(
                         progress = { p / 100f },
                         modifier = Modifier.fillMaxWidth().height(3.dp),
@@ -155,11 +172,17 @@ fun ReaderScreen(
                     )
                 }
             }
-            ReaderBottomBar(state, onBack, onForward, onOpenFind, onToggleTextPanel, onMainPage)
+            ReaderBottomBar(state, onBack, onContents, onOpenFind, onToggleTextPanel, onMainPage)
         }
         if (state.showTextPanel && !state.isApp) {
             SheetOverlay(onDismiss = onToggleTextPanel, dismissLabel = stringResource(R.string.action_close)) {
                 TextPanel(state, onTextZoom, onTheme)
+            }
+        }
+        val toc = state.contents
+        if (toc != null) {
+            SheetOverlay(onDismiss = onCloseContents, dismissLabel = stringResource(R.string.action_close)) {
+                ContentsSheet(toc, onHeading)
             }
         }
         SnackbarHost(
@@ -181,6 +204,7 @@ private fun ReaderTopBar(
     onSearch: () -> Unit,
     onBookDetails: () -> Unit,
     onHistory: () -> Unit,
+    onForward: () -> Unit,
 ) {
     val c = Offlinka.colors
     var menu by remember { mutableStateOf(false) }
@@ -219,7 +243,7 @@ private fun ReaderTopBar(
                 )
             }
         }
-        if (!state.isApp) {
+        if (!state.isApp && state.canSave) {
             val savedDesc = stringResource(if (state.saved) R.string.cd_saved_on else R.string.cd_saved_off)
             BarIconButton(
                 if (state.saved) OfflinkaIcons.BookmarkFilled else OfflinkaIcons.Bookmark,
@@ -232,6 +256,9 @@ private fun ReaderTopBar(
         Box {
             BarIconButton(OfflinkaIcons.More, stringResource(R.string.action_more), { menu = true }, tint = c.ink)
             DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = c.surface) {
+                if (state.canGoForward) {
+                    MenuItem(stringResource(R.string.action_forward), OfflinkaIcons.Forward) { menu = false; onForward() }
+                }
                 MenuItem(stringResource(R.string.cd_search), OfflinkaIcons.Search) { menu = false; onSearch() }
                 MenuItem(stringResource(R.string.reader_history), OfflinkaIcons.History) { menu = false; onHistory() }
                 MenuItem(stringResource(R.string.library_details), OfflinkaIcons.Info) { menu = false; onBookDetails() }
@@ -383,11 +410,16 @@ fun ZoomSlider(value: Int, onChange: (Int) -> Unit, modifier: Modifier = Modifie
         track = { st ->
             val range = st.valueRange.endInclusive - st.valueRange.start
             val fraction = if (range > 0f) (st.value - st.valueRange.start) / range else 0f
-            Canvas(Modifier.fillMaxWidth().height(6.dp)) {
+            Canvas(Modifier.fillMaxWidth().height(14.dp)) {
                 val y = size.height / 2
                 val w = 5.dp.toPx()
-                drawLine(c.line, Offset(0f, y), Offset(size.width, y), w, StrokeCap.Round)
+                // Unfilled track in ink3 (3:1 against the card), ticks at 100, 125, 150 and 175 %.
+                drawLine(c.ink3, Offset(0f, y), Offset(size.width, y), w, StrokeCap.Round)
                 drawLine(c.accent, Offset(0f, y), Offset(size.width * fraction, y), w, StrokeCap.Round)
+                for (t in listOf(100, 125, 150, 175)) {
+                    val x = size.width * (t - TextZoom.MIN) / (TextZoom.MAX - TextZoom.MIN)
+                    drawLine(if (x <= size.width * fraction) c.onAccent else c.ink3, Offset(x, y - 6.dp.toPx()), Offset(x, y + 6.dp.toPx()), 2.dp.toPx(), StrokeCap.Round)
+                }
             }
         },
         modifier = modifier.semantics { stateDescription = "$value %" },
@@ -441,11 +473,43 @@ private fun ExternalLinkDialog(link: String, onDismiss: () -> Unit, onCopyLink: 
     }
 }
 
+/** The article's sections; tap scrolls there. */
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.ContentsSheet(toc: List<TocEntry>, onHeading: (TocEntry) -> Unit) {
+    val c = Offlinka.colors
+    Text(
+        stringResource(R.string.reader_contents),
+        style = Offlinka.type.headline,
+        color = c.ink,
+        modifier = Modifier.padding(bottom = 10.dp).semantics { heading() },
+    )
+    if (toc.isEmpty()) {
+        Text(stringResource(R.string.reader_contents_empty), style = Offlinka.type.body, color = c.ink2, modifier = Modifier.padding(bottom = 16.dp))
+        return
+    }
+    androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f, fill = false)) {
+        items(toc.size) { i ->
+            val h = toc[i]
+            Text(
+                h.text,
+                style = if (h.level <= 2) Offlinka.type.bodyStrong else Offlinka.type.body,
+                color = if (h.level <= 2) c.ink else c.ink2,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(role = Role.Button) { onHeading(h) }
+                    .heightIn(min = 48.dp)
+                    .padding(start = if (h.level <= 2) 4.dp else 22.dp, top = 12.dp, bottom = 12.dp),
+            )
+            if (i < toc.size - 1) Hairline(color = c.lineSoft)
+        }
+    }
+}
+
 @Composable
 private fun ReaderBottomBar(
     state: ReaderState,
     onBack: () -> Unit,
-    onForward: () -> Unit,
+    onContents: () -> Unit,
     onOpenFind: () -> Unit,
     onToggleTextPanel: () -> Unit,
     onMainPage: () -> Unit,
@@ -454,15 +518,51 @@ private fun ReaderBottomBar(
     Column(Modifier.fillMaxWidth().background(c.surface).windowInsetsPadding(WindowInsets.navigationBars).imePadding()) {
         Hairline(color = c.line)
         Row(
-            Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 8.dp),
+            Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            BarIconButton(OfflinkaIcons.Back, stringResource(R.string.action_back), onBack, tint = c.ink, enabled = state.canGoBack)
-            BarIconButton(OfflinkaIcons.Forward, stringResource(R.string.action_forward), onForward, tint = c.ink, enabled = state.canGoForward)
-            BarIconButton(OfflinkaIcons.FindInPage, stringResource(R.string.reader_find), onOpenFind, tint = c.ink, enabled = !state.isApp)
-            BarIconButton(OfflinkaIcons.TextSize, stringResource(R.string.reader_text_size), onToggleTextPanel, tint = c.ink, enabled = !state.isApp)
-            BarIconButton(OfflinkaIcons.BookWikipedia, stringResource(R.string.reader_main_page), onMainPage, tint = c.ink)
+            ToolbarItem(OfflinkaIcons.Back, stringResource(R.string.reader_bar_back), stringResource(R.string.action_back), onBack, enabled = state.canGoBack)
+            if (!state.isApp) {
+                ToolbarItem(OfflinkaIcons.Toc, stringResource(R.string.reader_bar_contents), stringResource(R.string.reader_contents), onContents)
+                ToolbarItem(OfflinkaIcons.FindInPage, stringResource(R.string.reader_bar_find), stringResource(R.string.reader_find), onOpenFind)
+                ToolbarItem(OfflinkaIcons.TextSize, stringResource(R.string.reader_bar_text), stringResource(R.string.reader_text_size), onToggleTextPanel)
+            }
+            ToolbarItem(state.book?.icon ?: OfflinkaIcons.BookWikipedia, stringResource(R.string.reader_bar_main), stringResource(R.string.reader_main_page), onMainPage)
         }
+    }
+}
+
+/** A toolbar button with its label under the icon (12.5 sp), 48 dp wide at least. */
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.ToolbarItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    description: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+) {
+    val c = Offlinka.colors
+    val tint = if (enabled) c.ink else c.ink.copy(alpha = 0.35f)
+    Column(
+        Modifier
+            .weight(1f)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(enabled = enabled, role = Role.Button, onClickLabel = description, onClick = onClick)
+            .semantics(mergeDescendants = true) { contentDescription = description }
+            .heightIn(min = 56.dp)
+            .padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.height(3.dp))
+        Text(
+            label,
+            style = Offlinka.type.labelSmall.copy(fontSize = 12.5.sp),
+            color = if (enabled) c.ink2 else c.ink2.copy(alpha = 0.5f),
+            maxLines = 2,
+            textAlign = TextAlign.Center,
+        )
     }
 }

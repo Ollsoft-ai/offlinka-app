@@ -1,7 +1,5 @@
 // UniFFI Kotlin bindings of the Rust core (generated into src/main/kotlin by scripts/gen-bindings.sh).
 // The native libraries (libofflinka_core.so per ABI) are packaged by :app from app/src/main/jniLibs.
-import org.gradle.api.file.DirectoryProperty
-
 plugins {
     alias(libs.plugins.android.library)
 }
@@ -10,7 +8,7 @@ val repoRoot: File = rootProject.projectDir.parentFile
 
 android {
     namespace = "cz.offlinka.core"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig {
         minSdk = 26
         consumerProguardFiles("consumer-rules.pro")
@@ -47,41 +45,4 @@ dependencies {
     testImplementation(libs.jna)
     testImplementation(libs.junit)
     testImplementation(libs.truth)
-}
-
-// The generated bindings import com.sun.jna.Library (unused), which shadows the core's own `Library`
-// class in Kotlin. Compile a copy without that import instead of the raw file.
-abstract class FixBindings : DefaultTask() {
-    @get:InputDirectory @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val source: DirectoryProperty
-    @get:OutputDirectory
-    abstract val output: DirectoryProperty
-
-    @TaskAction
-    fun run() {
-        val out = output.get().asFile
-        out.deleteRecursively()
-        val src = source.get().asFile
-        src.walkTopDown().filter { it.isFile && it.extension == "kt" }.forEach { f ->
-            val target = out.resolve(f.relativeTo(src).path)
-            target.parentFile.mkdirs()
-            target.writeText(f.readText().replace(Regex("(?m)^import com\\.sun\\.jna\\.Library\\s*$"), ""))
-        }
-    }
-}
-
-val fixBindings = tasks.register<FixBindings>("fixBindings") {
-    source.set(layout.projectDirectory.dir("src/main/kotlin"))
-    output.set(layout.buildDirectory.dir("generated/bindings/kotlin"))
-}
-
-android.sourceSets.getByName("main") {
-    kotlin.setSrcDirs(emptyList<Any>())
-    java.setSrcDirs(emptyList<Any>())
-}
-
-androidComponents {
-    onVariants { variant ->
-        variant.sources.kotlin?.addGeneratedSourceDirectory(fixBindings, FixBindings::output)
-    }
 }

@@ -39,6 +39,8 @@ import cz.offlinka.ui.screens.SettingsScreen
 import cz.offlinka.ui.screens.SettingsState
 import cz.offlinka.ui.theme.Offlinka
 import cz.offlinka.ui.theme.OfflinkaTheme
+import cz.offlinka.ui.model.BookState
+import cz.offlinka.ui.model.TocEntry
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -46,7 +48,7 @@ import org.junit.runners.Parameterized
 import java.util.TimeZone
 
 /** One variant of the device: UI language and light/dark. */
-data class Variant(val name: String, val locale: String, val dark: Boolean) {
+data class Variant(val name: String, val locale: String, val dark: Boolean, val fontScale: Float = 1f) {
     override fun toString() = name
 
     fun paparazzi() = Paparazzi(
@@ -54,6 +56,7 @@ data class Variant(val name: String, val locale: String, val dark: Boolean) {
             locale = locale,
             nightMode = if (dark) NightMode.NIGHT else NightMode.NOTNIGHT,
             softButtons = false,
+            fontScale = fontScale,
         ),
         theme = "android:Theme.Material.Light.NoActionBar",
         maxPercentDifference = 0.1,
@@ -64,6 +67,8 @@ data class Variant(val name: String, val locale: String, val dark: Boolean) {
         val CS_DARK = Variant("cs-dark", "cs", true)
         val EN_LIGHT = Variant("en-light", "en", false)
         val EN_DARK = Variant("en-dark", "en", true)
+        val SK_LIGHT = Variant("sk-light", "sk", false)
+        val CS_LARGE = Variant("cs-font160", "cs", false, fontScale = 1.6f)
     }
 }
 
@@ -267,6 +272,72 @@ class ScreenStatesTest(private val v: Variant) {
         }
     }
 
+    @Test fun homeOpeningAndFailed() = snap {
+        WithTabs(MainTab.HOME) {
+            HomeState(
+                Samples.books.take(6).mapIndexed { i, b ->
+                    b.copy(state = when (i) { 1, 2 -> BookState.OPENING; 3 -> BookState.FAILED; else -> BookState.OPEN })
+                },
+            ).let { HomeScreen(it, onSearch = noop, onOpenBook = {}, onQuickLink = {}, onContinue = {}) }
+        }
+    }
+
+    @Test fun connectDriveSeen() = snap { ConnectScreen(ConnectState(driveSeen = true), onPick = noop) }
+
+    @Test fun connectSlow() = snap { ConnectScreen(ConnectState(mode = ConnectMode.SEARCHING, slow = true), onPick = noop) }
+
+    @Test fun unpluggedWithGuides() = snap {
+        ConnectScreen(ConnectState(mode = ConnectMode.UNPLUGGED, canOpenGuides = true), onPick = noop)
+    }
+
+    @Test fun readerContents() = snap {
+        ReaderScreen(
+            ReaderState(
+                title = "Praha", book = Samples.csWiki, canGoBack = true,
+                contents = listOf(
+                    TocEntry("Nazev", "Název", 2), TocEntry("Historie", "Historie", 2), TocEntry("Pravek", "Pravěk", 3),
+                    TocEntry("Stredovek", "Středověk", 3), TocEntry("Geografie", "Geografie", 2), TocEntry("Doprava", "Doprava", 2),
+                ),
+            ),
+            onHome = noop, onBack = noop, onForward = noop, onToggleSave = noop, onSearch = noop, onOpenFind = noop,
+            onFindQuery = {}, onFindNext = {}, onCloseFind = noop, onToggleTextPanel = noop, onTextZoom = {},
+            onTheme = {}, onMainPage = noop, onBookDetails = noop, onHistory = noop, onDismissExternal = noop,
+            onCopyLink = {},
+        ) { ArticleMock() }
+    }
+
+    @Test fun searchIndexingAndRetry() = snap {
+        SearchScreen(
+            SearchState(query = "krvácení z nosu u dětí", groups = Samples.searchGroups.take(1), retriedWord = "krvácení", indexProgress = 42),
+            onQueryChange = {}, onSubmit = noop, onHit = {}, onRecent = {}, onRemoveRecent = {}, onScope = {}, onBack = noop,
+            autoFocus = false,
+        )
+    }
+
+    @Test fun settingsTwoDrives() = snap {
+        WithTabs(MainTab.SETTINGS) {
+            SettingsScreen(
+                SettingsState(drives = Samples.drives + cz.offlinka.ui.model.DriveUi("old", "STARA", 0, false)),
+                onLanguage = {}, onTheme = {}, onTextZoom = {}, onChangeDrive = noop,
+                onSaveHistory = {}, onClearSearches = noop, onAbout = noop,
+            )
+        }
+    }
+
+    @Test fun bookDetailsSupport() = snap {
+        Box(Modifier.fillMaxSize()) {
+            LibraryScreen(LibraryState(Samples.books, Samples.phoneEditions, Samples.drives.first()), onOpen = {}, onDetails = {})
+            BookDetailsSheet(BookDetailsState(Samples.csWiki, supportOpen = true), onDismiss = noop, onOpen = noop)
+        }
+    }
+
+    @Test fun bookDetailsIndexOffer() = snap {
+        Box(Modifier.fillMaxSize()) {
+            LibraryScreen(LibraryState(Samples.books, Samples.phoneEditions, Samples.drives.first()), onOpen = {}, onDetails = {})
+            BookDetailsSheet(BookDetailsState(Samples.enWiki.copy(hasIndex = false), canBuildIndex = true), onDismiss = noop, onOpen = noop)
+        }
+    }
+
     @Test fun libraryDetailsPhoneEdition() = snap {
         Box(Modifier.fillMaxSize()) {
             LibraryScreen(LibraryState(Samples.books, Samples.phoneEditions, Samples.drives.first()), onOpen = {}, onDetails = {})
@@ -311,6 +382,73 @@ private fun ArticleMock() {
         Text(
             "Území Prahy bylo osídleno již v paleolitu. Pražský hrad byl založen koncem 9. století.",
             style = Offlinka.type.body, color = c.ink, modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+}
+
+/** Slovak UI (the Slovak Wikipedia leads) and Czech at 160 % system font size. */
+@RunWith(Parameterized::class)
+class LocaleAndFontTest(private val v: Variant) {
+    companion object {
+        @JvmStatic
+        @Parameterized.Parameters(name = "{0}")
+        fun variants() = listOf(Variant.SK_LIGHT, Variant.CS_LARGE)
+    }
+
+    @get:Rule val paparazzi = v.paparazzi()
+
+    private fun snap(content: @Composable () -> Unit) = paparazzi.snapshot { OfflinkaTheme(darkTheme = v.dark, content = content) }
+
+    private val books get() = if (v.locale == "sk") Samples.booksSk else Samples.books
+
+    @Test fun home() = snap {
+        WithTabs(MainTab.HOME) {
+            HomeScreen(HomeState(books), onSearch = noop, onOpenBook = {}, onQuickLink = {}, onContinue = {})
+        }
+    }
+
+    @Test fun connect() = snap { ConnectScreen(ConnectState(), onPick = noop) }
+
+    @Test fun library() = snap {
+        WithTabs(MainTab.LIBRARY) {
+            LibraryScreen(LibraryState(books, Samples.phoneEditions, Samples.drives.first()), onOpen = {}, onDetails = {})
+        }
+    }
+
+    @Test fun settings() = snap {
+        WithTabs(MainTab.SETTINGS) {
+            SettingsScreen(
+                SettingsState(textZoom = 115, drives = Samples.drives),
+                onLanguage = {}, onTheme = {}, onTextZoom = {}, onChangeDrive = noop,
+                onSaveHistory = {}, onClearSearches = noop, onAbout = noop,
+            )
+        }
+    }
+
+    @Test fun saved() = snap {
+        WithTabs(MainTab.SAVED) {
+            SavedScreen(
+                SavedState(SavedTab.HISTORY, Samples.saved, Samples.history, Samples.books.associateBy { it.id }, Samples.NOW, TimeZone.getTimeZone("Europe/Prague")),
+                onTab = {}, onOpen = {}, onRemoveSaved = {}, onRemoveHistory = {}, onClearHistory = noop,
+            )
+        }
+    }
+
+    @Test fun reader() = snap {
+        ReaderScreen(
+            ReaderState(title = "Praha", book = Samples.csWiki, canGoBack = true),
+            onHome = noop, onBack = noop, onForward = noop, onToggleSave = noop, onSearch = noop, onOpenFind = noop,
+            onFindQuery = {}, onFindNext = {}, onCloseFind = noop, onToggleTextPanel = noop, onTextZoom = {},
+            onTheme = {}, onMainPage = noop, onBookDetails = noop, onHistory = noop, onDismissExternal = noop,
+            onCopyLink = {},
+        ) { ArticleMock() }
+    }
+
+    @Test fun search() = snap {
+        SearchScreen(
+            SearchState(query = "cesky krumlov", groups = Samples.searchGroups),
+            onQueryChange = {}, onSubmit = noop, onHit = {}, onRecent = {}, onRemoveRecent = {}, onScope = {}, onBack = noop,
+            autoFocus = false,
         )
     }
 }

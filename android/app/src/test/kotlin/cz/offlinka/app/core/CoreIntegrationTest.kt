@@ -15,6 +15,7 @@ import org.junit.BeforeClass
 import org.junit.Test
 import java.io.File
 import java.io.IOException
+import java.nio.file.Files
 
 /**
  * The app's own code (CoreContentSource, ContentServer) on the real core (host build via JNA) and the real
@@ -115,6 +116,61 @@ class CoreIntegrationTest {
         assertThat(r.status).isEqualTo(206)
         assertThat(r.headers["Content-Range"]).isEqualTo("bytes 5-54/${full.data.size}")
         assertThat(r.bytes().toList()).isEqualTo(full.data.copyOfRange(5, 55).toList())
+    }
+
+    @Test fun `an index built on the phone finds titles without diacritics, progress reaches 1`() {
+        val guides = File(drive, "Telefon/offlinka_cs_prirucky.zim")
+        val out = File(Files.createTempDirectory("idx").toFile(), "guides.offidx")
+        val progress = mutableListOf<Double>()
+        source.openPath(guides.path).use { book ->
+            source.buildIndex(book, out.path, onProgress = { progress += it }, isCancelled = { false })
+        }
+        assertThat(out.length()).isGreaterThan(0L)
+        assertThat(progress.last()).isWithin(0.001).of(1.0)
+        assertThat(File(out.path + ".part").exists()).isFalse()
+        source.openPath(guides.path).use { book ->
+            val before = book.suggest("vypadek", 5)
+            book.attachIndexPath(out.path)
+            book.preloadIndex()
+            assertThat(book.info.hasIndex).isTrue()
+            val hits = book.suggest("vypadek", 5)
+            assertThat(hits.map { it.title }.first()).startsWith("Výpadek")
+            assertThat(hits.size).isAtLeast(before.size)
+        }
+    }
+
+    @Test fun `building an index stops when cancelled and leaves no file`() {
+        val out = File(Files.createTempDirectory("idx").toFile(), "guides.offidx")
+        source.openPath(File(drive, "Telefon/offlinka_cs_prirucky.zim").path).use { book ->
+            var thrown: Throwable? = null
+            try {
+                source.buildIndex(book, out.path, onProgress = {}, isCancelled = { true })
+            } catch (e: ContentException.Cancelled) {
+                thrown = e
+            }
+            assertThat(thrown).isNotNull()
+        }
+        assertThat(out.exists()).isFalse()
+        assertThat(File(out.path + ".part").exists()).isFalse()
+    }
+
+    @Test fun `after closeFile reads fail softly with Io, trimMemory keeps other books readable`() {
+        val book = source.openPath(File(drive, "Telefon/offlinka_cs_prirucky.zim").path)
+        val main = book.info.mainPath!!
+        assertThat(book.get(main).data.size).isGreaterThan(0)
+        book.closeFile()
+        var thrown: Throwable? = null
+        try {
+            book.get(main)
+        } catch (e: ContentException.Io) {
+            thrown = e
+        }
+        assertThat(thrown).isNotNull()
+        book.close()
+        source.trimMemory()
+        source.setCacheBudget(16L * 1024 * 1024)
+        val games = books.getValue("offlinka_mul_hry").content
+        assertThat(games.get(games.info.mainPath!!).data.size).isGreaterThan(0)
     }
 
     @Test fun `guides pages behind the home quick links exist`() {

@@ -107,19 +107,48 @@ class BookSelectorTest {
         assertThat(c.single().index?.name).isEqualTo("wikipedia_cs_all_maxi-offlinka_2026-09.offidx")
     }
 
-    @Test fun `home order follows the spec`() {
-        val names = listOf(
-            "wikivoyage_en_europe_maxi_2026-09.zim", "offlinka_mul_hry.zim", "maps_en_slovakia_2026-06.zim",
-            "wikipedia_en_top1m_nopic_2026-04.zim", "wikipedia_sk_all_maxi_2026-08.zim", "offlinka_cs_prirucky.zim",
-            "wikipedia_en_medicine_nopic_2026-10.zim", "maps_en_czech-republic_2026-06.zim", "wikipedia_cs_all_maxi_2026-09.zim",
-            "wiktionary_cs_all_nopic_2026-07.zim", "wikibooks_cs_all_maxi_2026-10.zim",
-        )
-        val keys = BookSelector.select(names.map { f(it, DriveFolder.LIBRARY) }).map { it.key }
+    private val edition = listOf(
+        "wikivoyage_en_europe_maxi_2026-09.zim", "offlinka_mul_hry.zim", "maps_en_slovakia_2026-06.zim",
+        "wikipedia_en_top1m_nopic_2026-04.zim", "wikipedia_sk_all_maxi_2026-08.zim", "offlinka_cs_prirucky.zim",
+        "wikipedia_en_medicine_nopic_2026-10.zim", "maps_en_czech-republic_2026-06.zim", "wikipedia_cs_all_maxi_2026-09.zim",
+        "wiktionary_cs_all_nopic_2026-07.zim", "wikibooks_cs_all_maxi_2026-10.zim", "wikisource_cs_all_maxi_2026-08.zim",
+        "wikiquote_cs_all_maxi_2026-07.zim", "wikiversity_cs_all_maxi_2026-08.zim",
+    )
+
+    @Test fun `home order follows the design README for a Czech UI`() {
+        val keys = BookSelector.select(edition.map { f(it, DriveFolder.LIBRARY) }, "cs").map { it.key }
         assertThat(keys).containsExactly(
-            "wikipedia_cs_all", "wikipedia_sk_all", "wikipedia_en_top1m", "wikipedia_en_medicine",
-            "maps_en_czech-republic", "maps_en_slovakia", "offlinka_cs_prirucky", "offlinka_mul_hry",
-            "wikibooks_cs_all", "wiktionary_cs_all", "wikivoyage_en_europe",
+            "wikipedia_cs_all", "maps_en_czech-republic", "offlinka_cs_prirucky", "wikipedia_sk_all",
+            "wikipedia_en_top1m", "wikipedia_en_medicine", "maps_en_slovakia", "offlinka_mul_hry",
+            "wikivoyage_en_europe", "wikibooks_cs_all", "wikisource_cs_all", "wikiquote_cs_all",
+            "wiktionary_cs_all", "wikiversity_cs_all",
         ).inOrder()
+    }
+
+    @Test fun `a Slovak UI puts the Slovak Wikipedia first and the Czech one fourth`() {
+        val keys = BookSelector.select(edition.map { f(it, DriveFolder.LIBRARY) }, "sk").map { it.key }
+        assertThat(keys.take(5)).containsExactly(
+            "wikipedia_sk_all", "maps_en_czech-republic", "offlinka_cs_prirucky", "wikipedia_cs_all", "wikipedia_en_top1m",
+        ).inOrder()
+    }
+
+    @Test fun `an English UI leads with the English Wikipedia`() {
+        val keys = BookSelector.select(edition.map { f(it, DriveFolder.LIBRARY) }, "en").map { it.key }
+        assertThat(keys.first()).isEqualTo("wikipedia_en_top1m")
+    }
+
+    @Test fun `on-device indexes cover every book except English top1m, which is on demand`() {
+        fun p(name: String, ui: String = "cs") = BookSelector.indexPriority(ZimName.parse(name), ui)
+        assertThat(p("wikipedia_en_top1m_nopic_2026-04.zim")).isNull()
+        assertThat(BookSelector.onDemandIndex(ZimName.parse("wikipedia_en_top1m_nopic_2026-04.zim"))).isTrue()
+        assertThat(p("wikipedia_en_medicine_maxi_2026-04.zim")).isEqualTo(3)
+        assertThat(p("maps_en_czech-republic_2026-06.zim")).isEqualTo(4)
+        assertThat(p("offlinka_mul_hry.zim")).isEqualTo(4)
+        assertThat(p("offlinka_cs_prirucky.zim")).isEqualTo(2)
+        assertThat(p("wikipedia_cs_all_maxi_2026-09.zim")).isEqualTo(0)
+        assertThat(p("wikipedia_sk_all_maxi_2026-08.zim")).isEqualTo(1)
+        assertThat(p("wikipedia_sk_all_maxi_2026-08.zim", "sk")).isEqualTo(0)
+        assertThat(p("wiktionary_cs_all_nopic_2026-07.zim")).isEqualTo(3)
     }
 
     @Test fun `two drives - first drive wins a tie, books from both are used`() {

@@ -25,6 +25,8 @@ interface ServedBook {
     val mainPath: String?
     /** MediaWiki output: gets the reader stylesheet. */
     val isWiki: Boolean
+    /** A MapLibre map viewer: gets the worker fetch bridge. */
+    val isMap: Boolean get() = false
 }
 
 /** Reader assets bundled with the app (`assets/reader/`). */
@@ -46,23 +48,35 @@ class ContentServer(
     private val look: () -> ReaderLook,
     private val notFoundPage: (dark: Boolean) -> String,
     private val onDriveError: (IOException) -> Unit,
+    /** False while the drive's books are not open (start, unplugged): unknown books are then "come back later". */
+    private val driveReady: () -> Boolean = { true },
 ) {
+    private val redirects = java.util.Collections.synchronizedMap(
+        object : LinkedHashMap<String, Boolean>(64, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?) = size > 64
+        },
+    )
+
+    /** [url] was answered with a redirect stub (not a page worth a history row). */
+    fun wasRedirect(url: String): Boolean = redirects.containsKey(url)
+
     fun serve(url: String, method: String, headers: Map<String, String>, mainFrame: Boolean): Served {
         if (!ReaderUrls.isOurs(url)) return blocked()
         if (method != "GET" && method != "HEAD") return blocked()
         val target = ReaderUrls.parse(url) ?: return notFound(mainFrame)
         if (target.bookId == ReaderUrls.ASSETS) return asset(target.path)
-        val book = books()[target.bookId] ?: return notFound(mainFrame)
-        if (target.path.isEmpty()) {
-            val main = book.mainPath ?: return notFound(mainFrame)
-            return replaceWith(ReaderUrls.article(target.bookId, main))
-        }
+        // Any failure below (a book closed under us, a panic in the core) must answer, never crash the WebView thread.
         return try {
+            val book = books()[target.bookId] ?: return if (driveReady()) notFound(mainFrame) else error503()
+            if (target.path.isEmpty()) {
+                val main = book.mainPath ?: return notFound(mainFrame)
+                return replaceWith(url, ReaderUrls.article(target.bookId, main))
+            }
             val range = headers.entries.firstOrNull { it.key.equals("Range", ignoreCase = true) }?.value
             if (range != null) {
-                rangeResponse(book, target, range) ?: full(book, target, mainFrame)
+                rangeResponse(book, target, range) ?: full(book, target, mainFrame, url)
             } else {
-                full(book, target, mainFrame)
+                full(book, target, mainFrame, url)
             }
         } catch (e: ContentException.NotFound) {
             notFound(mainFrame)
@@ -74,25 +88,31 @@ class ContentServer(
         } catch (e: IOException) {
             onDriveError(e)
             error503()
+        } catch (e: Exception) {
+            // IllegalStateException of a closed UniFFI object, InternalException of a core panic, …
+            error503()
         }
     }
 
-    private fun full(book: ServedBook, target: ReaderUrls.Target, mainFrame: Boolean): Served {
-        // Big media is streamed in chunks instead of decompressed into one array.
-        val mime0 = mimeOf(target.path)
-        if (mime0 != null && isMedia(mime0)) {
-            val length = book.content.contentLength(target.path)
-            if (length > STREAM_THRESHOLD) return stream(book, target, length, mime0)
+    private fun full(book: ServedBook, target: ReaderUrls.Target, mainFrame: Boolean, url: String): Served {
+        // Big entries (media, map tiles archives; also without a file extension) are streamed in chunks
+        // instead of being decompressed into one array.
+        val length = book.content.contentLength(target.path)
+        if (length > STREAM_THRESHOLD) {
+            val mime = mimeOf(target.path) ?: sniff(book.content.getRange(target.path, 0, SNIFF_BYTES)) ?: "application/octet-stream"
+            return stream(book, target, length, mime)
         }
         val res = book.content.get(target.path)
         if (mainFrame && res.path != target.path && res.path.isNotEmpty()) {
             // A redirect: show the target under its own URL so relative links and history are right.
-            return replaceWith(ReaderUrls.article(target.bookId, res.path))
+            return replaceWith(url, ReaderUrls.article(target.bookId, res.path))
         }
         val (mime, charset) = splitMime(res.mime)
         var data = res.data
         if (mime == "text/html" && book.isWiki) {
             data = HtmlInjector.inject(data, look())
+        } else if (mime == "text/html" && book.isMap && mainFrame) {
+            data = HtmlInjector.injectFirst(data, MAP_BRIDGE)
         }
         return Served(
             200, "OK", mime, charset ?: if (mime.startsWith("text/") || mime.endsWith("javascript")) "utf-8" else null,
@@ -116,7 +136,8 @@ class ContentServer(
         )
         val (start, end) = r
         val len = end - start + 1
-        val mime = mimeOf(target.path) ?: splitMime(book.content.get(target.path).mime).first
+        // MIME from the extension, else from the first bytes: never decompress a whole entry for a range.
+        val mime = mimeOf(target.path) ?: sniff(book.content.getRange(target.path, 0, SNIFF_BYTES)) ?: "application/octet-stream"
         val body: InputStream = if (len <= MAX_RANGE_IN_MEMORY) {
             ByteArrayInputStream(book.content.getRange(target.path, start, len.toInt()))
         } else {
@@ -140,8 +161,9 @@ class ContentServer(
         return Served(200, "OK", mime, if (mime.startsWith("text/")) "utf-8" else null, baseHeaders(mime), stream)
     }
 
-    /** Replaces the current page with [url] without adding a history entry. */
-    private fun replaceWith(url: String): Served {
+    /** Replaces the current page ([from]) with [url] without adding a history entry. */
+    private fun replaceWith(from: String, url: String): Served {
+        redirects[from] = true
         val js = url.replace("\\", "\\\\").replace("'", "\\'")
         val html = "<!doctype html><meta charset=utf-8><script>location.replace('$js')</script>"
         return Served(200, "OK", "text/html", "utf-8", baseHeaders("text/html"), ByteArrayInputStream(html.toByteArray()))
@@ -166,6 +188,31 @@ class ContentServer(
     companion object {
         const val STREAM_THRESHOLD = 4L * 1024 * 1024
         const val MAX_RANGE_IN_MEMORY = 2L * 1024 * 1024
+        private const val SNIFF_BYTES = 64
+
+        /** Script that lets map viewers' web workers fetch tiles through the page (assets/reader/map-bridge.js). */
+        val MAP_BRIDGE = "<script src=\"/${ReaderUrls.ASSETS}/map-bridge.js\"></script>"
+
+        /** MIME type from an entry's first bytes, for entries without a file extension. */
+        fun sniff(head: ByteArray): String? {
+            fun at(i: Int, vararg b: Int) = head.size >= i + b.size && b.indices.all { head[i + it] == b[it].toByte() }
+            fun ascii(i: Int, s: String) = at(i, *s.map { it.code }.toIntArray())
+            return when {
+                ascii(4, "ftyp") -> if (ascii(8, "M4A")) "audio/mp4" else "video/mp4"
+                at(0, 0x1A, 0x45, 0xDF, 0xA3) -> "video/webm"
+                ascii(0, "OggS") -> "audio/ogg"
+                ascii(0, "ID3") || at(0, 0xFF, 0xFB) || at(0, 0xFF, 0xF3) || at(0, 0xFF, 0xF2) -> "audio/mpeg"
+                ascii(0, "RIFF") && ascii(8, "WAVE") -> "audio/wav"
+                ascii(0, "RIFF") && ascii(8, "WEBP") -> "image/webp"
+                ascii(0, "%PDF") -> "application/pdf"
+                at(0, 0x89, 0x50, 0x4E, 0x47) -> "image/png"
+                at(0, 0xFF, 0xD8, 0xFF) -> "image/jpeg"
+                ascii(0, "GIF8") -> "image/gif"
+                ascii(0, "PMTiles") -> "application/vnd.pmtiles"
+                at(0, 0x00, 0x61, 0x73, 0x6D) -> "application/wasm"
+                else -> null
+            }
+        }
 
         /** `bytes=a-b`, `bytes=a-`, `bytes=-n` → inclusive [start, end] clamped to [total]; null if unsatisfiable. */
         fun parseRange(header: String, total: Long): Pair<Long, Long>? {
@@ -248,7 +295,10 @@ class RangeInputStream(
         val n = minOf(CHUNK.toLong(), end - pos).toInt()
         buf = try {
             book.getRange(path, pos, n)
-        } catch (e: ContentException) {
+        } catch (e: IOException) {
+            throw e
+        } catch (e: Exception) {
+            // A closed book or a core panic ends the stream like a read error, never as a crash.
             throw IOException(e)
         }
         if (buf.isEmpty()) return false

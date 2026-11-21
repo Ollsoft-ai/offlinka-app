@@ -15,7 +15,8 @@ import kotlinx.coroutines.withTimeout
 import java.util.concurrent.Executor
 
 class MemoryLocales : LocaleStore {
-    var current = AppLanguage.SYSTEM
+    /** Czech by default, so book order does not depend on the JVM's locale. */
+    var current = AppLanguage.CS
     override fun get() = current
     override fun set(language: AppLanguage) { current = language }
 }
@@ -47,6 +48,7 @@ class TestGraph(context: Context, scope: CoroutineScope) {
         db = memoryDb(context),
         settings = Settings(context.getSharedPreferences("test-settings", Context.MODE_PRIVATE).also { it.edit().clear().commit() }, locales),
         scope = scope,
+        indexDir = null,
     )
     val tree = drives.add(
         "content://com.android.externalstorage.documents/tree/1234-ABCD%3A", "OFFLINKA",
@@ -55,10 +57,12 @@ class TestGraph(context: Context, scope: CoroutineScope) {
         "Knihovna/maps_en_czech-republic_2026-06.zim" to 1_065_265_251L,
     )
 
-    /** Grants the drive and waits until the books are open. */
+    /** Grants the drive and waits until every book is open. */
     fun connect(): ShelfState.Ready {
         drives.granted += tree
         graph.shelf.reloadAsync()
-        return runBlocking { withTimeout(10_000) { graph.shelf.state.first { it is ShelfState.Ready } as ShelfState.Ready } }
+        return runBlocking {
+            withTimeout(10_000) { graph.shelf.state.first { it is ShelfState.Ready && !it.opening } as ShelfState.Ready }
+        }
     }
 }

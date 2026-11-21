@@ -108,7 +108,7 @@ class CoreBindingsTest {
         assumeTrue(csMini.isFile && skMini.isFile)
         Book.openPath(skMini.path).use { sk ->
             Book.openPath(csMini.path).use { cs ->
-                Library().use { lib ->
+                BookLibrary().use { lib ->
                     lib.add(sk)
                     lib.add(cs)
                     assertThat(lib.books()).hasSize(2)

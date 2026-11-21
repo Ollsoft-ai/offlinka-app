@@ -20,14 +20,14 @@ val releaseStoreFile = signing("storeFile", "OFFLINKA_KEYSTORE")
 
 android {
     namespace = "cz.offlinka.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "cz.offlinka.app"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        targetSdk = 36
+        versionCode = 2
+        versionName = "0.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Only the ABIs the Rust core is built for (scripts/build-android-core.sh). JNA would otherwise add
         // armeabi/mips/x86 copies of its dispatcher and such a phone would install an app without the core.
@@ -38,6 +38,8 @@ android {
         // Czech is the default (values/), plus Slovak and English. Drops other locales from libraries.
         localeFilters += listOf("cs", "sk", "en")
         generateLocaleConfig = true
+        // The bundled guides book is opened through a file descriptor of the asset.
+        noCompress += "zim"
     }
 
     signingConfigs {

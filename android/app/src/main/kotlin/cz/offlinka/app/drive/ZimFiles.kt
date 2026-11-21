@@ -118,9 +118,9 @@ object BookSelector {
     /**
      * Picks one file per book: the big edition (maxi in Knihovna) wins over the phone one (mini in Telefon),
      * then the newer date, then the first drive. Index files (`<zim basename>.offidx`) are matched in the same
-     * folder of the same drive.
+     * folder of the same drive. The result is in home-screen order for [uiLanguage].
      */
-    fun select(files: List<DriveFile>): List<BookChoice> {
+    fun select(files: List<DriveFile>, uiLanguage: String = "cs"): List<BookChoice> {
         val zims = files.filter { it.name.endsWith(".zim", ignoreCase = true) }
         val indexes = files.filter { it.name.endsWith(".offidx", ignoreCase = true) }
             .associateBy { Triple(it.driveIndex, it.folder, it.name.substringBeforeLast('.').lowercase()) }
@@ -144,30 +144,54 @@ object BookSelector {
                     fallbacks = sorted.drop(1).map { it.first },
                 )
             }
-            .sortedWith(compareBy<BookChoice> { homeOrder(it.name) }.thenBy { it.key })
+            .sortedWith(compareBy<BookChoice> { homeOrder(it.name, uiLanguage) }.thenBy { it.key })
     }
 
     fun indexFor(zim: DriveFile, indexes: Map<Triple<Int, DriveFolder, String>, DriveFile>): DriveFile? =
         indexes[Triple(zim.driveIndex, zim.folder, zim.name.substringBeforeLast('.').lowercase())]
 
-    /** Home screen order from the SPEC: Wikipedia cs, sk, en, medicine, maps, guides, games, sister projects. */
-    fun homeOrder(n: ZimName): Int = when (n.kind) {
+    /**
+     * Home screen order (design README "Tile order"): the UI-language Wikipedia, Mapa Česka, Nouzové
+     * příručky, the other Wikipedia, English Wikipedia, Medicína, Mapa Slovenska, Hry, Wikivoyage,
+     * Wikiknihy, Wikizdroje, Wikicitáty, Wikislovník, Wikiverzita, then unknown books.
+     */
+    fun homeOrder(n: ZimName, ui: String = "cs"): Int = when (n.kind) {
         BookKind.WIKIPEDIA -> when (uiLanguage(n.language)) {
-            "cs" -> 0
-            "sk" -> 1
-            "en" -> 2
-            else -> 3
+            ui -> 0
+            "cs" -> 30
+            "sk" -> 31
+            "en" -> 40
+            else -> 45
         }
-        BookKind.MEDICINE -> 4
-        BookKind.MAPS -> if (n.region == MapRegion.CZECHIA) 5 else if (n.region == MapRegion.SLOVAKIA) 6 else 7
-        BookKind.GUIDES -> 8
-        BookKind.GAMES -> 9
-        BookKind.WIKIBOOKS -> 10
-        BookKind.WIKIQUOTE -> 11
-        BookKind.WIKISOURCE -> 12
-        BookKind.WIKIVERSITY -> 13
-        BookKind.WIKTIONARY -> 14
-        BookKind.WIKIVOYAGE -> 15
-        BookKind.OTHER -> 20
+        BookKind.MAPS -> when (n.region) {
+            MapRegion.CZECHIA -> 10
+            MapRegion.SLOVAKIA -> 60
+            else -> 65
+        }
+        BookKind.GUIDES -> 20
+        BookKind.MEDICINE -> 50
+        BookKind.GAMES -> 70
+        BookKind.WIKIVOYAGE -> 80
+        BookKind.WIKIBOOKS -> 90
+        BookKind.WIKISOURCE -> 100
+        BookKind.WIKIQUOTE -> 110
+        BookKind.WIKTIONARY -> 120
+        BookKind.WIKIVERSITY -> 130
+        BookKind.OTHER -> 200
     }
+
+    /**
+     * Order of the automatic on-device search indexes, most useful first. Null = never automatic: English
+     * top1m (6–11 min, ~460 MB RAM to build) is built only when asked for in its details.
+     */
+    fun indexPriority(n: ZimName, ui: String): Int? = when {
+        onDemandIndex(n) -> null
+        n.kind == BookKind.WIKIPEDIA -> if (uiLanguage(n.language) == ui) 0 else 1
+        n.kind == BookKind.GUIDES -> 2
+        n.kind == BookKind.MAPS || n.kind == BookKind.GAMES || n.kind == BookKind.OTHER -> 4
+        else -> 3
+    }
+
+    /** Too heavy to index unasked (English top1m). */
+    fun onDemandIndex(n: ZimName): Boolean = n.kind == BookKind.WIKIPEDIA && n.topic == "top1m"
 }

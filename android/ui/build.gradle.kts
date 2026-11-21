@@ -10,7 +10,7 @@ plugins {
 
 android {
     namespace = "cz.offlinka.ui"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig {
         minSdk = 26
     }
@@ -36,6 +36,7 @@ dependencies {
     api(libs.compose.material3)
     api(libs.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit)
 }

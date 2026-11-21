@@ -15,6 +15,19 @@ interface ContentSource {
     fun openPath(path: String): ContentBook
 
     fun newLibrary(): ContentLibrary
+
+    /** Drops cached clusters and unloads in-memory indexes of all books (Android onTrimMemory). */
+    fun trimMemory()
+
+    /** Budget of the decompressed-cluster cache shared by all open books. */
+    fun setCacheBudget(bytes: Long)
+
+    /**
+     * Builds [book]'s search index into [outPath] (app storage). Blocking; [onProgress] gets 0..1,
+     * [isCancelled] is polled with it. Throws [ContentException.Cancelled] when cancelled; leaves no
+     * file behind on failure. Does not attach the index.
+     */
+    fun buildIndex(book: ContentBook, outPath: String, onProgress: (Double) -> Unit, isCancelled: () -> Boolean)
 }
 
 interface ContentBook : AutoCloseable {
@@ -37,6 +50,12 @@ interface ContentBook : AutoCloseable {
     fun attachIndexFd(fd: Int)
 
     fun attachIndexPath(path: String)
+
+    /** Loads an attached index's in-memory part now (call off the UI thread right after attaching). */
+    fun preloadIndex()
+
+    /** Releases the ZIM and index files at once (unplug): later reads fail with [ContentException.Io]. */
+    fun closeFile()
 }
 
 interface ContentLibrary : AutoCloseable {
@@ -74,4 +93,5 @@ sealed class ContentException(message: String?) : IOException(message) {
     class InvalidZim(message: String?) : ContentException(message)
     class NotFound(message: String?) : ContentException(message)
     class Unsupported(message: String?) : ContentException(message)
+    class Cancelled(message: String?) : ContentException(message)
 }

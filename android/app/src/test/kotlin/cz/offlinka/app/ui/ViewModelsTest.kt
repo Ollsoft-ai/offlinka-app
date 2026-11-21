@@ -6,7 +6,11 @@ import com.google.common.truth.Truth.assertThat
 import cz.offlinka.app.fakes.TestGraph
 import cz.offlinka.app.reader.PageInfo
 import cz.offlinka.app.reader.ReaderUrls
+import cz.offlinka.ui.model.BookKind
+import cz.offlinka.ui.model.BookState
+import cz.offlinka.ui.model.BookUi
 import cz.offlinka.ui.model.QuickLink
+import cz.offlinka.ui.model.SearchGroup
 import cz.offlinka.ui.model.ThemeMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -74,6 +78,32 @@ class ViewModelsTest {
         vm.setQuery("praha")
         val all = await(vm.state) { !it.searching && it.scope == null && it.groups.isNotEmpty() }
         assertThat(all.groups.map { it.book.id }).containsExactly("wikipedia_cs_all")
+    }
+
+    @Test fun `a multi-word query with no title match retries its longest word`() {
+        val vm = SearchViewModel(t.graph, null, Dispatchers.Unconfined)
+        vm.setQuery("praha hlavní")
+        val s = await(vm.state) { !it.searching && it.groups.isNotEmpty() }
+        assertThat(s.retriedWord).isEqualTo("hlavní")
+        assertThat(s.groups.flatMap { it.hits }.map { it.title }).contains("Hlavní strana")
+        vm.setQuery("praha")
+        val direct = await(vm.state) { !it.searching && it.query == "praha" && it.groups.isNotEmpty() }
+        assertThat(direct.retriedWord).isNull()
+    }
+
+    @Test fun `the UI-language Wikipedia leads the search groups, the rest keep the core's order`() {
+        fun g(id: String, kind: BookKind, lang: String) =
+            SearchGroup(BookUi(id = id, kind = kind, language = lang, zimTitle = id), emptyList())
+        val core = listOf(
+            g("offlinka_cs_prirucky", BookKind.GUIDES, "cs"),
+            g("wikipedia_cs_all", BookKind.WIKIPEDIA, "cs"),
+            g("wikipedia_sk_all", BookKind.WIKIPEDIA, "sk"),
+            g("wiktionary_sk_all", BookKind.WIKTIONARY, "sk"),
+        )
+        assertThat(SearchViewModel.uiWikipediaFirst(core, "sk").map { it.book.id })
+            .containsExactly("wikipedia_sk_all", "offlinka_cs_prirucky", "wikipedia_cs_all", "wiktionary_sk_all").inOrder()
+        assertThat(SearchViewModel.uiWikipediaFirst(core, "cs").map { it.book.id })
+            .containsExactly("wikipedia_cs_all", "offlinka_cs_prirucky", "wikipedia_sk_all", "wiktionary_sk_all").inOrder()
     }
 
     @Test fun `no results and empty query`() {
@@ -156,6 +186,18 @@ class ViewModelsTest {
             assertThat(vm.quickLink(QuickLink.PREPARE)).isEqualTo(ReaderUrls.article("offlinka_cs_prirucky", "vypadek-proudu.html"))
             assertThat(vm.quickLink(QuickLink.RANDOM)).isEqualTo(ReaderUrls.article("wikipedia_cs_all", "Brno"))
         }
+    }
+
+    @Test fun `a book that does not open is a failed tile on home and opens on retry`() {
+        t.source.failing += "maps_en_czech-republic_2026-06.zim"
+        runBlocking { t.graph.shelf.reload() }
+        val vm = HomeViewModel(t.graph)
+        val failed = await(vm.state) { s -> s.books.any { it.state == BookState.FAILED } }
+        assertThat(failed.books.single { it.state == BookState.FAILED }.id).isEqualTo("maps_en_czech-republic")
+        t.source.failing.clear()
+        vm.retry(failed.books.single { it.id == "maps_en_czech-republic" })
+        val ok = await(vm.state) { s -> s.books.all { it.state == BookState.OPEN } }
+        assertThat(ok.books.map { it.id }).containsExactly("wikipedia_cs_all", "maps_en_czech-republic", "offlinka_cs_prirucky").inOrder()
     }
 
     @Test fun `library lists the open books`() {

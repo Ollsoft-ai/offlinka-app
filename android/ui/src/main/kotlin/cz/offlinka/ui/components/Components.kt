@@ -40,6 +40,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.composed
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -111,6 +114,34 @@ fun GroupCard(modifier: Modifier = Modifier, background: Color = Offlinka.colors
     )
 }
 
+/**
+ * One row of a list group drawn row by row (for lazy lists): rounded top on the first, rounded bottom on
+ * the last, one line between rows.
+ */
+fun Modifier.groupItem(first: Boolean, last: Boolean): Modifier = composed {
+    val c = Offlinka.colors
+    val r = 12.dp
+    val shape = RoundedCornerShape(
+        topStart = if (first) r else 0.dp, topEnd = if (first) r else 0.dp,
+        bottomStart = if (last) r else 0.dp, bottomEnd = if (last) r else 0.dp,
+    )
+    clip(shape)
+        .background(c.surface)
+        .drawWithContent {
+            drawContent()
+            val sw = Offlinka_OUTLINE.toPx()
+            // The bottom edge of a middle row is the next row's top edge: draw it once.
+            val outline = shape.createOutline(
+                androidx.compose.ui.geometry.Size(size.width, size.height + if (last) 0f else sw),
+                layoutDirection,
+                this,
+            )
+            drawOutline(outline, c.line, style = androidx.compose.ui.graphics.drawscope.Stroke(sw * 2))
+        }
+}
+
+private val Offlinka_OUTLINE = 1.5.dp
+
 @Composable
 fun GroupDivider(modifier: Modifier = Modifier) {
     Box(modifier.fillMaxWidth().height(1.dp).background(Offlinka.colors.line))
@@ -174,39 +205,61 @@ fun PaperBar(modifier: Modifier = Modifier, content: @Composable RowScope.() -> 
     }
 }
 
-/** Segmented choice: ink outline, the selected part filled forest. */
+/**
+ * Segmented choice: ink outline, the selected part filled forest. Labels wrap to two lines; with large
+ * system fonts (scale above 1.3) the options stack vertically instead of squeezing.
+ */
 @Composable
 fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
     val c = Offlinka.colors
     val shape = RoundedCornerShape(8.dp)
-    Row(
-        modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min)
-            .clip(shape)
-            .border(Offlinka.size.outline, c.outline, shape)
-            .selectableGroup(),
-    ) {
-        options.forEachIndexed { i, (value, label) ->
-            if (i > 0) Box(Modifier.width(Offlinka.size.outline).fillMaxHeight().background(c.outline))
-            val on = value == selected
-            Box(
-                Modifier
-                    .weight(if (label.length > 10) 1.5f else 1f)
-                    .heightIn(min = 52.dp)
-                    .fillMaxHeight()
-                    .background(if (on) c.accent else c.surface)
-                    .selectable(on, role = Role.RadioButton, onClick = { onSelect(value) }),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    label,
-                    style = Offlinka.type.label,
-                    color = if (on) c.onAccent else c.ink2,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 8.dp),
-                )
+    val vertical = androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.3f
+    @Composable
+    fun Option(value: T, label: String, m: Modifier) {
+        val on = value == selected
+        Box(
+            m
+                .heightIn(min = 52.dp)
+                .background(if (on) c.accent else c.surface)
+                .selectable(on, role = Role.RadioButton, onClick = { onSelect(value) })
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                label,
+                style = Offlinka.type.label,
+                color = if (on) c.onAccent else c.ink2,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+        }
+    }
+    if (vertical) {
+        Column(
+            modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .border(Offlinka.size.outline, c.outline, shape)
+                .selectableGroup(),
+        ) {
+            options.forEachIndexed { i, (value, label) ->
+                if (i > 0) Box(Modifier.fillMaxWidth().height(Offlinka.size.outline).background(c.outline))
+                Option(value, label, Modifier.fillMaxWidth())
+            }
+        }
+    } else {
+        Row(
+            modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+                .clip(shape)
+                .border(Offlinka.size.outline, c.outline, shape)
+                .selectableGroup(),
+        ) {
+            options.forEachIndexed { i, (value, label) ->
+                if (i > 0) Box(Modifier.width(Offlinka.size.outline).fillMaxHeight().background(c.outline))
+                Option(value, label, Modifier.weight(if (label.length > 10) 1.5f else 1f).fillMaxHeight())
             }
         }
     }

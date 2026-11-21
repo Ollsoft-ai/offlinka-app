@@ -36,6 +36,14 @@ object HtmlInjector {
         return out.toByteArray(Charsets.UTF_8)
     }
 
+    /** Puts [snippet] first in `<head>`, before the page's own scripts (the map bridge must wrap Worker first). */
+    fun injectFirst(html: ByteArray, snippet: String): ByteArray {
+        val text = html.toString(Charsets.UTF_8)
+        val m = headOpen.find(text)
+        val out = if (m != null) text.substring(0, m.range.last + 1) + snippet + text.substring(m.range.last + 1) else snippet + text
+        return out.toByteArray(Charsets.UTF_8)
+    }
+
     /** Applies theme and text scale to an open page without reloading. */
     fun lookScript(look: ReaderLook): String = "window.offlinkaReader&&window.offlinkaReader(${look(look)})"
 

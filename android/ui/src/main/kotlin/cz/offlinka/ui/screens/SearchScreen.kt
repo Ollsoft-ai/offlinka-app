@@ -76,6 +76,10 @@ data class SearchState(
     val searching: Boolean = false,
     /** How many hits a group shows before "show more" when searching everywhere. */
     val perGroup: Int = 4,
+    /** Nothing matched the whole query, so these results are for its longest word. */
+    val retriedWord: String? = null,
+    /** Accent-free search index being built on the phone, percent. */
+    val indexProgress: Int? = null,
 ) {
     val showRecent: Boolean get() = query.isBlank()
     val noResults: Boolean get() = query.isNotBlank() && !searching && groups.all { it.hits.isEmpty() }
@@ -93,6 +97,8 @@ fun SearchScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     autoFocus: Boolean = true,
+    onClearRecent: () -> Unit = {},
+    onCancelIndex: () -> Unit = {},
 ) {
     val c = Offlinka.colors
     Column(modifier.fillMaxSize().background(c.bg)) {
@@ -107,25 +113,50 @@ fun SearchScreen(
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
             val scope = state.scope
+            state.indexProgress?.let { p ->
+                item(key = "index") {
+                    InfoNote(stringResource(R.string.search_index_building, p), Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
+                        BarIconButton(OfflinkaIcons.Close, stringResource(R.string.action_cancel), onCancelIndex, tint = c.ink2)
+                    }
+                }
+            }
             if (scope != null) {
                 item(key = "scope") { ScopeChip(scope) { onScope(null) } }
+            }
+            state.retriedWord?.let { w ->
+                if (!state.showRecent && state.groups.any { it.hits.isNotEmpty() }) {
+                    item(key = "retried") {
+                        Text(
+                            stringResource(R.string.search_retry_word, w),
+                            style = Offlinka.type.bodySmall,
+                            color = c.ink2,
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp),
+                        )
+                    }
+                }
             }
             when {
                 state.showRecent -> {
                     if (state.recent.isNotEmpty()) {
                         item(key = "recent-title") {
-                            SectionLabel(stringResource(R.string.search_recent_title), Modifier.padding(horizontal = 16.dp))
+                            SectionLabel(stringResource(R.string.search_recent_title), Modifier.padding(horizontal = 16.dp)) {
+                                Text(
+                                    stringResource(R.string.action_clear),
+                                    style = Offlinka.type.subhead,
+                                    color = c.link,
+                                    modifier = Modifier
+                                        .clickable(role = Role.Button, onClick = onClearRecent)
+                                        .heightIn(min = 48.dp)
+                                        .padding(top = 12.dp),
+                                )
+                            }
                         }
                         items(state.recent, key = { "recent-$it" }) { q ->
                             RecentRow(q, onClick = { onRecent(q) }, onRemove = { onRemoveRecent(q) })
                         }
                     }
                     item(key = "tip") {
-                        Row(Modifier.padding(horizontal = 16.dp, vertical = 20.dp), verticalAlignment = Alignment.Top) {
-                            Icon(OfflinkaIcons.Info, null, tint = c.ink3, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(12.dp))
-                            Text(stringResource(R.string.search_tip), style = Offlinka.type.bodySmall, color = c.ink2)
-                        }
+                        InfoNote(stringResource(R.string.search_tip), Modifier.padding(horizontal = 16.dp, vertical = 20.dp))
                     }
                 }
                 state.noResults -> item(key = "none") {
@@ -218,9 +249,9 @@ private fun ScopeChip(book: BookUi, onClear: () -> Unit) {
     Row(
         Modifier
             .padding(start = 16.dp, end = 16.dp, top = 14.dp)
-            .clip(RoundedCornerShape(100.dp))
+            .clip(RoundedCornerShape(6.dp))
             .background(c.surface)
-            .border(1.5.dp, c.outline, RoundedCornerShape(100.dp))
+            .border(1.5.dp, c.outline, RoundedCornerShape(6.dp))
             .clickable(role = Role.Button, onClickLabel = stringResource(R.string.action_close), onClick = onClear)
             .heightIn(min = 44.dp)
             .padding(start = 6.dp, end = 12.dp),
@@ -231,6 +262,25 @@ private fun ScopeChip(book: BookUi, onClear: () -> Unit) {
         Text(bookTitle(book), style = Offlinka.type.label, color = c.ink)
         Spacer(Modifier.width(8.dp))
         Icon(OfflinkaIcons.Close, null, tint = c.ink2, modifier = Modifier.size(18.dp))
+    }
+}
+
+/** Info note: soft fill, info icon, body text, optional trailing action. */
+@Composable
+private fun InfoNote(text: String, modifier: Modifier = Modifier, trailing: @Composable () -> Unit = {}) {
+    val c = Offlinka.colors
+    Row(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(c.surfaceMuted)
+            .padding(start = 14.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(OfflinkaIcons.Info, null, tint = c.ink2, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(text, style = Offlinka.type.bodySmall, color = c.ink, modifier = Modifier.weight(1f))
+        trailing()
     }
 }
 

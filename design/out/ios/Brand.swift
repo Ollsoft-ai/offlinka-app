@@ -32,7 +32,7 @@ extension Color {
     static let brandInk3 = Color(light: 0x736C59, dark: 0x99937D)
     static let brandLine = Color(light: 0xCDBF9F, dark: 0x2E4236)
     static let brandLineSoft = Color(light: 0xE2D6B8, dark: 0x22342A)
-    static let brandOutline = Color(light: 0x17231C, dark: 0x4B6B59)
+    static let brandOutline = Color(light: 0x17231C, dark: 0x5E8270)
     static let brandHero = Color(light: 0x1F3D2F, dark: 0x173024)
     static let brandHeroDeep = Color(light: 0x14291F, dark: 0x0F2219)
     static let brandHeroRidge = Color(light: 0x2F5642, dark: 0x1F3D2F)

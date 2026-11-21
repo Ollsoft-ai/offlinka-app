@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -17,13 +19,15 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import cz.offlinka.ui.R
 import cz.offlinka.ui.theme.Offlinka
@@ -38,7 +42,7 @@ fun OfflinkaBottomBar(selected: MainTab, onSelect: (MainTab) -> Unit, modifier: 
     Column(modifier.fillMaxWidth().background(c.surface).windowInsetsPadding(WindowInsets.navigationBars)) {
         Hairline(color = c.line)
         Row(
-            Modifier.fillMaxWidth().height(Offlinka.size.bottomBar + 8.dp).selectableGroup(),
+            Modifier.fillMaxWidth().heightIn(min = Offlinka.size.bottomBar + 8.dp).height(IntrinsicSize.Min).selectableGroup(),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
             MainTab.entries.forEach { tab ->
@@ -53,7 +57,8 @@ fun OfflinkaBottomBar(selected: MainTab, onSelect: (MainTab) -> Unit, modifier: 
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .selectable(on, role = Role.Tab, onClick = { onSelect(tab) }),
+                        .selectable(on, role = Role.Tab, onClick = { onSelect(tab) })
+                        .padding(vertical = 6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
@@ -62,13 +67,14 @@ fun OfflinkaBottomBar(selected: MainTab, onSelect: (MainTab) -> Unit, modifier: 
                     }
                     Icon(icon, null, tint = if (on) c.ink else c.ink2, modifier = Modifier.size(26.dp))
                     Spacer(Modifier.height(4.dp))
-                    Text(
+                    // One word per tab: shrink it to fit at large system font sizes instead of breaking it mid-word.
+                    val style = Offlinka.type.labelSmall
+                    BasicText(
                         stringResource(label),
-                        style = Offlinka.type.labelSmall,
-                        color = if (on) c.ink else c.ink2,
+                        style = style.copy(color = if (on) c.ink else c.ink2, textAlign = TextAlign.Center),
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 2.dp),
+                        autoSize = TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = style.fontSize, stepSize = 0.5.sp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
                     )
                 }
             }

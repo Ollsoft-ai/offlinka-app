@@ -1,0 +1,8 @@
+<!doctype html><html><head><script src="/map-bridge.js"></script></head><body><script>
+var code = "fetch('/data.bin').then(function(r){return r.arrayBuffer()}).then(function(b){postMessage({len:b.byteLength, first:new Uint8Array(b)[0]})}).catch(function(e){postMessage({err:String(e)})});" +
+  "self.addEventListener('message', function(e){ postMessage({echo:e.data}) });";
+var w = new Worker(URL.createObjectURL(new Blob([code], {type:'text/javascript'})));
+window.result = [];
+w.addEventListener('message', function(e){ window.result.push(e.data); });
+setTimeout(function(){ w.postMessage('ping'); }, 300);
+</script></body></html>

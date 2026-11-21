@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.layout.height
+import cz.offlinka.ui.components.groupItem
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -109,52 +112,49 @@ fun SavedScreen(
                     }
                 }
             } else if (state.tab == SavedTab.SAVED) {
-                item(key = "saved") {
-                    GroupCard(Modifier.padding(horizontal = 16.dp, vertical = 10.dp).widthIn(max = 720.dp)) {
-                        items.forEachIndexed { i, ref ->
-                            if (i > 0) GroupDivider()
-                            ArticleRow(ref, state.books[ref.bookId], onOpen) {
-                                BarIconButton(
-                                    OfflinkaIcons.BookmarkFilled,
-                                    stringResource(R.string.saved_remove),
-                                    { onRemoveSaved(ref) },
-                                    tint = if (state.books.containsKey(ref.bookId)) c.accent else c.ink3,
-                                )
-                            }
-                        }
+                item(key = "saved-top") { Spacer(Modifier.height(10.dp)) }
+                itemsIndexed(items, key = { _, it -> "s-${it.bookId}-${it.path}" }) { i, ref ->
+                    ArticleRow(
+                        ref, state.books[ref.bookId], onOpen,
+                        Modifier.padding(horizontal = 16.dp).widthIn(max = 720.dp).groupItem(i == 0, i == items.lastIndex),
+                    ) {
+                        BarIconButton(
+                            OfflinkaIcons.BookmarkFilled,
+                            stringResource(R.string.saved_remove),
+                            { onRemoveSaved(ref) },
+                            tint = if (state.books.containsKey(ref.bookId)) c.accent else c.ink3,
+                        )
                     }
                 }
             } else {
                 val days = items.groupBy { dayIndex(it.time, state.now, state.timeZone) }
                 days.entries.forEachIndexed { index, (day, refs) ->
                     item(key = "day-$day") {
-                        Column(Modifier.padding(horizontal = 16.dp).widthIn(max = 720.dp)) {
-                            SectionLabel(dayLabel(day, refs.first().time, state.timeZone)) {
-                                if (index == 0) {
-                                    Text(
-                                        stringResource(R.string.history_clear),
-                                        style = Offlinka.type.subhead,
-                                        color = c.link,
-                                        modifier = Modifier
-                                            .clickable(role = Role.Button, onClick = { confirmClear = true })
-                                            .heightIn(min = 48.dp)
-                                            .padding(top = 12.dp),
-                                    )
-                                }
+                        SectionLabel(dayLabel(day, refs.first().time, state.timeZone), Modifier.padding(horizontal = 16.dp).widthIn(max = 720.dp)) {
+                            if (index == 0) {
+                                Text(
+                                    stringResource(R.string.history_clear),
+                                    style = Offlinka.type.subhead,
+                                    color = c.link,
+                                    modifier = Modifier
+                                        .clickable(role = Role.Button, onClick = { confirmClear = true })
+                                        .heightIn(min = 48.dp)
+                                        .padding(top = 12.dp),
+                                )
                             }
-                            GroupCard {
-                                refs.forEachIndexed { i, ref ->
-                                    if (i > 0) GroupDivider()
-                                    ArticleRow(ref, state.books[ref.bookId], onOpen) {
-                                        Text(
-                                            timeOf(ref.time, state.timeZone),
-                                            style = Offlinka.type.label,
-                                            color = c.ink2,
-                                            modifier = Modifier.padding(end = 14.dp),
-                                        )
-                                    }
-                                }
-                            }
+                        }
+                    }
+                    itemsIndexed(refs, key = { _, it -> "h-$day-${it.time}-${it.bookId}-${it.path}" }) { i, ref ->
+                        ArticleRow(
+                            ref, state.books[ref.bookId], onOpen,
+                            Modifier.padding(horizontal = 16.dp).widthIn(max = 720.dp).groupItem(i == 0, i == refs.lastIndex),
+                        ) {
+                            Text(
+                                timeOf(ref.time, state.timeZone),
+                                style = Offlinka.type.label,
+                                color = c.ink2,
+                                modifier = Modifier.padding(end = 14.dp),
+                            )
                         }
                     }
                 }
@@ -212,12 +212,13 @@ private fun ArticleRow(
     ref: ArticleRef,
     book: BookUi?,
     onOpen: (ArticleRef) -> Unit,
+    modifier: Modifier = Modifier,
     trailing: @Composable () -> Unit,
 ) {
     val c = Offlinka.colors
     val available = book != null
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .clickable(enabled = available, role = Role.Button, onClick = { onOpen(ref) })
             .heightIn(min = 72.dp)

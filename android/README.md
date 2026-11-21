@@ -32,5 +32,11 @@ Never in git. Either env vars `OFFLINKA_KEYSTORE`, `OFFLINKA_KEYSTORE_PASSWORD`,
 
 - **No INTERNET permission.** WebView loads only what `ContentServer` answers; any other host gets an empty 403.
 - **Never writes to the drive.** Read-only SAF descriptors (ZIMs and `.offidx` indexes are handed to the core as detached fds; the core reads with `pread`, no `mmap`, so a pulled drive is an `Io` error, never SIGBUS). The only copy the app makes is a PDF opened from the guides (app cache).
-- **compileSdk/targetSdk 35** per SPEC; AndroidX versions are the newest whose AAR metadata still allows compileSdk 35 (`gradle/libs.versions.toml`).
+- **compileSdk/targetSdk 36** (Google Play requirement since 2026-08-31, SPEC updated); AndroidX versions are the newest whose AAR metadata still allows compileSdk 36 (`gradle/libs.versions.toml`).
+- **Search indexes on the phone:** drives without `.offidx` get them built in `noBackupFilesDir/indexes` (core `build_index`, file name = ZIM name + size, so a new edition rebuilds and the old one's index is deleted), UI-language Wikipedia first, every book except English top1m; that one only from its details (warning, phones with 3 GB+ RAM, request kept across restarts). Progress on Home and in Search, cancellable, never blocks reading. Index tables preload when Search opens.
+- **Retired books** (unplug, rescan) get `closeFile()` only, after the new state is published; the UniFFI cleaner frees them once unreferenced. A WebView read on a retired book gets Io → 503 → the reader reloads.
+- **Memory:** one 48 MB cluster cache for all books (32 MB on low-RAM phones); `onTrimMemory` → core `trimMemory()`.
+- **Startup:** the UI-language Wikipedia opens first and Home shows at once; the other books open in parallel (3 at a time) and fill in.
+- **Bundled guides:** `app/src/main/assets/offlinka_cs_prirucky.zim` (from the drive release) is copied to app storage on first start, so První pomoc works with the drive unplugged.
+- **Maps:** map pages get `assets/reader/map-bridge.js`, which routes MapLibre worker fetches through the page (always intercepted). Check in Chromium: `PLAYWRIGHT_BROWSERS_PATH=/srv/offlinka/tools/ms-playwright atd-render timeout 120 node android/tools/map-bridge-check/run.cjs`.
 - One `WebView` per activity (`ReaderController`), so the reading history survives moving between screens; a search started in the reader returns its result into the same history.

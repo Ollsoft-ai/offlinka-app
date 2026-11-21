@@ -27,7 +27,15 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.alpha
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -48,10 +56,12 @@ import cz.offlinka.ui.components.BookBadge
 import cz.offlinka.ui.components.HeroBox
 import cz.offlinka.ui.components.InkCard
 import cz.offlinka.ui.components.OfflinkaLogo
+import cz.offlinka.ui.components.Peak
 import cz.offlinka.ui.components.Ridge
 import cz.offlinka.ui.components.Tag
 import cz.offlinka.ui.model.ArticleRef
 import cz.offlinka.ui.model.BookKind
+import cz.offlinka.ui.model.BookState
 import cz.offlinka.ui.model.BookUi
 import cz.offlinka.ui.model.QuickLink
 import cz.offlinka.ui.model.bookDescription
@@ -69,6 +79,8 @@ data class HomeState(
     val continueBook: BookUi? = null,
     val hasGuides: Boolean = true,
     val hasRandom: Boolean = true,
+    /** Accent-free search index being built on the phone, percent (a calm line, never blocking). */
+    val indexProgress: Int? = null,
 )
 
 @Composable
@@ -79,8 +91,18 @@ fun HomeScreen(
     onQuickLink: (QuickLink) -> Unit,
     onContinue: (ArticleRef) -> Unit,
     modifier: Modifier = Modifier,
+    onRetryBook: (BookUi) -> Unit = {},
 ) {
     val c = Offlinka.colors
+    var failed by remember { mutableStateOf<BookUi?>(null) }
+    val open: (BookUi) -> Unit = { b ->
+        when (b.state) {
+            BookState.OPEN -> onOpenBook(b)
+            BookState.FAILED -> failed = b
+            BookState.OPENING -> Unit
+        }
+    }
+    failed?.let { b -> RetryBookDialog(b, onRetry = { failed = null; onRetryBook(b) }, onDismiss = { failed = null }) }
     Column(
         modifier
             .fillMaxSize()
@@ -131,9 +153,11 @@ fun HomeScreen(
                 Modifier.fillMaxWidth().padding(top = 26.dp, bottom = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                Peak()
+                Spacer(Modifier.width(10.dp))
                 Text(
                     stringResource(R.string.home_books_title),
-                    style = Offlinka.type.subhead.copy(fontSize = Offlinka.type.title.fontSize),
+                    style = Offlinka.type.title,
                     color = c.ink,
                     modifier = Modifier.weight(1f).semantics { heading() },
                 )
@@ -143,7 +167,15 @@ fun HomeScreen(
                     color = c.ink2,
                 )
             }
-            BookGrid(state.books, onOpenBook)
+            BookGrid(state.books, open)
+            state.indexProgress?.let { p ->
+                Text(
+                    stringResource(R.string.search_index_building, p),
+                    style = Offlinka.type.label,
+                    color = c.ink2,
+                    modifier = Modifier.padding(top = 14.dp),
+                )
+            }
             Spacer(Modifier.height(28.dp))
         }
     }
@@ -207,13 +239,13 @@ private fun QuickLinks(state: HomeState, onQuickLink: (QuickLink) -> Unit) {
         Spacer(Modifier.height(18.dp))
         return
     }
-    Row(
+    FlowRow(
         Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
             .padding(horizontal = 16.dp)
             .padding(top = 18.dp, bottom = 22.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         links.forEach { link ->
             when (link) {
@@ -225,6 +257,7 @@ private fun QuickLinks(state: HomeState, onQuickLink: (QuickLink) -> Unit) {
     }
 }
 
+/** Quick chip on the forest hero: 40 dp, 15 sp, tinted fill and a 3:1 outline. */
 @Composable
 private fun QuickChip(text: String, icon: ImageVector, onClick: () -> Unit) {
     val c = Offlinka.colors
@@ -232,15 +265,16 @@ private fun QuickChip(text: String, icon: ImageVector, onClick: () -> Unit) {
     Row(
         Modifier
             .clip(shape)
-            .border(1.5.dp, c.heroLine, shape)
+            .background(c.heroDeep.copy(alpha = 0.35f))
+            .border(1.5.dp, c.onHero2.copy(alpha = 0.5f), shape)
             .clickable(role = Role.Button, onClick = onClick)
-            .heightIn(min = 52.dp)
-            .padding(horizontal = 14.dp),
+            .heightIn(min = 40.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, null, tint = c.onHero2, modifier = Modifier.size(22.dp))
-        Spacer(Modifier.width(10.dp))
-        Text(text, style = Offlinka.type.subhead, color = c.onHero, maxLines = 1)
+        Icon(icon, null, tint = c.onHero2, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(text, style = Offlinka.type.label.copy(fontSize = 15.sp), color = c.onHero)
     }
 }
 
@@ -297,11 +331,19 @@ private fun BookGrid(books: List<BookUi>, onOpenBook: (BookUi) -> Unit) {
     }
 }
 
-/** "CZ", "SK", "EN" on the Wikipedia tiles. */
+/** "CZ", "SK", "EN" on the Wikipedia tiles, and "EN" on the other English books (Medicína, Wikivoyage). */
 private fun langTag(book: BookUi): String? = when {
-    book.kind != BookKind.WIKIPEDIA -> null
-    book.language == "cs" -> "CZ"
-    else -> book.language.uppercase()
+    book.kind == BookKind.WIKIPEDIA -> if (book.language == "cs") "CZ" else book.language.uppercase()
+    book.language == "en" && book.kind != BookKind.MAPS && book.kind != BookKind.GAMES -> "EN"
+    else -> null
+}
+
+/** Opening / failed books: dimmed, with a short state line instead of the description. */
+@Composable
+private fun stateLine(book: BookUi): String? = when (book.state) {
+    BookState.OPENING -> stringResource(R.string.library_opening)
+    BookState.FAILED -> stringResource(R.string.library_open_failed)
+    BookState.OPEN -> null
 }
 
 @Composable
@@ -312,7 +354,7 @@ private fun WideBookTile(book: BookUi, onOpenBook: (BookUi) -> Unit) {
     InkCard(
         onClick = { onOpenBook(book) },
         onClickLabel = stringResource(R.string.cd_open_book, title),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().alpha(if (book.state == BookState.OPEN) 1f else 0.62f),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 18.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -320,7 +362,7 @@ private fun WideBookTile(book: BookUi, onOpenBook: (BookUi) -> Unit) {
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, style = Offlinka.type.title.copy(fontSize = 21.sp, lineHeight = 26.sp), color = c.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(bookDescription(book), style = Offlinka.type.body, color = c.ink2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(stateLine(book) ?: bookDescription(book), style = Offlinka.type.body, color = c.ink2, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             langTag(book)?.let {
                 Spacer(Modifier.width(8.dp))
@@ -338,7 +380,7 @@ private fun BookTile(book: BookUi, modifier: Modifier, onOpenBook: (BookUi) -> U
     InkCard(
         onClick = { onOpenBook(book) },
         onClickLabel = stringResource(R.string.cd_open_book, title),
-        modifier = modifier,
+        modifier = modifier.alpha(if (book.state == BookState.OPEN) 1f else 0.62f),
         contentPadding = PaddingValues(start = 16.dp, end = 12.dp, top = 16.dp, bottom = 18.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
@@ -349,6 +391,24 @@ private fun BookTile(book: BookUi, modifier: Modifier, onOpenBook: (BookUi) -> U
         Spacer(Modifier.height(16.dp))
         Text(title, style = Offlinka.type.title, color = c.ink, maxLines = 3, overflow = TextOverflow.Ellipsis)
         Spacer(Modifier.height(4.dp))
-        Text(bookDescription(book), style = Offlinka.type.bodySmall, color = c.ink2, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        Text(stateLine(book) ?: bookDescription(book), style = Offlinka.type.bodySmall, color = c.ink2, maxLines = 3, overflow = TextOverflow.Ellipsis)
     }
+}
+
+/** A book that could not be opened: the calm error and "Zkusit znovu". */
+@Composable
+internal fun RetryBookDialog(book: BookUi, onRetry: () -> Unit, onDismiss: () -> Unit) {
+    val c = Offlinka.colors
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(bookTitle(book), style = Offlinka.type.title) },
+        text = { Text(stringResource(R.string.error_body), style = Offlinka.type.body) },
+        confirmButton = {
+            TextButton(onClick = onRetry) { Text(stringResource(R.string.action_retry), style = Offlinka.type.label, color = c.link) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close), style = Offlinka.type.label, color = c.ink) }
+        },
+        containerColor = c.surface,
+    )
 }

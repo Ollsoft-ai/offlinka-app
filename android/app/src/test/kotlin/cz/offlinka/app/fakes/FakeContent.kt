@@ -20,7 +20,12 @@ class FakeBook(
     val random: String? = entries.keys.firstOrNull(),
 ) : ContentBook {
     @Volatile var unplugged = false
-    @Volatile var closed = false
+    /** closeFile() was called: like the core, reads now fail with Io and suggest returns nothing. */
+    @Volatile var fileClosed = false
+    /** The native object was destroyed (close()). */
+    @Volatile var destroyed = false
+    /** Retired by the shelf: its file is released (or the object destroyed). */
+    val closed: Boolean get() = fileClosed || destroyed
     var attachedIndex: String? = null
 
     override val info: BookMeta get() = meta.copy(hasIndex = attachedIndex != null)
@@ -28,7 +33,8 @@ class FakeBook(
     override fun illustration(size: Int): ByteArray? = null
 
     private fun check() {
-        if (unplugged) throw ContentException.Io("drive gone")
+        if (destroyed) throw IllegalStateException("Book object has already been destroyed")
+        if (unplugged || fileClosed) throw ContentException.Io("drive gone")
     }
 
     private fun resolve(path: String): Pair<String, FakeEntry> {
@@ -42,21 +48,31 @@ class FakeBook(
         throw ContentException.InvalidZim("redirect loop")
     }
 
+    @Volatile var gets = 0
+    /** Makes every read throw this (a closed UniFFI object, a core panic …). */
+    @Volatile var failWith: RuntimeException? = null
+
     override fun get(path: String): ContentResource {
+        failWith?.let { throw it }
+        gets++
         val (p, e) = resolve(path)
         return ContentResource(p, e.mime, e.data)
     }
 
     override fun getRange(path: String, offset: Long, length: Int): ByteArray {
+        failWith?.let { throw it }
         val data = resolve(path).second.data
         if (offset >= data.size) return ByteArray(0)
         return data.copyOfRange(offset.toInt(), minOf(data.size, offset.toInt() + length))
     }
 
-    override fun contentLength(path: String): Long = resolve(path).second.data.size.toLong()
+    override fun contentLength(path: String): Long {
+        failWith?.let { throw it }
+        return resolve(path).second.data.size.toLong()
+    }
 
     override fun suggest(query: String, limit: Int): List<ContentSuggestion> {
-        if (unplugged) return emptyList()
+        if (unplugged || fileClosed) return emptyList()
         val q = norm(query)
         return entries.filter { (_, e) -> e.title.isNotEmpty() && norm(e.title).startsWith(q) }
             .entries.sortedBy { it.value.title.length }
@@ -68,9 +84,27 @@ class FakeBook(
 
     override fun attachIndexFd(fd: Int) { attachedIndex = "fd:$fd" }
 
-    override fun attachIndexPath(path: String) { attachedIndex = path }
+    override fun attachIndexPath(path: String) {
+        check()
+        attachedIndex = path
+    }
 
-    override fun close() { closed = true }
+    var preloaded = false
+
+    override fun preloadIndex() { preloaded = true }
+
+    /** Called when the book is retired (tests check what the shelf published by then). */
+    var onClose: (() -> Unit)? = null
+
+    override fun closeFile() {
+        onClose?.invoke()
+        fileClosed = true
+    }
+
+    override fun close() {
+        if (!closed) onClose?.invoke()
+        destroyed = true
+    }
 
     companion object {
         fun norm(s: String): String =
@@ -79,21 +113,29 @@ class FakeBook(
 }
 
 class FakeLibrary : ContentLibrary {
-    val books = mutableListOf<ContentBook>()
+    val books: MutableList<ContentBook> = java.util.concurrent.CopyOnWriteArrayList()
     var closed = false
 
     override fun add(book: ContentBook) { books += book }
 
     override fun suggestAll(query: String, limit: Int): List<LibraryHit> =
-        books.flatMap { b -> b.suggest(query, limit).map { LibraryHit(b.info.id, it.title, it.path) } }.take(limit)
+        books.toList().flatMap { b -> b.suggest(query, limit).map { LibraryHit(b.info.id, it.title, it.path) } }.take(limit)
 
     override fun close() { closed = true }
 }
 
 /** Opens [FakeBook]s by file name; [books] maps file names to factories. */
 class FakeContentSource(private val books: Map<String, () -> FakeBook>) : ContentSource {
-    val opened = mutableListOf<FakeBook>()
-    val failing = mutableSetOf<String>()
+    val opened: MutableList<FakeBook> = java.util.Collections.synchronizedList(mutableListOf())
+    val openedNames: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
+    val failing: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf())
+    /** Opening these files waits until the gate is opened (to observe the shelf mid-way). */
+    val gated: MutableMap<String, java.util.concurrent.CountDownLatch> = java.util.concurrent.ConcurrentHashMap()
+    @Volatile var trims = 0
+    @Volatile var budget = -1L
+    val built: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
+    /** Index builds wait on this gate when set. */
+    @Volatile var buildGate: java.util.concurrent.CountDownLatch? = null
 
     override val coreVersion = "fake-1.0"
 
@@ -101,13 +143,29 @@ class FakeContentSource(private val books: Map<String, () -> FakeBook>) : Conten
 
     override fun openPath(path: String): ContentBook {
         val name = path.substringAfterLast('/')
+        gated[name]?.await(10, java.util.concurrent.TimeUnit.SECONDS)
         if (name in failing) throw ContentException.InvalidZim(name)
         val book = books[name]?.invoke() ?: throw ContentException.InvalidZim(name)
         opened += book
+        openedNames += name
         return book
     }
 
     override fun newLibrary(): ContentLibrary = FakeLibrary()
+
+    override fun trimMemory() { trims++ }
+
+    override fun setCacheBudget(bytes: Long) { budget = bytes }
+
+    override fun buildIndex(book: ContentBook, outPath: String, onProgress: (Double) -> Unit, isCancelled: () -> Boolean) {
+        for (i in 1..10) {
+            buildGate?.await(10, java.util.concurrent.TimeUnit.SECONDS)
+            if (isCancelled()) throw ContentException.Cancelled("cancelled")
+            onProgress(i / 10.0)
+        }
+        java.io.File(outPath).writeText("index of ${book.info.id}")
+        built += book.info.id
+    }
 }
 
 fun meta(id: String, title: String = id, main: String? = "Main", articles: Long = 100) = BookMeta(
@@ -142,10 +200,14 @@ fun fakeGuides() = FakeBook(
     ),
 )
 
+/** A 5 MB "video" without a file extension (MP4 signature). */
+fun mp4Bytes() = ByteArray(5 * 1024 * 1024) { i -> if (i in 4..7) "ftyp"[i - 4].code.toByte() else (i % 253).toByte() }
+
 fun fakeMaps() = FakeBook(
     meta("maps_en_czech-republic", "Czech Republic", main = "index.html"),
     mapOf(
-        "index.html" to html("<div id=map></div>", "Map"),
+        "index.html" to FakeEntry("text/html", "<html><head><title>Map</title><script type=module src=./a.js></script></head><body></body></html>".toByteArray(), "Map"),
+        "media/clip" to FakeEntry("application/octet-stream", mp4Bytes()),
         "tiles.pmtiles" to FakeEntry("application/octet-stream", ByteArray(6 * 1024 * 1024) { (it % 251).toByte() }),
     ),
 )

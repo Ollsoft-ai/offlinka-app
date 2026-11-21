@@ -21,6 +21,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -43,11 +48,13 @@ import cz.offlinka.ui.components.BookBadge
 import cz.offlinka.ui.components.GroupCard
 import cz.offlinka.ui.components.GroupDivider
 import cz.offlinka.ui.components.InkCard
+import cz.offlinka.ui.components.OutlineButton
 import cz.offlinka.ui.components.PrimaryButton
 import cz.offlinka.ui.components.ScreenHeader
 import cz.offlinka.ui.components.SectionLabel
 import cz.offlinka.ui.components.SheetOverlay
 import cz.offlinka.ui.model.BookKind
+import cz.offlinka.ui.model.BookState
 import cz.offlinka.ui.model.BookUi
 import cz.offlinka.ui.model.DriveUi
 import cz.offlinka.ui.model.bookDescription
@@ -96,9 +103,19 @@ fun LibraryScreen(
     onOpen: (BookUi) -> Unit,
     onDetails: (BookUi) -> Unit,
     modifier: Modifier = Modifier,
+    onRetry: (BookUi) -> Unit = {},
 ) {
     val c = Offlinka.colors
     val locale = currentLocale()
+    var failed by remember { mutableStateOf<BookUi?>(null) }
+    failed?.let { b -> RetryBookDialog(b, onRetry = { failed = null; onRetry(b) }, onDismiss = { failed = null }) }
+    val open: (BookUi) -> Unit = { b ->
+        when (b.state) {
+            BookState.OPEN -> onOpen(b)
+            BookState.FAILED -> failed = b
+            BookState.OPENING -> Unit
+        }
+    }
     Column(
         modifier
             .fillMaxSize()
@@ -118,7 +135,7 @@ fun LibraryScreen(
                 GroupCard {
                     books.forEachIndexed { i, book ->
                         if (i > 0) GroupDivider()
-                        LibraryRow(book, locale, onOpen = { onOpen(book) }, onDetails = { onDetails(book) })
+                        LibraryRow(book, locale, onOpen = { open(book) }, onDetails = { onDetails(book) })
                     }
                 }
             }
@@ -130,7 +147,7 @@ fun LibraryScreen(
                     color = c.ink2,
                     modifier = Modifier.padding(bottom = 10.dp),
                 )
-                GroupCard(Modifier.alpha(0.8f), background = c.bgSunken) {
+                GroupCard(background = c.bgSunken) {
                     state.replaced.forEachIndexed { i, book ->
                         if (i > 0) GroupDivider()
                         LibraryRow(book, locale, onOpen = null, onDetails = { onDetails(book) }, replaced = true)
@@ -191,6 +208,7 @@ private fun LibraryRow(
     Row(
         Modifier
             .fillMaxWidth()
+            .alpha(if (book.state == BookState.OPEN) 1f else 0.62f)
             .clickable(
                 role = Role.Button,
                 onClickLabel = if (onOpen != null) stringResource(R.string.cd_open_book, title) else stringResource(R.string.library_details),
@@ -204,14 +222,19 @@ private fun LibraryRow(
         Column(Modifier.weight(1f)) {
             Text(title, style = Offlinka.type.title, color = c.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(
-                if (replaced) stringResource(R.string.library_replaced) else bookDescription(book),
+                when {
+                    replaced -> stringResource(R.string.library_replaced)
+                    book.state == BookState.OPENING -> stringResource(R.string.library_opening)
+                    book.state == BookState.FAILED -> stringResource(R.string.library_open_failed)
+                    else -> bookDescription(book)
+                },
                 style = Offlinka.type.bodySmall,
                 color = c.ink2,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(4.dp))
-            Text(meta(book, locale), style = Offlinka.type.caption, color = c.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(meta(book, locale), style = Offlinka.type.caption, color = c.ink2, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         BarIconButton(OfflinkaIcons.Info, stringResource(R.string.library_details), onDetails, tint = c.ink2)
     }
@@ -229,21 +252,50 @@ data class BookDetailsState(
     val book: BookUi,
     val illustration: ImageBitmap? = null,
     val replaced: Boolean = false,
+    /** "Pro technickou podporu" unfolded (screenshots). */
+    val supportOpen: Boolean = false,
+    /** A heavy book (English top1m) whose accent-free search the user may start here, with a warning. */
+    val canBuildIndex: Boolean = false,
+    /** Its index is being built right now, percent. */
+    val indexProgress: Int? = null,
 )
 
 /** Book details as a sheet over whatever is below (library or reader). */
 @Composable
-fun BookDetailsSheet(state: BookDetailsState, onDismiss: () -> Unit, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+fun BookDetailsSheet(
+    state: BookDetailsState,
+    onDismiss: () -> Unit,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+    onBuildIndex: () -> Unit = {},
+) {
     Box(modifier.fillMaxSize()) {
         SheetOverlay(onDismiss = onDismiss, dismissLabel = stringResource(R.string.action_close)) {
-            BookDetailsContent(state, onOpen)
+            BookDetailsContent(state, onOpen, onBuildIndex)
         }
     }
 }
 
 @Composable
-private fun ColumnScope.BookDetailsContent(state: BookDetailsState, onOpen: () -> Unit) {
+private fun DetailRow(k: String, v: String) {
     val c = Offlinka.colors
+    GroupDivider()
+    Row(Modifier.fillMaxWidth().heightIn(min = 50.dp).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(k, style = Offlinka.type.body, color = c.ink2, modifier = Modifier.weight(0.45f))
+        Text(
+            v,
+            style = if (v.length > 24) Offlinka.type.bodySmall else Offlinka.type.subhead,
+            color = c.ink,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(0.55f),
+        )
+    }
+}
+
+@Composable
+private fun ColumnScope.BookDetailsContent(state: BookDetailsState, onOpen: () -> Unit, onBuildIndex: () -> Unit) {
+    val c = Offlinka.colors
+    var supportOpen by rememberSaveable { mutableStateOf(state.supportOpen) }
     val book = state.book
     val locale = currentLocale()
     val tone = bookTone(book.kind.family, c.isDark)
@@ -270,6 +322,25 @@ private fun ColumnScope.BookDetailsContent(state: BookDetailsState, onOpen: () -
             val date = book.zimDate.ifBlank { book.date }
             if (date.isNotBlank()) add(stringResource(R.string.library_detail_date) to formatFullDate(date, locale))
             add(stringResource(R.string.library_detail_language) to languageName(book.language))
+        }
+        rows.forEach { (k, v) -> DetailRow(k, v) }
+        if (!book.hasIndex && (state.canBuildIndex || state.indexProgress != null)) {
+            GroupDivider()
+            Column(Modifier.fillMaxWidth().padding(vertical = 14.dp)) {
+                Text(stringResource(R.string.library_index_offer_title), style = Offlinka.type.subhead, color = c.ink)
+                Spacer(Modifier.height(4.dp))
+                val progress = state.indexProgress
+                if (progress != null) {
+                    Text(stringResource(R.string.search_index_building, progress), style = Offlinka.type.body, color = c.ink2)
+                } else {
+                    Text(stringResource(R.string.library_index_offer_body), style = Offlinka.type.body, color = c.ink2)
+                    Spacer(Modifier.height(12.dp))
+                    OutlineButton(stringResource(R.string.library_index_offer_button), onBuildIndex, Modifier.fillMaxWidth())
+                }
+            }
+        }
+        // Things only support needs, folded away.
+        val support = buildList {
             if (book.kind.isWiki || book.kind == BookKind.GUIDES) {
                 add(
                     stringResource(R.string.library_detail_search) to stringResource(
@@ -280,18 +351,19 @@ private fun ColumnScope.BookDetailsContent(state: BookDetailsState, onOpen: () -
             if (book.folder.isNotBlank()) add(stringResource(R.string.library_detail_folder) to book.folder)
             if (book.fileName.isNotBlank()) add(stringResource(R.string.library_detail_file) to book.fileName)
         }
-        rows.forEach { (k, v) ->
+        if (support.isNotEmpty()) {
             GroupDivider()
-            Row(Modifier.fillMaxWidth().heightIn(min = 50.dp).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(k, style = Offlinka.type.body, color = c.ink2, modifier = Modifier.weight(0.45f))
-                Text(
-                    v,
-                    style = if (v.length > 24) Offlinka.type.bodySmall else Offlinka.type.subhead,
-                    color = c.ink,
-                    textAlign = TextAlign.End,
-                    modifier = Modifier.weight(0.55f),
-                )
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(role = Role.Button) { supportOpen = !supportOpen }
+                    .heightIn(min = 50.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.library_support), style = Offlinka.type.body, color = c.ink2, modifier = Modifier.weight(1f))
+                Icon(if (supportOpen) OfflinkaIcons.ChevronUp else OfflinkaIcons.ChevronDown, null, tint = c.ink2)
             }
+            if (supportOpen) support.forEach { (k, v) -> DetailRow(k, v) }
         }
     }
     if (!state.replaced) {

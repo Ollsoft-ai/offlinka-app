@@ -15,6 +15,9 @@ enum class MapRegion { CZECHIA, SLOVAKIA, OTHER }
 
 enum class Flavour { MAXI, NOPIC, MINI, OTHER }
 
+/** Whether a book of the drive is ready to read. */
+enum class BookState { OPEN, OPENING, FAILED }
+
 @Immutable
 data class BookUi(
     /** Stable id used in URLs and saved items: the ZIM name, e.g. `wikipedia_cs_all`. */
@@ -41,6 +44,7 @@ data class BookUi(
     val driveName: String? = null,
     val publisher: String = "",
     val creator: String = "",
+    val state: BookState = BookState.OPEN,
 )
 
 @Immutable
@@ -69,6 +73,8 @@ enum class AppLanguage(val tag: String) { SYSTEM(""), CS("cs"), SK("sk"), EN("en
 
 @Immutable
 data class DriveUi(
+    /** The drive's tree URI, to forget it. */
+    val id: String = "",
     val name: String,
     val bookCount: Int,
     val connected: Boolean,
@@ -79,3 +85,7 @@ data class DriveUi(
 
 /** Quick links on the home screen into the guides book and Wikipedia. */
 enum class QuickLink { FIRST_AID, PREPARE, RANDOM }
+
+/** A section heading of the open article (for the "Obsah" sheet). */
+@Immutable
+data class TocEntry(val id: String, val text: String, val level: Int)

@@ -16,6 +16,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -50,6 +51,7 @@ import cz.offlinka.ui.components.MainTab
 import cz.offlinka.ui.components.OfflinkaBottomBar
 import cz.offlinka.ui.model.ArticleRef
 import cz.offlinka.ui.model.BookUi
+import cz.offlinka.ui.model.TocEntry
 import cz.offlinka.ui.screens.AboutScreen
 import cz.offlinka.ui.screens.AboutState
 import cz.offlinka.ui.screens.BookDetailsSheet
@@ -128,6 +130,7 @@ fun AppNavHost(
                     state = state,
                     onSearch = { nav.navigate(Routes.search()) },
                     onOpenBook = { b -> openBookMain(graph, b)?.let(::openReader) },
+                    onRetryBook = vm::retry,
                     onQuickLink = { link -> scope.launch { vm.quickLink(link)?.let(::openReader) } },
                     onContinue = { ref -> openArticle(ref.bookId, ref.path) },
                 )
@@ -139,6 +142,7 @@ fun AppNavHost(
                     state = state,
                     onOpen = { b -> openBookMain(graph, b)?.let(::openReader) },
                     onDetails = { b -> nav.navigate(Routes.book(b.id, b.fileName)) },
+                    onRetry = vm::retry,
                 )
             }
             composable(Routes.SAVED) {
@@ -178,6 +182,7 @@ fun AppNavHost(
                     onSaveHistory = vm::setSaveHistory,
                     onClearSearches = { vm.clearSearches() },
                     onAbout = { nav.navigate(Routes.ABOUT) },
+                    onForgetDrive = { vm.forgetDrive(it) },
                 )
             }
             composable(Routes.ABOUT) {
@@ -217,6 +222,7 @@ fun AppNavHost(
                         state = s,
                         onDismiss = { nav.popBackStack() },
                         onOpen = { openBookMain(graph, s.book)?.let(::openReader) },
+                        onBuildIndex = vm::buildIndex,
                     )
                 }
             }
@@ -255,6 +261,8 @@ fun AppNavHost(
                     onRemoveRecent = { vm.removeRecent(it) },
                     onScope = { b: BookUi? -> vm.setScope(b?.id) },
                     onBack = { nav.popBackStack() },
+                    onClearRecent = { vm.clearRecent() },
+                    onCancelIndex = { vm.cancelIndexing() },
                 )
             }
             composable(
@@ -298,6 +306,7 @@ private fun ReaderDestination(graph: AppGraph, entry: NavBackStackEntry, nav: Na
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val external = remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    val toc = remember { androidx.compose.runtime.mutableStateOf<List<TocEntry>?>(null) }
     val savedMsg = stringResource(R.string.reader_saved_toast)
     val removedMsg = stringResource(R.string.reader_removed_toast)
     val copiedMsg = stringResource(R.string.reader_link_copied)
@@ -331,8 +340,10 @@ private fun ReaderDestination(graph: AppGraph, entry: NavBackStackEntry, nav: Na
             }
         }
     }
-    BackHandler(enabled = find != null) { controller.closeFind() }
     BackHandler(enabled = find == null && page.canGoBack) { controller.back() }
+    BackHandler(enabled = find != null) { controller.closeFind() }
+    BackHandler(enabled = panel) { vm.toggleTextPanel() }
+    BackHandler(enabled = toc.value != null) { toc.value = null }
 
     ReaderScreen(
         state = ReaderState(
@@ -349,7 +360,14 @@ private fun ReaderDestination(graph: AppGraph, entry: NavBackStackEntry, nav: Na
             externalLink = external.value,
             isApp = article.isApp,
             showTitle = page.titleInBar,
+            contents = toc.value,
         ),
+        onContents = { controller.contents { list -> toc.value = list.map { TocEntry(it.id, it.text, it.level) } } },
+        onHeading = { h ->
+            toc.value = null
+            controller.scrollTo(h.id)
+        },
+        onCloseContents = { toc.value = null },
         onHome = { nav.popBackStack(Routes.HOME, inclusive = false) },
         onBack = controller::back,
         onForward = controller::forward,
@@ -394,6 +412,66 @@ private fun ReaderDestination(graph: AppGraph, entry: NavBackStackEntry, nav: Na
             },
             onRelease = { it.removeAllViews() },
             modifier = Modifier.fillMaxSize().background(cz.offlinka.ui.theme.Offlinka.colors.bg),
+        )
+    }
+}
+
+/**
+ * The guides bundled with the app, opened from the Connect / Unplugged screen without a drive: its own
+ * WebView ([controller]), the reader chrome without saving.
+ */
+@Composable
+fun GuidesReader(graph: AppGraph, controller: ReaderController, url: String?, onClose: () -> Unit) {
+    val page by controller.page.collectAsStateWithLifecycle()
+    val find by controller.find.collectAsStateWithLifecycle()
+    val settings by graph.settings.values.collectAsStateWithLifecycle()
+    val dark = cz.offlinka.ui.theme.Offlinka.colors.isDark
+    var panel by remember { androidx.compose.runtime.mutableStateOf(false) }
+    LaunchedEffect(url) { if (url != null) controller.load(url, fresh = true) }
+    LaunchedEffect(settings.textZoom) { controller.setTextZoom(settings.textZoom) }
+    LaunchedEffect(dark) { controller.setDark(dark) }
+    BackHandler { if (page.canGoBack) controller.back() else onClose() }
+    BackHandler(enabled = find != null) { controller.closeFind() }
+    ReaderScreen(
+        state = ReaderState(
+            title = page.title,
+            book = graph.shelf.builtin?.ui,
+            canGoBack = page.canGoBack,
+            canGoForward = page.canGoForward,
+            progress = page.progress,
+            find = find,
+            textZoom = settings.textZoom,
+            theme = settings.theme,
+            showTextPanel = panel,
+            canSave = false,
+        ),
+        onHome = onClose,
+        onBack = controller::back,
+        onForward = controller::forward,
+        onToggleSave = {},
+        onSearch = {},
+        onOpenFind = controller::openFind,
+        onFindQuery = controller::findQuery,
+        onFindNext = controller::findNext,
+        onCloseFind = controller::closeFind,
+        onToggleTextPanel = { panel = !panel },
+        onTextZoom = { graph.settings.setTextZoom(it) },
+        onTheme = { graph.settings.setTheme(it) },
+        onMainPage = { url?.let { controller.load(it, fresh = false) } },
+        onBookDetails = {},
+        onHistory = {},
+        onDismissExternal = {},
+        onCopyLink = {},
+    ) {
+        AndroidView(
+            factory = { ctx ->
+                FrameLayout(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    addView(controller.detachedWebView())
+                }
+            },
+            onRelease = { it.removeAllViews() },
+            modifier = Modifier.fillMaxSize(),
         )
     }
 }

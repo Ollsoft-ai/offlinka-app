@@ -17,10 +17,15 @@ Install: `adb install -r offlinka-<version>-universal.apk` (or from the drive's 
 - [ ] Plug the drive in. The system may show a "USB disk" notification: tapping it does not break the app.
 - [ ] Tap **Vybrat flashku**: the system picker opens **directly on the drive** (Android 10+); on Android 8–9 it opens on the last folder, navigate to the drive.
 - [ ] Pick the drive root, "Použít tuto složku" → "Povolit": "Hledám knihy na flashce…" then Home with **all books** of the drive (14 tiles on the full edition).
-- [ ] Time from "Povolit" to Home: ____ s (target under 3 s on a mid phone).
+- [ ] Time from "Povolit" to Home: ____ s (target under 2 s on a mid phone: Home shows once the UI-language Wikipedia is open, the other tiles turn from "Otevírám…" to normal as they open).
+- [ ] Phone in Slovak: Slovenská Wikipedie is the wide first tile; Nouzové příručky is visible without scrolling.
 - [ ] Pick a wrong folder (e.g. `Aplikace` or the phone's `Download`): calm "Tady knihy nejsou" message, button to pick again, no crash.
 - [ ] Pick the `Knihovna` folder itself: books open (minus the phone editions).
 - [ ] Cancel the picker (back): returns to the Connect screen.
+- [ ] Drive not plugged, tap **Vybrat flashku**: "Flashku nevidím" instead of a picker on the phone's own storage; tap **Vybrat znovu**: the picker opens anyway (for phones that hide USB volumes).
+- [ ] Plug the drive in while the Connect screen is open: "Flashku vidím. Klepněte na Vybrat flashku." and the button is highlighted.
+- [ ] Android 11+: if the picker refuses the drive's root ("Použít tuto složku" greyed out), pick `Knihovna`: the books open. The help sheet ("Flashka se neukazuje?") says so.
+- [ ] A big drive on a slow phone: after 3 s "Velká flashka, může to chvíli trvat." under the spinner.
 
 ## 2. Remembering the drive
 
@@ -37,12 +42,16 @@ Install: `adb install -r offlinka-<version>-universal.apk` (or from the drive's 
 - [ ] Pull the drive while a map is panning/zooming and while a game runs: no crash.
 - [ ] Pull the drive while the app is in the background, return to the app: unplugged screen (or Home if replugged meanwhile).
 - [ ] Pull the drive during the first start "Hledám knihy…": no crash, ends on a calm screen.
+- [ ] Unplugged screen: "Otevřít první pomoc" opens the guides bundled in the app (works with the drive out); back returns to the unplugged screen.
+- [ ] Back gesture on the unplugged screen moves the app to the background (does not navigate hidden pages).
+- [ ] Kill the app while an article is open (Developer options → Don't keep activities, or `adb shell am kill cz.offlinka.app` from the background), reopen: the article comes back once the drive is ready, not as "Článek tu není".
 - [ ] Repeat the unplug test 5× in a row: no crash, no growing memory (Settings → Developer options → Memory, optional).
 
 ## 4. Two drives
 
 - [ ] With a second Offlinka drive (or a copy of `Knihovna` on another USB stick): Nastavení → Flashka → "Vybrat jinou flashku", pick it: books of both are listed, no duplicates.
-- [ ] Unplug one: its books disappear, the other's stay; Settings shows it as "Není zapojená".
+- [ ] Unplug one: its books disappear, the other's stay; Settings shows it by name as "Není zapojená" with "Zapomenout flashku"; forgetting removes it.
+- [ ] An old drive that is never plugged in again: opening and closing the app does not reopen all books each time (no "Otevírám…" flashing on resume).
 
 ## 5. Reading
 
@@ -51,7 +60,10 @@ Install: `adb install -r offlinka-<version>-universal.apk` (or from the drive's 
 - [ ] Mini edition (Telefon, when there is no maxi): missing pictures are hidden with their captions, no empty boxes.
 - [ ] Links between articles work; back/forward buttons and the system back gesture go through the article history, then leave the reader.
 - [ ] Article tables (infobox) fit the screen or scroll sideways; no horizontal page scroll.
-- [ ] Text size (Aa): 80–200 % changes the article text live; the value is kept after restart.
+- [ ] Text size (Písmo): 80–200 % changes the article text live; the value is kept after restart. With the system font size at maximum, articles are bigger too (system scale × app size).
+- [ ] "Obsah" opens the article's sections; tapping one scrolls there.
+- [ ] Status bar icons are dark on paper screens (Knihovna, Uložené, Nastavení, reader, search) and light on the forest screens (Home, Connect, O aplikaci), in both themes.
+- [ ] A redirect (search "Prag" and open it) leaves one history row ("Praha"), not two.
 - [ ] Light/dark toggle in the reader: the article switches without reloading; dark mode is readable (no white boxes).
 - [ ] "Hledat v článku": matches highlighted, "2 z 7" counter, up/down jump, close clears highlights.
 - [ ] Save an article (bookmark): toast, it appears in Uložené; remove it again.
@@ -68,7 +80,7 @@ Install: `adb install -r offlinka-<version>-universal.apk` (or from the drive's 
 - [ ] Mapa Česka opens, the map renders, pinch-zoom down to street level works, panning is smooth, labels readable. (If tiles stay grey, the viewer loads them from a web worker that the WebView does not route through the app: report it, it needs a service-worker/worker fallback.)
 - [ ] Mapa Slovenska the same.
 - [ ] Map search / place list inside the map viewer (if the viewer has one) works offline.
-- [ ] Hry: each game starts, plays with touch, score is kept after leaving and reopening (local storage).
+- [ ] Hry: each game starts, plays with touch, score is kept after leaving and reopening (local storage); switching to another app pauses the game (timers stop).
 - [ ] Audio/video in an article (if the edition has any): plays, seeking works (range requests).
 
 ## 7. Search
@@ -76,7 +88,10 @@ Install: `adb install -r offlinka-<version>-universal.apk` (or from the drive's 
 - [ ] Typing "cesky krumlov" (no diacritics) shows "Český Krumlov" first, while typing, no visible lag per key (target ≤ 100 ms with the drive's search index).
 - [ ] Results are grouped by book, Czech Wikipedia first; "Zobrazit další" limits to one book.
 - [ ] Recent searches appear when the field is empty; removing one works; Nastavení → "Vymazat nedávno hledané" clears them.
-- [ ] Drive with `.offidx` files: Knihovna → details of Česká Wikipedie says "Rychlé hledání: Ano"; diacritics-free search works. App memory after opening (Settings → Apps → Offlinka → Memory): ____ MB.
+- [ ] Drive without `.offidx` files (all drives sold so far): after opening, Home and Search show "Připravuji hledání bez háčků… N %"; reading and searching keep working meanwhile; when done, "cesky krumlov" finds Český Krumlov. Time for the cs maxi: ____ min. The X stops it for this session; kill the app mid-way and reopen: it continues.
+- [ ] English Wikipedia (top1m) is never indexed by itself: Knihovna → its details show "Hledání bez háčků" with the warning and "Připravit hledání"; tap it, keep reading meanwhile. Time: ____ min, peak app memory: ____ MB, phone temperature OK. Not offered on phones under 3 GB RAM.
+- [ ] Drive with `.offidx` files: Knihovna → details → "Pro technickou podporu" says "Rychlé hledání: Ano" right away, nothing is built. App memory after opening (Settings → Apps → Offlinka → Memory): ____ MB.
+- [ ] Multi-word search with no title match ("krvácení z nosu u dětí"): results for the longest word with the note "Výsledky pro „krvácení“".
 - [ ] Pull the drive while typing a search with the index attached: no crash.
 
 ## 8. Home, library, saved, settings, about

@@ -1,9 +1,13 @@
 package cz.offlinka.app.content
 
 import cz.offlinka.core.Book
+import cz.offlinka.core.BookLibrary
 import cz.offlinka.core.CoreException
-import cz.offlinka.core.Library
+import cz.offlinka.core.IndexBuildListener
+import cz.offlinka.core.buildIndex as nativeBuildIndex
 import cz.offlinka.core.coreVersion as nativeCoreVersion
+import cz.offlinka.core.setClusterCacheBudget
+import cz.offlinka.core.trimMemory as nativeTrimMemory
 
 /** [ContentSource] on the Rust core through its UniFFI bindings (package `cz.offlinka.core`). */
 class CoreContentSource : ContentSource {
@@ -13,12 +17,26 @@ class CoreContentSource : ContentSource {
 
     override fun openPath(path: String): ContentBook = CoreBook(call { Book.openPath(path) })
 
-    override fun newLibrary(): ContentLibrary = CoreLibrary(Library())
+    override fun newLibrary(): ContentLibrary = CoreLibrary(BookLibrary())
+
+    override fun trimMemory() = nativeTrimMemory()
+
+    override fun setCacheBudget(bytes: Long) = setClusterCacheBudget(bytes.coerceAtLeast(0).toULong())
+
+    override fun buildIndex(book: ContentBook, outPath: String, onProgress: (Double) -> Unit, isCancelled: () -> Boolean) = call {
+        nativeBuildIndex(
+            (book as CoreBook).book,
+            outPath,
+            object : IndexBuildListener {
+                override fun onProgress(fraction: Double) = onProgress(fraction)
+                override fun isCancelled(): Boolean = isCancelled()
+            },
+        )
+    }
 }
 
 private class CoreBook(val book: Book) : ContentBook {
-    override val info: BookMeta by lazy {
-        val i = book.info()
+    override val info: BookMeta get() = book.info().let { i ->
         BookMeta(
             id = i.id,
             name = i.name,
@@ -57,10 +75,14 @@ private class CoreBook(val book: Book) : ContentBook {
 
     override fun attachIndexPath(path: String) = call { book.attachIndexPath(path) }
 
+    override fun preloadIndex() = call { book.preloadIndex() }
+
+    override fun closeFile() = call { book.closeFile() }
+
     override fun close() = book.close()
 }
 
-private class CoreLibrary(val library: Library) : ContentLibrary {
+private class CoreLibrary(val library: BookLibrary) : ContentLibrary {
     override fun add(book: ContentBook) {
         library.add((book as CoreBook).book)
     }
@@ -82,4 +104,6 @@ private inline fun <T> call(block: () -> T): T = try {
     throw ContentException.InvalidZim(e.message)
 } catch (e: CoreException.Unsupported) {
     throw ContentException.Unsupported(e.message)
+} catch (e: CoreException.Cancelled) {
+    throw ContentException.Cancelled(e.message)
 }

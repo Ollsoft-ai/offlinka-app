@@ -1,6 +1,9 @@
 package cz.offlinka.ui.screens
 
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -55,6 +58,7 @@ import cz.offlinka.ui.components.OutlineButton
 import cz.offlinka.ui.components.PrimaryButton
 import cz.offlinka.ui.components.Ridge
 import cz.offlinka.ui.components.TextLink
+import cz.offlinka.ui.components.SheetOverlay
 import cz.offlinka.ui.theme.Offlinka
 import cz.offlinka.ui.theme.OfflinkaIcons
 
@@ -66,6 +70,12 @@ data class ConnectState(
     val mode: ConnectMode = ConnectMode.PICK,
     val problem: ConnectProblem = ConnectProblem.NONE,
     val showHelp: Boolean = false,
+    /** Android reports a mounted USB drive: invite the tap. */
+    val driveSeen: Boolean = false,
+    /** Scanning takes longer than 3 s (a big drive on a slow port). */
+    val slow: Boolean = false,
+    /** The guides bundled with the app can be opened without the drive. */
+    val canOpenGuides: Boolean = false,
 )
 
 @Composable
@@ -73,53 +83,58 @@ fun ConnectScreen(
     state: ConnectState,
     onPick: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenGuides: () -> Unit = {},
 ) {
     val c = Offlinka.colors
     var help by rememberSaveable { mutableStateOf(state.showHelp) }
-    Column(
-        modifier
-            .fillMaxSize()
-            .background(c.bg)
-            .verticalScroll(rememberScrollState())
-            .windowInsetsPadding(WindowInsets.navigationBars),
-    ) {
-        HeroBox(Modifier.fillMaxWidth()) {
-            Column(
-                Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 6.dp)) {
-                    OfflinkaLogo(Modifier.height(30.dp), onDark = true)
-                }
-                DriveIllustration(
-                    unplugged = state.mode == ConnectMode.UNPLUGGED,
-                    modifier = Modifier.padding(top = 8.dp).size(width = 200.dp, height = 240.dp),
-                )
-                Ridge(Modifier.padding(top = 10.dp))
-            }
-        }
+    Box(modifier.fillMaxSize().background(c.bg)) {
         Column(
             Modifier
-                .align(Alignment.CenterHorizontally)
-                .widthIn(max = 560.dp)
-                .padding(horizontal = 20.dp),
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .windowInsetsPadding(WindowInsets.navigationBars),
         ) {
-            when (state.mode) {
-                ConnectMode.SEARCHING -> Searching()
-                ConnectMode.UNPLUGGED -> Unplugged(onPick)
-                ConnectMode.PICK -> Pick(state, onPick)
-            }
-            Spacer(Modifier.height(16.dp))
-            if (state.mode != ConnectMode.SEARCHING) {
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    TextLink(stringResource(R.string.connect_help_link), { help = !help })
+            HeroBox(Modifier.fillMaxWidth()) {
+                Column(
+                    Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 6.dp)) {
+                        OfflinkaLogo(Modifier.height(30.dp), onDark = true)
+                    }
+                    DriveIllustration(
+                        unplugged = state.mode == ConnectMode.UNPLUGGED,
+                        modifier = Modifier.padding(top = 8.dp).size(width = 200.dp, height = 240.dp),
+                    )
+                    Ridge(Modifier.padding(top = 10.dp))
                 }
-                if (help) {
-                    Spacer(Modifier.height(8.dp))
-                    HelpCard()
-                }
             }
-            Spacer(Modifier.height(32.dp))
+            Column(
+                Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .widthIn(max = 560.dp)
+                    .padding(horizontal = 20.dp),
+            ) {
+                when (state.mode) {
+                    ConnectMode.SEARCHING -> Searching(state.slow)
+                    ConnectMode.UNPLUGGED -> Unplugged(onPick, if (state.canOpenGuides) onOpenGuides else null)
+                    ConnectMode.PICK -> Pick(state, onPick)
+                }
+                Spacer(Modifier.height(16.dp))
+                if (state.mode != ConnectMode.SEARCHING) {
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        TextLink(stringResource(R.string.connect_help_link), { help = true })
+                    }
+                }
+                Spacer(Modifier.height(32.dp))
+            }
+        }
+        if (help) {
+            // No dispatcher in screenshot tests; in the app back closes the sheet.
+            if (LocalOnBackPressedDispatcherOwner.current != null) BackHandler { help = false }
+            SheetOverlay(onDismiss = { help = false }, dismissLabel = stringResource(R.string.action_close)) {
+                HelpSheet()
+            }
         }
     }
 }
@@ -142,26 +157,37 @@ private fun Pick(state: ConnectState, onPick: () -> Unit) {
             ConnectProblem.WRONG_FOLDER -> R.string.connect_err_wrongfolder_title to R.string.connect_err_wrongfolder_body
             else -> R.string.connect_err_noaccess_title to R.string.connect_err_noaccess_body
         }
-        InkCard(modifier = Modifier.fillMaxWidth(), background = c.warnBg, shadow = null) {
-            Row(verticalAlignment = Alignment.Top) {
-                Icon(OfflinkaIcons.Warning, null, tint = c.warnInk, modifier = Modifier.size(22.dp))
-                Spacer(Modifier.width(10.dp))
-                Column {
-                    Text(stringResource(title), style = Offlinka.type.subhead, color = c.ink)
-                    Text(stringResource(body), style = Offlinka.type.bodySmall, color = c.ink)
-                }
-            }
+        Note(OfflinkaIcons.Warning, c.warnInk, c.warnBg, c.warnLine) {
+            Text(stringResource(title), style = Offlinka.type.subhead, color = c.ink)
+            Text(stringResource(body), style = Offlinka.type.bodySmall, color = c.ink)
         }
-        Spacer(Modifier.height(18.dp))
+    } else {
+        // With a problem the note replaces the steps, so the help link stays on screen.
+        Steps()
     }
-    Steps()
+    if (state.driveSeen) {
+        Spacer(Modifier.height(16.dp))
+        Note(OfflinkaIcons.Drive, c.accent, c.accentSoft, c.ok) {
+            Text(stringResource(R.string.connect_drive_seen), style = Offlinka.type.bodyStrong, color = c.ink)
+        }
+    }
     Spacer(Modifier.height(24.dp))
-    PrimaryButton(
-        stringResource(if (state.problem == ConnectProblem.NONE) R.string.connect_button else R.string.connect_pick_again),
-        onPick,
-        Modifier.fillMaxWidth(),
-        icon = OfflinkaIcons.Drive,
-    )
+    Box(
+        if (state.driveSeen) {
+            Modifier
+                .border(3.dp, c.ok, RoundedCornerShape(12.dp))
+                .padding(5.dp)
+        } else {
+            Modifier
+        },
+    ) {
+        PrimaryButton(
+            stringResource(if (state.problem == ConnectProblem.NONE) R.string.connect_button else R.string.connect_pick_again),
+            onPick,
+            Modifier.fillMaxWidth(),
+            icon = OfflinkaIcons.Drive,
+        )
+    }
     Spacer(Modifier.height(10.dp))
     Text(
         stringResource(R.string.connect_remember),
@@ -170,6 +196,30 @@ private fun Pick(state: ConnectState, onPick: () -> Unit) {
         textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+/** A calm note: icon, tinted fill, outline. */
+@Composable
+private fun Note(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tint: androidx.compose.ui.graphics.Color,
+    fill: androidx.compose.ui.graphics.Color,
+    outline: androidx.compose.ui.graphics.Color,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(fill)
+            .border(1.5.dp, outline, RoundedCornerShape(8.dp))
+            .padding(14.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(12.dp))
+        Column(content = content)
+    }
 }
 
 @Composable
@@ -190,17 +240,21 @@ private fun Steps() {
 }
 
 @Composable
-private fun Searching() {
+private fun Searching(slow: Boolean) {
     val c = Offlinka.colors
     Column(Modifier.fillMaxWidth().padding(top = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         CircularProgressIndicator(color = c.primary, trackColor = c.surfaceMuted, strokeCap = StrokeCap.Round)
         Spacer(Modifier.height(16.dp))
         Text(stringResource(R.string.connect_searching), style = Offlinka.type.subhead, color = c.ink)
+        if (slow) {
+            Spacer(Modifier.height(8.dp))
+            Text(stringResource(R.string.connect_slow), style = Offlinka.type.bodySmall, color = c.ink2, textAlign = TextAlign.Center)
+        }
     }
 }
 
 @Composable
-private fun Unplugged(onPick: () -> Unit) {
+private fun Unplugged(onPick: () -> Unit, onOpenGuides: (() -> Unit)?) {
     val c = Offlinka.colors
     Text(
         stringResource(R.string.unplugged_title),
@@ -220,18 +274,30 @@ private fun Unplugged(onPick: () -> Unit) {
     }
     Spacer(Modifier.height(28.dp))
     OutlineButton(stringResource(R.string.unplugged_pick_other), onPick, Modifier.fillMaxWidth(), icon = OfflinkaIcons.Drive, shadow = true, big = true)
+    if (onOpenGuides != null) {
+        Spacer(Modifier.height(14.dp))
+        OutlineButton(stringResource(R.string.unplugged_guides), onOpenGuides, Modifier.fillMaxWidth(), icon = OfflinkaIcons.FirstAid, shadow = true, big = true)
+    }
 }
 
 @Composable
-private fun HelpCard() {
+private fun androidx.compose.foundation.layout.ColumnScope.HelpSheet() {
     val c = Offlinka.colors
-    InkCard(modifier = Modifier.fillMaxWidth(), shadow = null, border = c.line) {
-        Text(stringResource(R.string.help_title), style = Offlinka.type.subhead, color = c.ink)
-        Spacer(Modifier.height(8.dp))
-        listOf(R.string.help_1, R.string.help_2, R.string.help_3_android, R.string.help_5).forEach { res ->
-            Row(Modifier.padding(vertical = 4.dp)) {
-                Text("•", style = Offlinka.type.bodySmall, color = c.primaryEdge, modifier = Modifier.width(16.dp))
-                Text(stringResource(res), style = Offlinka.type.bodySmall, color = c.ink)
+    Text(
+        stringResource(R.string.help_title),
+        style = Offlinka.type.headline,
+        color = c.ink,
+        modifier = Modifier.padding(bottom = 12.dp).semantics { heading() },
+    )
+    Column(Modifier.verticalScroll(rememberScrollState()).weight(1f, fill = false)) {
+        listOf(
+            R.string.help_1, R.string.help_2, R.string.help_picker_menu, R.string.help_pick_folder,
+            R.string.help_3_android, R.string.help_exfat, R.string.help_5,
+        ).forEach { res ->
+            Row(Modifier.padding(vertical = 6.dp)) {
+                Box(Modifier.padding(top = 9.dp).size(7.dp).clip(RoundedCornerShape(4.dp)).background(c.primary))
+                Spacer(Modifier.width(12.dp))
+                Text(stringResource(res), style = Offlinka.type.body, color = c.ink)
             }
         }
     }
@@ -242,6 +308,9 @@ private fun HelpCard() {
 fun DriveIllustration(unplugged: Boolean, modifier: Modifier = Modifier) {
     val c = Offlinka.colors
     val desc = stringResource(R.string.cd_drive_illustration)
+    // In the dark theme the phone is drawn in muted tones, not bright paper.
+    val paper = if (c.isDark) c.onHero3 else c.onHero
+    val screen = if (c.isDark) c.surfaceMuted else c.onHero
     Canvas(modifier.semantics { contentDescription = desc }) {
         val u = size.height / 240f
         fun r(x: Float, y: Float, w: Float, h: Float, rad: Float, color: androidx.compose.ui.graphics.Color, stroke: Float = 0f) {
@@ -256,8 +325,8 @@ fun DriveIllustration(unplugged: Boolean, modifier: Modifier = Modifier) {
         // phone: hard shadow, body, screen
         r(px + 6f, 8f, 104f, 168f, 18f, c.shadowStrong)
         r(px, 2f, 104f, 168f, 18f, c.heroDeep)
-        r(px, 2f, 104f, 168f, 18f, c.onHero, 5f)
-        r(px + 10f, 14f, 84f, 140f, 8f, c.onHero)
+        r(px, 2f, 104f, 168f, 18f, paper, 5f)
+        r(px + 10f, 14f, 84f, 140f, 8f, screen)
         // screen: forest header with ridge, logo bar and peak, search box, tiles
         r(px + 10f, 14f, 84f, 44f, 8f, c.hero)
         drawRect(c.hero, Offset((px + 10f) * u, 40f * u), Size(84f * u, 16f * u))
@@ -268,13 +337,13 @@ fun DriveIllustration(unplugged: Boolean, modifier: Modifier = Modifier) {
             }
             lineTo((px + 94f) * u, 58f * u); close()
         }
-        drawPath(ridge, c.onHero)
-        r(px + 18f, 20f, 26f, 4f, 2f, c.onHero)
+        drawPath(ridge, screen)
+        r(px + 18f, 20f, 26f, 4f, 2f, paper)
         val peak = Path().apply {
             moveTo((px + 31f) * u, 15f * u); lineTo((px + 34f) * u, 19.5f * u); lineTo((px + 28f) * u, 19.5f * u); close()
         }
         drawPath(peak, c.primary)
-        r(px + 18f, 30f, 68f, 9f, 2.5f, c.onHero)
+        r(px + 18f, 30f, 68f, 9f, 2.5f, paper)
         r(px + 18f, 64f, 68f, 18f, 3f, c.surface)
         r(px + 18f, 64f, 68f, 18f, 3f, c.heroDeep, 1.6f)
         r(px + 22f, 68f, 9f, 9f, 2f, androidx.compose.ui.graphics.Color(0xFFE9DFC8))
@@ -297,12 +366,12 @@ fun DriveIllustration(unplugged: Boolean, modifier: Modifier = Modifier) {
         val dy = if (unplugged) 196f else 176f
         if (unplugged) {
             val dash = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(4f * u, 4f * u))
-            drawLine(c.onHero, Offset((px + 52f) * u, 178f * u), Offset((px + 52f) * u, 192f * u), 2.5f * u, pathEffect = dash)
+            drawLine(paper, Offset((px + 52f) * u, 178f * u), Offset((px + 52f) * u, 192f * u), 2.5f * u, pathEffect = dash)
         }
         r(px + 46f, dy, 12f, 7f, 1.5f, c.onHero3)
         r(px + 40f, dy + 9f, 36f, 52f, 8f, c.shadowStrong)
         r(px + 34f, dy + 6f, 36f, 52f, 8f, c.heroDeep)
-        r(px + 34f, dy + 6f, 36f, 52f, 8f, c.onHero, 3.5f)
+        r(px + 34f, dy + 6f, 36f, 52f, 8f, paper, 3.5f)
         r(px + 41f, dy + 13f, 22f, 38f, 4f, c.hero)
         val dpeak = Path().apply {
             moveTo((px + 52f) * u, (dy + 21f) * u); lineTo((px + 58f) * u, (dy + 30f) * u); lineTo((px + 46f) * u, (dy + 30f) * u); close()

@@ -76,6 +76,7 @@ fun SettingsScreen(
     onAbout: () -> Unit,
     modifier: Modifier = Modifier,
     languagePickerOpen: Boolean = false,
+    onForgetDrive: (String) -> Unit = {},
 ) {
     val c = Offlinka.colors
     val locale = currentLocale()
@@ -131,14 +132,10 @@ fun SettingsScreen(
 
                 SectionLabel(stringResource(R.string.settings_section_drive))
                 GroupCard {
-                    val connected = state.drives.filter { it.connected }
-                    if (connected.isEmpty()) {
-                        DriveRow(null, locale)
-                    } else {
-                        connected.forEachIndexed { i, d ->
-                            if (i > 0) GroupDivider()
-                            DriveRow(d, locale)
-                        }
+                    if (state.drives.none { it.connected }) DriveRow(null, locale)
+                    state.drives.sortedByDescending { it.connected }.forEachIndexed { i, d ->
+                        if (i > 0 || state.drives.none { it.connected }) GroupDivider()
+                        if (d.connected) DriveRow(d, locale) else ForgettableDrive(d) { onForgetDrive(d.id) }
                     }
                     GroupDivider()
                     NavRow(OfflinkaIcons.Folder, stringResource(R.string.settings_drive_change), null, onChangeDrive)
@@ -255,6 +252,33 @@ private fun DriveRow(drive: DriveUi?, locale: java.util.Locale) {
                 Text(stringResource(R.string.library_drive_edition, formatEditionDate(it, locale)), style = Offlinka.type.body, color = c.ink2)
             }
         }
+    }
+}
+
+/** A drive the app still has a permission for but that is not plugged in: offer to forget it. */
+@Composable
+private fun ForgettableDrive(drive: DriveUi, onForget: () -> Unit) {
+    val c = Offlinka.colors
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(OfflinkaIcons.DriveOff, null, tint = c.ink3, modifier = Modifier.size(26.dp))
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(drive.name, style = Offlinka.type.subhead, color = c.ink)
+            Text(stringResource(R.string.settings_drive_disconnected), style = Offlinka.type.bodySmall, color = c.ink2)
+        }
+        Text(
+            stringResource(R.string.settings_drive_forget),
+            style = Offlinka.type.label,
+            color = c.danger,
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .clickable(role = Role.Button, onClick = onForget)
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 8.dp, vertical = 14.dp),
+        )
     }
 }
 

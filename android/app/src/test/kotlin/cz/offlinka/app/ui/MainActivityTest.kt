@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.google.common.truth.Truth.assertThat
 import cz.offlinka.app.MainActivity
 import cz.offlinka.app.OfflinkaApp
@@ -61,9 +62,32 @@ class MainActivityTest {
 
     @Test fun `first start asks for the drive and opens the system folder picker`() {
         waitForText("Zapojte flashku Offlinka")
-        compose.onNodeWithText("Vybrat flashku").performClick()
+        compose.activity.graph.driveVisible.value = null
+        compose.onNodeWithText("Vybrat flashku").performScrollTo().performClick()
         val started = shadowOf(compose.activity).nextStartedActivityForResult
         assertThat(started.intent.action).isEqualTo(Intent.ACTION_OPEN_DOCUMENT_TREE)
+    }
+
+    @Test fun `with no USB volume mounted the first tap explains, the second opens the picker anyway`() {
+        waitForText("Zapojte flashku Offlinka")
+        compose.runOnUiThread { compose.activity.graph.driveVisible.value = false }
+        compose.onNodeWithText("Vybrat flashku").performScrollTo().performClick()
+        waitForText("Flashku nevidím")
+        assertThat(shadowOf(compose.activity).nextStartedActivityForResult).isNull()
+        compose.onNodeWithText("Vybrat znovu").performScrollTo().performClick()
+        assertThat(shadowOf(compose.activity).nextStartedActivityForResult.intent.action).isEqualTo(Intent.ACTION_OPEN_DOCUMENT_TREE)
+    }
+
+    @Test fun `a mounted drive is pointed out`() {
+        waitForText("Zapojte flashku Offlinka")
+        compose.runOnUiThread { compose.activity.graph.driveVisible.value = true }
+        waitForText("Flashku vidím. Klepněte na Vybrat flashku.")
+    }
+
+    @Test fun `the help opens as a sheet`() {
+        waitForText("Zapojte flashku Offlinka")
+        compose.onNodeWithText("Flashka se neukazuje?").performScrollTo().performClick()
+        waitForText("Když se flashka neukazuje")
     }
 
     @Test fun `a granted drive opens home, unplugging shows the calm screen and plugging back returns`() {
@@ -73,10 +97,22 @@ class MainActivityTest {
         compose.onNodeWithText("Nouzové příručky").assertExists()
 
         app.drives.drives.getValue(app.tree).plugged = false
-        app.books.forEach { it.unplugged = true }
+        val bundled = compose.activity.graph.shelf.builtin?.content
+        val driveBooks = app.books.filter { it !== bundled }
+        driveBooks.forEach { it.unplugged = true }
         compose.activity.graph.shelf.reportIoError(java.io.IOException("EIO"))
         waitForText("Flashka je odpojená")
-        assertThat(app.books.all { it.closed }).isTrue()
+        assertThat(driveBooks.all { it.closed }).isTrue()
+
+        // Back on the cover screen does not move the hidden pages and does not crash.
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        waitForText("Flashka je odpojená")
+
+        // The bundled guides open without the drive.
+        compose.onNodeWithText("Otevřít první pomoc").performScrollTo().performClick()
+        waitForText("Nouzové příručky")
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        waitForText("Flashka je odpojená")
 
         app.drives.drives.getValue(app.tree).plugged = true
         compose.activity.graph.shelf.onStorageChanged() // what the mount broadcast triggers

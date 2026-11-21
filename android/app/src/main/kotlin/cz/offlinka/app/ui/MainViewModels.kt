@@ -13,6 +13,7 @@ import cz.offlinka.app.reader.ReaderUrls
 import cz.offlinka.ui.model.AppLanguage
 import cz.offlinka.ui.model.ArticleRef
 import cz.offlinka.ui.model.BookKind
+import cz.offlinka.ui.model.BookUi
 import cz.offlinka.ui.model.QuickLink
 import cz.offlinka.ui.model.ThemeMode
 import cz.offlinka.ui.screens.BookDetailsState
@@ -34,29 +35,32 @@ import kotlinx.coroutines.withContext
 private val SharingStarted.Companion.Ui get() = WhileSubscribed(5_000)
 
 class HomeViewModel(private val graph: AppGraph) : ViewModel() {
-    val state: StateFlow<HomeState> = combine(graph.shelf.state, graph.db.history().recent(1)) { shelf, recent ->
+    val state: StateFlow<HomeState> = combine(graph.shelf.state, graph.db.history().recent(1), graph.shelf.indexing) { shelf, recent, idx ->
         val ready = shelf as? ShelfState.Ready
-        val books = ready?.books?.map { it.ui }.orEmpty()
+        val tiles = ready?.tiles.orEmpty()
         val last = recent.firstOrNull()?.takeIf { ready?.byId?.containsKey(it.bookId) == true }
         HomeState(
-            books = books,
+            books = tiles,
             continueReading = last?.let { ArticleRef(it.bookId, it.path, it.title, it.visitedAt) },
             continueBook = last?.let { ready?.byId?.get(it.bookId)?.ui },
-            hasGuides = books.any { it.kind == BookKind.GUIDES },
-            hasRandom = books.any { it.kind == BookKind.WIKIPEDIA },
+            hasGuides = graph.shelf.servedBooks().values.any { it.ui.kind == BookKind.GUIDES },
+            hasRandom = ready?.books?.any { it.ui.kind == BookKind.WIKIPEDIA } == true,
+            indexProgress = idx?.let { (it.fraction * 100).toInt().coerceIn(0, 99) },
         )
     }.stateIn(viewModelScope, SharingStarted.Ui, HomeState(emptyList()))
 
+    fun retry(book: BookUi) = graph.shelf.retry(book.id)
+
     /** URL for a quick link, or null when the book is missing. */
     suspend fun quickLink(link: QuickLink): String? = withContext(Dispatchers.IO) {
-        val ready = graph.shelf.ready ?: return@withContext null
         when (link) {
             QuickLink.RANDOM -> {
                 val wiki = graph.shelf.primaryWikipedia() ?: return@withContext null
                 runCatching { wiki.content.randomArticle() }.getOrNull()?.let { ReaderUrls.article(wiki.id, it) }
             }
             QuickLink.FIRST_AID, QuickLink.PREPARE -> {
-                val guides = ready.books.firstOrNull { it.ui.kind == BookKind.GUIDES } ?: return@withContext null
+                // The guides of the drive, or the copy bundled with the app.
+                val guides = graph.shelf.servedBooks().values.firstOrNull { it.ui.kind == BookKind.GUIDES } ?: return@withContext null
                 val candidates = if (link == QuickLink.FIRST_AID) GUIDE_FIRST_AID else GUIDE_PREPARE
                 val path = candidates.firstOrNull { p -> runCatching { guides.content.get(p) }.isSuccess }
                     ?: guides.mainPath ?: ""
@@ -72,11 +76,13 @@ class HomeViewModel(private val graph: AppGraph) : ViewModel() {
     }
 }
 
-class LibraryViewModel(graph: AppGraph) : ViewModel() {
+class LibraryViewModel(private val graph: AppGraph) : ViewModel() {
+    fun retry(book: BookUi) = graph.shelf.retry(book.id)
+
     val state: StateFlow<LibraryState> = graph.shelf.state.map { shelf ->
         val ready = shelf as? ShelfState.Ready
         LibraryState(
-            books = ready?.books?.map { it.ui }.orEmpty(),
+            books = ready?.tiles.orEmpty(),
             replaced = ready?.replaced.orEmpty(),
             drive = ready?.drives?.firstOrNull { it.connected },
         )
@@ -86,16 +92,23 @@ class LibraryViewModel(graph: AppGraph) : ViewModel() {
 class BookDetailsViewModel(private val graph: AppGraph, private val bookId: String, private val fileName: String?) : ViewModel() {
     private val illustration = MutableStateFlow<ImageBitmap?>(null)
 
-    val state: StateFlow<BookDetailsState?> = combine(graph.shelf.state, illustration) { shelf, img ->
+    val state: StateFlow<BookDetailsState?> = combine(graph.shelf.state, illustration, graph.shelf.indexing) { shelf, img, idx ->
         val ready = shelf as? ShelfState.Ready ?: return@combine null
         val open = ready.byId[bookId]
         if (open != null && (fileName == null || open.ui.fileName == fileName)) {
-            BookDetailsState(open.ui, img)
+            BookDetailsState(
+                open.ui, img,
+                canBuildIndex = !open.ui.hasIndex && graph.heavyIndexAllowed && graph.shelf.canBuildOnDemand(open),
+                indexProgress = idx?.takeIf { it.bookId == bookId }?.let { (it.fraction * 100).toInt().coerceIn(0, 99) },
+            )
         } else {
             ready.replaced.firstOrNull { it.id == bookId && (fileName == null || it.fileName == fileName) }
                 ?.let { BookDetailsState(it, null, replaced = true) }
+                ?: ready.tiles.firstOrNull { it.id == bookId }?.let { BookDetailsState(it, null) }
         }
     }.stateIn(viewModelScope, SharingStarted.Ui, null)
+
+    fun buildIndex() = graph.shelf.buildIndexNow(bookId)
 
     init {
         viewModelScope.launch {
@@ -195,6 +208,8 @@ class SettingsViewModel(private val graph: AppGraph) : ViewModel() {
     }
 
     fun clearSearches() = viewModelScope.launch { graph.db.searches().clear() }
+
+    fun forgetDrive(id: String) = graph.shelf.forget(id)
 }
 
 /** Saves or removes the article shown in the reader; records history. */

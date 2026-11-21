@@ -389,9 +389,29 @@ def kebab(s):
 
 
 # --------------------------------------------------------------------------------------------- strings
+NBSP = "\u00a0"
+
+
+def typography(s, lang):
+    """Czech/Slovak typesetting rules: no line break after a one-letter word, between a number and its unit,
+    in "USB kľúč" and in "iPhone 14" / "Android 8". The sources keep plain spaces; outputs get U+00A0."""
+    if lang not in ("cs", "sk"):
+        return s
+    s = re.sub(r"(?<!\w)([KkSsVvZzOoUuAaIi]) ", r"\1" + NBSP, s)
+    s = re.sub(r"(\d|\})[ ](%|GB|MB|kB|km\b|m\b)", r"\1" + NBSP + r"\2", s)
+    s = re.sub(r"USB (kľúč\w*)", "USB" + NBSP + r"\1", s)
+    s = re.sub(r"(iPhone|Android\w*) (\d+)", r"\1" + NBSP + r"\2", s)
+    return s
+
+
 def gen_strings():
     langs = ["cs", "sk", "en"]
     data = {l: load(f"strings/{l}.json") for l in langs}
+    for l in langs:
+        for k, v in list(data[l].items()):
+            if k.startswith("_"):
+                continue
+            data[l][k] = {q: typography(t, l) for q, t in v.items()} if isinstance(v, dict) else typography(v, l)
     keys = [k for k in data["cs"] if not k.startswith("_")]
     for l in langs:
         missing = [k for k in keys if k not in data[l]]

@@ -37,7 +37,11 @@ object Samples {
     val wiktionary = book("wiktionary_cs_all", BookKind.WIKTIONARY, "cs", 1_311_000_000, "2026-07", 220_118, "wiktionary_cs_all_nopic_2026-07.zim", Flavour.NOPIC)
     val wikivoyage = book("wikivoyage_en_europe", BookKind.WIKIVOYAGE, "en", 980_000_000, "2026-09", 9_412, "wikivoyage_en_europe_maxi_2026-09.zim")
 
-    val books = listOf(csWiki, skWiki, enWiki, medicine, mapCz, mapSk, guides, games, wikibooks, wikiquote, wikisource, wikiversity, wiktionary, wikivoyage)
+    /** Home order of the design README for a Czech UI. */
+    val books = listOf(csWiki, mapCz, guides, skWiki, enWiki, medicine, mapSk, games, wikivoyage, wikibooks, wikisource, wikiquote, wiktionary, wikiversity)
+
+    /** The same for a Slovak UI: the Slovak Wikipedia leads, the Czech one moves to fourth. */
+    val booksSk = listOf(skWiki, mapCz, guides, csWiki, enWiki, medicine, mapSk, games, wikivoyage, wikibooks, wikisource, wikiquote, wiktionary, wikiversity)
 
     val phoneEditions = listOf(
         csWiki.copy(flavour = Flavour.MINI, fileName = "wikipedia_cs_all_mini-offlinka_2026-09.zim", folder = "Telefon", sizeBytes = 911_871_253),
@@ -80,5 +84,5 @@ object Samples {
         SearchGroup(wikivoyage, listOf(SearchHit(wikivoyage.id, "Cesky Krumlov", "Cesky_Krumlov"))),
     )
 
-    val drives = listOf(DriveUi("OFFLINKA", 14, true, edition = "2026-11", totalBytes = 34_299_000_000))
+    val drives = listOf(DriveUi("content://drive", "OFFLINKA", 14, true, edition = "2026-11", totalBytes = 34_299_000_000))
 }
