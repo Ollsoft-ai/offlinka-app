@@ -6,6 +6,11 @@ enum DriveFolder: String, Codable, Hashable, Sendable, CaseIterable {
     case library = "Knihovna"
     /// `Telefon/`: the small phone editions (mini Wikipedia, guides, games).
     case phone = "Telefon"
+    /// The guides book bundled inside the app (works without the drive).
+    case app = "Offlinka"
+
+    /// The folders a drive has.
+    static let onDrive: [DriveFolder] = [.library, .phone]
 }
 
 /// One opened book (ZIM file). App-side copy of the core's `BookInfo`, plus where it lives on the drive.
@@ -58,6 +63,8 @@ enum ContentError: Error, Equatable, Sendable {
     case notFound(String)
     case unsupported(String)
     case unknownBook(String)
+    /// `buildIndex` stopped because its listener asked to.
+    case cancelled
 
     var isDriveFailure: Bool {
         if case .io = self { return true }
@@ -84,9 +91,13 @@ protocol ContentSource: AnyObject, Sendable {
     func randomArticle(bookId: String) throws -> String?
     /// PNG favicon of the book, if any.
     func illustration(bookId: String, size: Int) -> Data?
+    /// The book is on the drive but still being opened (the reader shows "Otevírám…", then reloads).
+    func isPending(bookId: String) -> Bool
 }
 
 extension ContentSource {
+    func isPending(bookId: String) -> Bool { false }
+
     func book(id: String) -> BookRecord? {
         let key = id.lowercased()
         return books.first { $0.id == key }
@@ -97,7 +108,3 @@ extension ContentSource {
     }
 }
 
-/// Opens the books a drive scan found. Injected so tests and the demo mode can avoid the core.
-protocol ContentSourceFactory: Sendable {
-    func open(scan: DriveScan) throws -> ContentSource
-}

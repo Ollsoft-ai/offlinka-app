@@ -1,6 +1,6 @@
 # iOS UI smoke test plan
 
-**Automated** (`OfflinkaUITests/SmokeUITests`, simulator, demo drive via `-demo-drive`): home → search „cesky krumlov“ → article → save → Uložené → Knihovna → Nastavení; „První pomoc“ quick link; external link shows the offline notice.
+**Automated** (`OfflinkaUITests/SmokeUITests`, simulator, demo drive via `-demo-drive`): home → search „cesky krumlov“ → article → save → „Zpět“ back to Search with the query → Uložené → Knihovna → Nastavení; „První pomoc“ quick link; Slovak UI leads with the Slovak Wikipedia; external link shows the offline notice.
 
 **By hand on a device** (iPhone 15+ or USB-C iPad, real drive, edition 2026-11.3). Tick each in cs, then spot-check sk and en.
 
@@ -14,6 +14,19 @@
 - [ ] Unplug while an article is open: calm unplugged screen within ~3 s, no crash; plug back → same tab and page.
 - [ ] Unplug while typing a search (risk 1 in UNVERIFIED.md): no crash.
 - [ ] Settings → „Vybrat jinou flashku“ → connect screen; pick the drive again.
+
+## Round 2 (0.2.0)
+
+- [ ] First start on edition 2026-11.3 (no `.offidx`): Home appears as soon as the UI-language Wikipedia is open; other tiles show „Otevírám…“ and fill in.
+- [ ] Search shows „Připravuji hledání…“ with one percentage (UI-language Wikipedia only); the X only hides the note; the tip appears once that Wikipedia is indexed; „cesky krumlov“ then finds Český Krumlov.
+- [ ] Screen stays on while an index builds; lock the phone mid-build, unlock: the build continues or restarts cleanly; kill the app mid-build: the next start continues with what is missing.
+- [ ] Settings → Knihovna → Anglická Wikipedie → „Připravit hledání“ (only on 3 GB+ phones); stop it from the same details; the next start does not resume it.
+- [ ] Unplug during a build and during reading: unplugged cover, no crash, no hang; plug back: same page.
+- [ ] A broken ZIM (rename a copy to garbage on a test drive): its tile shows the warning line, tap → „Zkusit znovu“ card.
+- [ ] Connect and Unplugged: „Otevřít první pomoc“ opens the bundled first-aid card without a drive; closes back.
+- [ ] Reader: „Zpět“ always works (article from search goes back to the results); book name opens its main page; „Uložit“ in the bar; maps show only a floating „Zpět“.
+- [ ] Settings → „Vybrat jinou flashku“ with a wrong folder keeps the books open (short message); „Zapomenout flashku“ goes to Connect.
+- [ ] Largest Dynamic Type on an iPhone SE-size screen: „Vybrat flashku“ visible without scrolling; one tile column; theme choice as a list.
 
 ## Home, search, reader
 

@@ -30,7 +30,9 @@ final class SmokeUITests: XCTestCase {
         XCTAssertTrue(article.waitForExistence(timeout: 10), "article did not load from the scheme handler")
 
         app.buttons["reader.save"].tap()
-        app.navigationBars.buttons.firstMatch.tap()
+        // „Zpět“ is never disabled: with no page history it returns to Search, query kept.
+        app.buttons["reader.back"].firstMatch.tap()
+        XCTAssertEqual(app.textFields["search.field"].value as? String, "cesky krumlov")
         app.navigationBars.buttons.firstMatch.tap()
 
         app.tabBars.buttons["Uložené"].tap()
@@ -48,6 +50,17 @@ final class SmokeUITests: XCTestCase {
         XCTAssertTrue(firstAid.waitForExistence(timeout: 10))
         firstAid.tap()
         XCTAssertTrue(app.webViews.staticTexts["Volejte 155 nebo 112."].waitForExistence(timeout: 10))
+    }
+
+    func testSlovakUILeadsWithTheSlovakWikipedia() throws {
+        app.terminate()
+        app.launchArguments = ["-demo-drive", "-demo-language", "sk"]
+        app.launch()
+        let tile = app.buttons["tile.wikipedia_sk_all"]
+        XCTAssertTrue(tile.waitForExistence(timeout: 10))
+        let czech = app.buttons["tile.wikipedia_cs_all"]
+        XCTAssertTrue(czech.waitForExistence(timeout: 10))
+        XCTAssertLessThan(tile.frame.minY, czech.frame.minY, "the UI-language Wikipedia is the first, wide tile")
     }
 
     func testExternalLinkShowsOfflineNotice() throws {

@@ -44,6 +44,7 @@ private struct ReaderContent: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let model: ReaderModel
     let target: ReaderTarget
     @State private var showContents = false
@@ -66,8 +67,35 @@ private struct ReaderContent: View {
             .toolbar { toolbarContent }
             .toolbar(.hidden, for: .tabBar)
             .toolbarBackground(Color.brandBg, for: .navigationBar)
-            .toolbarBackground(Color.brandSurface, for: .bottomBar)
-            .toolbarBackground(.visible, for: .navigationBar, .bottomBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !model.isMap {
+                    ReaderBottomBar(model: model, back: back, showContents: openContents,
+                                    showTextSize: { showTextSize = true }, toggleSaved: toggleSaved)
+                }
+            }
+            .overlay(alignment: .topLeading) {
+                // Maps: the whole screen is the map; a floating „Zpět“ pill instead of the bar.
+                if model.isMap {
+                    Button(action: back) {
+                        Label {
+                            Text(tr(.readerBarBack))
+                        } icon: {
+                            BrandIconView(icon: .arrowBack, size: BrandSize.iconSmall)
+                        }
+                        .brandText(.label)
+                        .foregroundStyle(Color.brandInk)
+                        .padding(.horizontal, BrandSpace.m)
+                        .frame(minHeight: BrandSize.buttonSmall)
+                        .background(Capsule().fill(Color.brandSurface))
+                        .overlay(Capsule().strokeBorder(Color.brandOutline, lineWidth: BrandSize.outline))
+                        .hardShadow(BrandElevation.card)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(BrandSpace.m)
+                    .accessibilityIdentifier("reader.back")
+                }
+            }
             .alert(tr(.readerExternalTitle), isPresented: externalLinkShown, presenting: model.externalLink) { url in
                 Button(tr(.readerCopyLink)) {
                     UIPasteboard.general.string = url.absoluteString
@@ -89,6 +117,8 @@ private struct ReaderContent: View {
             .onAppear(perform: applyAppearance)
             .onChange(of: app.store.settings.theme) { _, _ in applyAppearance() }
             .onChange(of: app.store.settings.textScale) { _, _ in applyAppearance() }
+            .onChange(of: dynamicTypeSize) { _, _ in applyAppearance() }
+            .onChange(of: app.shelf.tiles) { _, _ in model.reloadIfBookOpened() }
             .onChange(of: model.location) { _, location in
                 if let location {
                     app.resumeLocations[target] = ReaderTarget(bookId: location.bookId, path: location.path)
@@ -110,37 +140,8 @@ private struct ReaderContent: View {
                 barTitle
             }
         }
-        ToolbarItemGroup(placement: .topBarTrailing) {
-            Button(action: toggleSaved) {
-                BrandIconView(icon: model.isSaved ? .bookmarkFilled : .bookmark)
-                    .foregroundStyle(Color.brandAccent)
-            }
-            .disabled(!model.canSave)
-            .accessibilityLabel(model.isSaved ? tr(.readerUnsave) : tr(.readerSave))
-            .accessibilityValue(model.isSaved ? tr(.cdSavedOn) : tr(.cdSavedOff))
-            .accessibilityIdentifier("reader.save")
+        ToolbarItem(placement: .topBarTrailing) {
             moreMenu
-        }
-        ToolbarItemGroup(placement: .bottomBar) {
-            Button { model.goBack() } label: { BrandIconView(icon: .arrowBack) }
-                .disabled(!model.canGoBack)
-                .accessibilityLabel(tr(.actionBack))
-            Spacer()
-            Button { model.goForward() } label: { BrandIconView(icon: .arrowForward) }
-                .disabled(!model.canGoForward)
-                .accessibilityLabel(tr(.actionForward))
-            Spacer()
-            Button { model.showFind() } label: { BrandIconView(icon: .findInPage) }
-                .accessibilityLabel(tr(.readerFind))
-            Spacer()
-            Button { showTextSize = true } label: { BrandIconView(icon: .textSize) }
-                .accessibilityLabel(tr(.readerTextSize))
-            Spacer()
-            Button { model.openMainPage() } label: {
-                BrandIconView(icon: model.book.map { BookCatalog.kind(of: $0).icon } ?? .home)
-            }
-            .disabled(model.book == nil)
-            .accessibilityLabel(tr(.readerMainPage))
         }
     }
 
@@ -155,30 +156,45 @@ private struct ReaderContent: View {
                 .transition(.opacity)
                 .accessibilityAddTraits(.isHeader)
         } else if let book = model.book {
-            HStack(spacing: BrandSpace.s) {
-                BookIconBox(kind: BookCatalog.kind(of: book), box: 26)
-                Text(BookCatalog.title(of: book))
-                    .brandText(.label)
-                    .foregroundStyle(Color.brandInk2)
-                    .lineLimit(1)
+            // Tapping the book opens its main page (UX review r2).
+            Button {
+                model.openMainPage()
+            } label: {
+                HStack(spacing: BrandSpace.s) {
+                    BookIconBox(kind: BookCatalog.kind(of: book), box: 26)
+                    Text(BookCatalog.title(of: book))
+                        .brandText(.label)
+                        .foregroundStyle(Color.brandInk2)
+                        .lineLimit(1)
+                }
             }
+            .buttonStyle(.plain)
             .transition(.opacity)
             .accessibilityElement(children: .combine)
+            .accessibilityHint(tr(.readerMainPage))
         }
     }
 
     private var moreMenu: some View {
         Menu {
+            if model.canGoForward {
+                Button {
+                    model.goForward()
+                } label: {
+                    Label(tr(.actionForward), systemImage: BrandIcon.arrowForward.systemName)
+                }
+            }
+            if let book = model.book, !book.fileName.isEmpty, book.folder != .app {
+                Button {
+                    app.router.push(.book(book.id))
+                } label: {
+                    Label(tr(.libraryDetails), systemImage: BrandIcon.info.systemName)
+                }
+            }
             Button {
                 app.router.showHistory()
             } label: {
                 Label(tr(.readerHistory), systemImage: BrandIcon.history.systemName)
-            }
-            Button {
-                model.loadHeadings()
-                showContents = true
-            } label: {
-                Label(tr(.readerContents), systemImage: BrandIcon.toc.systemName)
             }
             Button {
                 app.updateSettings { $0.theme = colorScheme == .dark ? .light : .dark }
@@ -227,8 +243,26 @@ private struct ReaderContent: View {
         }
     }
 
+    /// „Zpět“ is never disabled: page history first, else leave the reader (Search keeps its query
+    /// and scroll; the guides cover closes).
+    private func back() {
+        if model.canGoBack {
+            model.goBack()
+        } else {
+            dismiss()
+        }
+    }
+
+    private func openContents() {
+        model.loadHeadings()
+        showContents = true
+    }
+
+    /// The app's text size times the phone's text size (Dynamic Type), as Android multiplies the
+    /// system font scale.
     private func applyAppearance() {
-        model.apply(ReaderAppearance(theme: app.store.settings.theme, textScale: app.store.settings.textScale))
+        let system = UIFontMetrics(forTextStyle: .body).scaledValue(for: 17) / 17
+        model.apply(ReaderAppearance(theme: app.store.settings.theme, textScale: app.store.settings.textScale * Double(system)))
     }
 }
 
@@ -266,6 +300,8 @@ private struct TextSizeSheet: View {
         .background(Color.brandSurface.ignoresSafeArea())
         .presentationDetents([.height(300), .medium])
         .presentationDragIndicator(.visible)
+        // Non-modal: the article stays visible and live behind the panel (UX review r2).
+        .presentationBackgroundInteraction(.enabled(upThrough: .height(300)))
     }
 }
 
@@ -279,7 +315,7 @@ private struct ContentsSheet: View {
         NavigationStack {
             Group {
                 if headings.isEmpty {
-                    EmptyStateView(icon: .toc, title: tr(.readerContents), message: tr(.readerLoading))
+                    EmptyStateView(icon: .toc, title: tr(.readerContents), message: tr(.readerContentsEmpty))
                 } else {
                     List(headings) { heading in
                         Button {
@@ -307,5 +343,54 @@ private struct ContentsSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+/// The reader's bottom bar (labelled buttons for older readers): back, contents, find, text size,
+/// save. Games get no find and no text size; maps get no bar (a floating „Zpět“ instead).
+@MainActor
+private struct ReaderBottomBar: View {
+    let model: ReaderModel
+    let back: () -> Void
+    let showContents: () -> Void
+    let showTextSize: () -> Void
+    let toggleSaved: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            item(.arrowBack, tr(.readerBarBack), enabled: true, action: back)
+                .accessibilityIdentifier("reader.back")
+            item(.toc, tr(.readerBarContents), enabled: model.book != nil, action: showContents)
+            if !model.isWebApp {
+                item(.findInPage, tr(.readerBarFind), enabled: true) { model.showFind() }
+                item(.textSize, tr(.readerBarText), enabled: true, action: showTextSize)
+            }
+            item(model.isSaved ? .bookmarkFilled : .bookmark, tr(.readerSave), enabled: model.canSave, action: toggleSaved)
+                .accessibilityValue(model.isSaved ? tr(.cdSavedOn) : tr(.cdSavedOff))
+                .accessibilityIdentifier("reader.save")
+        }
+        .padding(.top, BrandSpace.xs)
+        .background(Color.brandSurface.ignoresSafeArea(edges: .bottom))
+        .overlay(alignment: .top) { Rectangle().fill(Color.brandLine).frame(height: 1) }
+    }
+
+    private func item(_ icon: BrandIcon, _ label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                BrandIconView(icon: icon)
+                Text(label)
+                    .font(.custom("Archivo-SemiBold", size: 12.5, relativeTo: .caption2))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.7)
+                    .multilineTextAlignment(.center)
+            }
+            .foregroundStyle(enabled ? Color.brandInk : Color.brandInk3)
+            .frame(maxWidth: .infinity, minHeight: BrandSize.touch)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.55)
+        .accessibilityLabel(label)
     }
 }

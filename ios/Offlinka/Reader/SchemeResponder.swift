@@ -35,6 +35,8 @@ struct ReaderTexts: Sendable, Equatable {
     var noBookBody = ""
     var errorTitle = ""
     var errorBody = ""
+    /// The book is still being opened ("Otevírám…"); the reader reloads once it is open.
+    var openingTitle = ""
 }
 
 /// The app's own reader assets served at `offlinka://app.offlinka/<name>` (stylesheet, fonts).
@@ -122,6 +124,9 @@ struct SchemeResponder: Sendable {
             return asset(String(parsed.path.dropFirst(OfflinkaURL.assetPathPrefix.count)))
         }
         guard let book = source.book(id: parsed.bookId) else {
+            if source.isPending(bookId: parsed.bookId) {
+                return page(status: 503, title: texts.openingTitle, body: "")
+            }
             return page(status: 404, title: texts.noBookTitle, body: texts.noBookBody)
         }
         if parsed.path.isEmpty, let main = book.mainPath, !main.isEmpty {
@@ -168,7 +173,7 @@ struct SchemeResponder: Sendable {
                 var reply = page(status: 503, title: texts.driveTitle, body: texts.driveBody)
                 reply.driveFailed = true
                 return reply
-            case .invalidZim, .unsupported:
+            case .invalidZim, .unsupported, .cancelled:
                 return page(status: 500, title: texts.errorTitle, body: texts.errorBody)
             }
         } catch {

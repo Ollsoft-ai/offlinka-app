@@ -32,6 +32,54 @@ final class FakeContentSource: ContentSource, @unchecked Sendable {
         var record: BookRecord
         var entries: [String: Entry]
         var illustration: Data?
+
+        /// Follows redirects like the core (max 10).
+        func resolve(_ path: String) throws -> (String, Entry) {
+            var current = path
+            for _ in 0..<10 {
+                guard let entry = entries[current] else { throw ContentError.notFound(current) }
+                guard let target = entry.redirectTo else { return (current, entry) }
+                current = target
+            }
+            throw ContentError.invalidZim("redirect loop at \(path)")
+        }
+
+        /// Ranked like the core: exact > prefix > word prefix, then shorter titles.
+        func scored(_ query: String) -> [(Int, SearchHit)] {
+            let needle = FakeContentSource.normalize(query)
+            guard !needle.isEmpty else { return [] }
+            var result: [(Int, SearchHit)] = []
+            for (path, entry) in entries where !entry.title.isEmpty && (entry.redirectTo != nil || MimeTypes.isHTML(entry.mimeType)) {
+                let title = FakeContentSource.normalize(entry.title)
+                let score: Int
+                if title == needle {
+                    score = 3
+                } else if title.hasPrefix(needle) {
+                    score = 2
+                } else if title.split(separator: " ").contains(where: { $0.hasPrefix(needle) }) {
+                    score = 1
+                } else {
+                    continue
+                }
+                // Redirects are shown under the searched title but open the target.
+                let target = entry.redirectTo ?? path
+                result.append((score, SearchHit(bookId: record.id, title: entry.title, path: target, snippet: nil)))
+            }
+            result.sort { lhs, rhs in
+                if lhs.0 != rhs.0 { return lhs.0 > rhs.0 }
+                if lhs.1.title.count != rhs.1.title.count { return lhs.1.title.count < rhs.1.title.count }
+                return lhs.1.title < rhs.1.title
+            }
+            return result
+        }
+
+        func randomArticle() -> String? {
+            entries
+                .filter { $0.value.redirectTo == nil && MimeTypes.isHTML($0.value.mimeType) && $0.key != record.mainPath }
+                .map(\.key)
+                .sorted()
+                .first
+        }
     }
 
     let coreVersion = "fake"
@@ -111,12 +159,7 @@ final class FakeContentSource: ContentSource, @unchecked Sendable {
     }
 
     func randomArticle(bookId: String) throws -> String? {
-        let book = try lookup(bookId)
-        return book.entries
-            .filter { $0.value.redirectTo == nil && MimeTypes.isHTML($0.value.mimeType) && $0.key != book.record.mainPath }
-            .map(\.key)
-            .sorted()
-            .first
+        try lookup(bookId).randomArticle()
     }
 
     func illustration(bookId: String, size: Int) -> Data? {
@@ -137,43 +180,11 @@ final class FakeContentSource: ContentSource, @unchecked Sendable {
     }
 
     private func resolve(bookId: String, path: String) throws -> (String, Entry) {
-        let book = try lookup(bookId)
-        var current = path
-        for _ in 0..<10 {
-            guard let entry = book.entries[current] else { throw ContentError.notFound(current) }
-            guard let target = entry.redirectTo else { return (current, entry) }
-            current = target
-        }
-        throw ContentError.invalidZim("redirect loop at \(path)")
+        try lookup(bookId).resolve(path)
     }
 
     private func scoredSuggestions(bookId: String, query: String) throws -> [(Int, SearchHit)] {
-        let book = try lookup(bookId)
-        let needle = Self.normalize(query)
-        guard !needle.isEmpty else { return [] }
-        var result: [(Int, SearchHit)] = []
-        for (path, entry) in book.entries where !entry.title.isEmpty && (entry.redirectTo != nil || MimeTypes.isHTML(entry.mimeType)) {
-            let title = Self.normalize(entry.title)
-            let score: Int
-            if title == needle {
-                score = 3
-            } else if title.hasPrefix(needle) {
-                score = 2
-            } else if title.split(separator: " ").contains(where: { $0.hasPrefix(needle) }) {
-                score = 1
-            } else {
-                continue
-            }
-            // Redirects are shown under the searched title but open the target.
-            let target = entry.redirectTo ?? path
-            result.append((score, SearchHit(bookId: book.record.id, title: entry.title, path: target, snippet: nil)))
-        }
-        result.sort { lhs, rhs in
-            if lhs.0 != rhs.0 { return lhs.0 > rhs.0 }
-            if lhs.1.title.count != rhs.1.title.count { return lhs.1.title.count < rhs.1.title.count }
-            return lhs.1.title < rhs.1.title
-        }
-        return result
+        try lookup(bookId).scored(query)
     }
 
     static func normalize(_ text: String) -> String {
@@ -195,6 +206,11 @@ extension FakeContentSource {
 
     /// A small library that looks like the real drive. Used by previews and `-demo-drive` UI tests.
     static func demo() -> FakeContentSource {
+        FakeContentSource(books: demoBooks())
+    }
+
+    /// The demo books (Czech and Slovak Wikipedia, guides, games, map of Czechia).
+    static func demoBooks() -> [FakeBook] {
         let wikipedia = FakeBook(
             record: demoRecord(id: demoWikipediaId, name: "wikipedia_cs_all", title: "Wikipedie", language: "ces",
                                mainPath: "Hlavní_strana", articles: 963_744, size: 9_958_167_476, file: "wikipedia_cs_all_maxi-offlinka_2026-09.zim"),
@@ -259,7 +275,7 @@ extension FakeContentSource {
                 "index.html": .html("Czech Republic", "<div id=\"map\" style=\"height:300px;background:#E9DFC8\"></div>"),
             ]
         )
-        return FakeContentSource(books: [games, guides, maps, wikipediaSk, wikipedia])
+        return [games, guides, maps, wikipediaSk, wikipedia]
     }
 
     private static func demoRecord(id: String, name: String, title: String, language: String, mainPath: String?,
@@ -271,9 +287,3 @@ extension FakeContentSource {
     }
 }
 
-/// Opens the demo library whatever the scan found (UI tests, screenshots).
-struct DemoContentSourceFactory: ContentSourceFactory {
-    func open(scan: DriveScan) throws -> ContentSource {
-        FakeContentSource.demo()
-    }
-}

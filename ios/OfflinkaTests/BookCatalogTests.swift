@@ -32,9 +32,36 @@ final class BookCatalogTests: XCTestCase {
         XCTAssertFalse(BookKind.guides.usesReaderStyle)
     }
 
-    func testHomeOrderFollowsSpec() {
-        let books = FakeContentSource.demo().books
-        XCTAssertEqual(books.map(\.name), ["wikipedia_cs_all", "wikipedia_sk_all", "maps_en_czech-republic", "offlinka_cs_prirucky", "offlinka_mul_hry"])
+    func testHomeOrderFollowsDesignForTheUILanguage() {
+        let records = FakeContentSource.demo().books
+        XCTAssertEqual(BookCatalog.sorted(records, uiLanguage: "cs").map(\.name),
+                       ["wikipedia_cs_all", "maps_en_czech-republic", "offlinka_cs_prirucky", "wikipedia_sk_all", "offlinka_mul_hry"])
+        XCTAssertEqual(BookCatalog.sorted(records, uiLanguage: "sk").map(\.name),
+                       ["wikipedia_sk_all", "offlinka_cs_prirucky", "wikipedia_cs_all", "maps_en_czech-republic", "offlinka_mul_hry"])
+        XCTAssertEqual(BookKind.mapsSk.homeOrder(uiLanguage: "sk"), 10)
+        XCTAssertEqual(BookKind.wikipediaEn.homeOrder(uiLanguage: "en"), 0)
+        let full = [BookKind.wikivoyage, .wiktionary, .medicine, .wikipediaEn, .guides, .games, .wikisource]
+        XCTAssertEqual(full.sorted { $0.homeOrder(uiLanguage: "cs") < $1.homeOrder(uiLanguage: "cs") },
+                       [.guides, .wikipediaEn, .medicine, .games, .wikivoyage, .wikisource, .wiktionary])
+    }
+
+    func testIndexPriorityGuidesFirstAndTop1mOnlyOnRequest() {
+        XCTAssertEqual(BookCatalog.indexPriority(name: "offlinka_cs_prirucky", uiLanguage: "cs", requested: false), 0)
+        XCTAssertEqual(BookCatalog.indexPriority(name: "wikipedia_cs_all", uiLanguage: "cs", requested: false), 1)
+        XCTAssertEqual(BookCatalog.indexPriority(name: "wikipedia_sk_all", uiLanguage: "cs", requested: false), 2)
+        XCTAssertEqual(BookCatalog.indexPriority(name: "wikipedia_sk_all", uiLanguage: "sk", requested: false), 1)
+        XCTAssertEqual(BookCatalog.indexPriority(name: "wiktionary_cs_all", uiLanguage: "cs", requested: false), 3)
+        XCTAssertEqual(BookCatalog.indexPriority(name: "maps_en_czech-republic", uiLanguage: "cs", requested: false), 4)
+        XCTAssertNil(BookCatalog.indexPriority(name: "wikipedia_en_top1m", uiLanguage: "en", requested: false))
+        XCTAssertEqual(BookCatalog.indexPriority(name: "wikipedia_en_top1m", uiLanguage: "en", requested: true), 10)
+    }
+
+    func testIndexFileNamesBindNameAndSize() {
+        let name = BookCatalog.indexFileName(zimFileName: "wikipedia_cs_all_maxi-offlinka_2026-09.zim", size: 9_958_167_476)
+        XCTAssertEqual(name, "wikipedia_cs_all_maxi-offlinka_2026-09-9958167476.offidx")
+        XCTAssertEqual(BookCatalog.bookKey(ofIndexFile: name), "wikipedia_cs_all")
+        XCTAssertEqual(BookCatalog.indexFileName(zimFileName: "něco divného (1).zim", size: 5), "n_co_divn_ho__1_-5.offidx")
+        XCTAssertNil(BookCatalog.bookKey(ofIndexFile: "readme.txt"))
     }
 
     func testPrimaryWikipediaFollowsLanguage() {
@@ -60,9 +87,12 @@ final class BookCatalogTests: XCTestCase {
         XCTAssertEqual(BookCatalog.gigabytes(32_400_000_000, significantDigits: 2), "32")
     }
 
-    func testLanguageTagsOnlyOnWikipedias() {
-        let books = FakeContentSource.demo().books
-        XCTAssertEqual(books.map { BookCatalog.languageTag(of: $0) }, ["CZ", "SK", nil, nil, nil])
+    func testLanguageTagsOnWikipediasAndEnglishOnlyBooks() {
+        XCTAssertEqual(BookCatalog.languageTag(kind: .wikipediaCs), "CZ")
+        XCTAssertEqual(BookCatalog.languageTag(kind: .wikipediaSk), "SK")
+        XCTAssertEqual(BookCatalog.languageTag(kind: .medicine), "EN")
+        XCTAssertEqual(BookCatalog.languageTag(kind: .wikivoyage), "EN")
+        XCTAssertNil(BookCatalog.languageTag(kind: .guides))
     }
 
     func testContentDates() {

@@ -1,4 +1,6 @@
+import Combine
 import SwiftUI
+import UIKit
 
 @main
 struct OfflinkaApp: App {
@@ -48,6 +50,22 @@ struct RootView: View {
             default: break
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
+            app.didReceiveMemoryWarning()
+        }
+        .fullScreenCover(isPresented: guidesShown) {
+            if let target = app.guidesReader, let engine = app.guidesEngine {
+                NavigationStack {
+                    ReaderScreen(target: target, resumeAt: nil, engine: engine, store: app.store)
+                }
+                .environment(app)
+            }
+        }
+    }
+
+    /// The bundled guides over the connect / unplugged screens (closed by the reader's home button).
+    private var guidesShown: Binding<Bool> {
+        Binding(get: { app.guidesReader != nil && app.phase != .ready }, set: { if !$0 { app.guidesReader = nil } })
     }
 
     @ViewBuilder

@@ -1,5 +1,6 @@
 @_exported import Foundation
 import UIKit
+import Combine
 import UniformTypeIdentifiers
 import Observation
 
@@ -58,7 +59,19 @@ public struct EnvironmentValues {
     public var scenePhase: ScenePhase { .active }
     public var dismiss: DismissAction { DismissAction() }
     public var locale: Locale { get { .current } set {} }
+    public var dynamicTypeSize: DynamicTypeSize { .large }
+    public var verticalSizeClass: UserInterfaceSizeClass? { nil }
 }
+public enum DynamicTypeSize: Comparable, Sendable { case xSmall, small, medium, large, xLarge, xxLarge, xxxLarge, accessibility1 }
+public enum VerticalEdge: Sendable { case top, bottom }
+public enum ControlSize: Sendable { case mini, small, regular, large }
+public struct PresentationBackgroundInteraction: Sendable {
+    public static let automatic = PresentationBackgroundInteraction(), disabled = PresentationBackgroundInteraction()
+    public static func enabled(upThrough detent: PresentationDetent) -> PresentationBackgroundInteraction { PresentationBackgroundInteraction() }
+}
+public struct DisclosureGroup<L: View, C: View>: View { public var body: Never { fatalError() } }
+extension DisclosureGroup where L == Text { public init<S: StringProtocol>(_ t: S, @ViewBuilder content: @escaping () -> C) {} }
+public func withAnimation<R>(_ animation: Animation? = nil, _ body: () throws -> R) rethrows -> R { try body() }
 @propertyWrapper public struct Environment<Value>: DynamicProperty {
     public init(_ kp: KeyPath<EnvironmentValues, Value>) {}
     public init(_ type: Value.Type) where Value: AnyObject & Observable {}
@@ -104,7 +117,8 @@ public struct Animation { public static func easeOut(duration: Double) -> Animat
 public struct AnyTransition { public static let opacity = AnyTransition() }
 public enum ContentMode { case fit, fill }
 public enum TextCase { case uppercase, lowercase }
-public struct AccessibilityTraits: Sendable { public static let isHeader = AccessibilityTraits(), updatesFrequently = AccessibilityTraits() }
+public struct AccessibilityTraits: OptionSet, Sendable { public let rawValue: Int; public init(rawValue: Int) { self.rawValue = rawValue }
+    public static let isHeader = AccessibilityTraits(rawValue: 1), updatesFrequently = AccessibilityTraits(rawValue: 2), isSelected = AccessibilityTraits(rawValue: 4) }
 public struct AccessibilityChildBehavior { public static let combine = AccessibilityChildBehavior(), ignore = AccessibilityChildBehavior(), contain = AccessibilityChildBehavior() }
 public struct SubmitLabel { public static let search = SubmitLabel() }
 public struct TextInputAutocapitalization { public static let never = TextInputAutocapitalization() }
@@ -296,10 +310,19 @@ extension View {
     public func sheet<C: View>(isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil, @ViewBuilder content: @escaping () -> C) -> some View { _Mod<Self>() }
     public func presentationDetents(_ d: Set<PresentationDetent>) -> some View { _Mod<Self>() }
     public func presentationDragIndicator(_ v: Visibility) -> some View { _Mod<Self>() }
+    public func presentationBackgroundInteraction(_ i: PresentationBackgroundInteraction) -> some View { _Mod<Self>() }
+    public func controlSize(_ s: ControlSize) -> some View { _Mod<Self>() }
     public func sheet<I: Identifiable, C: View>(item: Binding<I?>, onDismiss: (() -> Void)? = nil, @ViewBuilder content: @escaping (I) -> C) -> some View { _Mod<Self>() }
     public func navigationBarBackButtonHidden(_ h: Bool = true) -> some View { _Mod<Self>() }
+    public func fullScreenCover<C: View>(isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil, @ViewBuilder content: @escaping () -> C) -> some View { _Mod<Self>() }
+    public func onReceive<P: Publisher>(_ publisher: P, perform: @escaping (P.Output) -> Void) -> some View where P.Failure == Never { _Mod<Self>() }
+    public func safeAreaInset<V: View>(edge: VerticalEdge, alignment: HorizontalAlignment = .center, spacing: CGFloat? = nil, @ViewBuilder content: () -> V) -> some View { _Mod<Self>() }
+    public func minimumScaleFactor(_ f: CGFloat) -> some View { _Mod<Self>() }
+    public func listRowSeparator(_ v: Visibility) -> some View { _Mod<Self>() }
+    public func task(priority: TaskPriority = .userInitiated, _ action: @escaping @Sendable () async -> Void) -> some View { _Mod<Self>() }
     public func alert<S: StringProtocol, A: View, M: View, T>(_ t: S, isPresented: Binding<Bool>, presenting: T?, @ViewBuilder actions: (T) -> A, @ViewBuilder message: (T) -> M) -> some View { _Mod<Self>() }
     public func confirmationDialog<S: StringProtocol, A: View, M: View>(_ t: S, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, @ViewBuilder actions: () -> A, @ViewBuilder message: () -> M) -> some View { _Mod<Self>() }
+    public func confirmationDialog<S: StringProtocol, A: View>(_ t: S, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, @ViewBuilder actions: () -> A) -> some View { _Mod<Self>() }
     public func fileImporter(isPresented: Binding<Bool>, allowedContentTypes: [UTType], onCompletion: @escaping (Result<URL, any Error>) -> Void) -> some View { _Mod<Self>() }
     public func contextMenu<M: View>(@ViewBuilder menuItems: () -> M) -> some View { _Mod<Self>() }
     public func swipeActions<C: View>(edge: HorizontalEdge = .trailing, allowsFullSwipe: Bool = true, @ViewBuilder content: () -> C) -> some View { _Mod<Self>() }

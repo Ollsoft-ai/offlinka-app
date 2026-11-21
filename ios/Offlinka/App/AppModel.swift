@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 
 /// A transient message; equal when the text is (enough for animations).
 struct Toast: Equatable {
@@ -11,7 +12,8 @@ struct Toast: Equatable {
     static func == (lhs: Toast, rhs: Toast) -> Bool { lhs.id == rhs.id }
 }
 
-/// App state: which drive is open, the content, the reader engine, navigation and user data.
+/// App state: which drive is open, the reader engine, navigation and user data. The books
+/// themselves (opening order, tiles, search indexes) are the `Shelf`'s job.
 ///
 /// Phases: `starting` → (`connect` | `opening` | `unplugged`) → `ready`. While `ready`, the drive
 /// is checked every few seconds and after every read error; when it disappears the app shows the
@@ -37,13 +39,29 @@ final class AppModel {
         case noAccess
         /// Books are there but none could be opened.
         case unreadable
+
+        var title: String {
+            switch self {
+            case .notFound: return tr(.connectErrNotfoundTitle)
+            case .wrongFolder: return tr(.connectErrWrongfolderTitle)
+            case .noAccess: return tr(.connectErrNoaccessTitle)
+            case .unreadable: return tr(.errorTitle)
+            }
+        }
+    }
+
+    private enum OpenMode {
+        /// The remembered drive (launch, plugged back).
+        case restore
+        /// Picked in the Files sheet; `accessing` = its security scope was started.
+        case picked(accessing: Bool)
     }
 
     private(set) var phase: Phase = .starting
-    private(set) var content: ContentSource?
     private(set) var engine: ReaderEngine?
-    /// Phone editions that the big editions replace (shown greyed in the library).
-    private(set) var shadowed: [DriveEntry] = []
+    /// The bundled guides opened over the connect / unplugged screens ("Otevřít první pomoc").
+    var guidesReader: ReaderTarget?
+    private(set) var guidesEngine: ReaderEngine?
     /// Short message at the bottom of the screen ("Článek je v Uložených"), optionally with an action ("Vrátit").
     var toast: Toast?
     /// Where each open reader has got to (by the page it was opened with), so a reader rebuilt after
@@ -52,22 +70,44 @@ final class AppModel {
 
     let store: UserStore
     let router = Router()
+    let shelf: Shelf
     let isDemo: Bool
+    /// English top1m's index is offered on phones with 3 GB or more.
+    let heavyIndexAllowed: Bool
 
     @ObservationIgnored private let access: DriveAccess
-    @ObservationIgnored private let factory: ContentSourceFactory
+    @ObservationIgnored private let scanner: @Sendable (URL) throws -> DriveScan
     @ObservationIgnored private var watchTask: Task<Void, Never>?
     @ObservationIgnored private var openGeneration = 0
     @ObservationIgnored private var lastReopen = Date.distantPast
     @ObservationIgnored private var isActive = true
     @ObservationIgnored private var toastTask: Task<Void, Never>?
+    @ObservationIgnored private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
-    init(store: UserStore, access: DriveAccess, factory: ContentSourceFactory, isDemo: Bool = false) {
+    static let lowMemoryLimit: UInt64 = 3 * 1024 * 1024 * 1024
+
+    init(store: UserStore, access: DriveAccess, engine: ContentEngine,
+         scanner: @escaping @Sendable (URL) throws -> DriveScan,
+         indexDirectory: URL?, bundledGuidesPath: String?, isDemo: Bool = false) {
         self.store = store
         self.access = access
-        self.factory = factory
+        self.scanner = scanner
         self.isDemo = isDemo
         L10n.apply(store.settings.language)
+        let memory = ProcessInfo.processInfo.physicalMemory
+        self.heavyIndexAllowed = memory >= Self.lowMemoryLimit
+        // One cluster cache for all books: the core's 48 MB, 32 MB on phones under 3 GB.
+        engine.setCacheBudget(bytes: (memory < Self.lowMemoryLimit ? 32 : 48) * 1024 * 1024)
+        self.shelf = Shelf(engine: engine, indexDirectory: indexDirectory, bundledGuidesPath: bundledGuidesPath,
+                           uiLanguage: { L10n.languageCode })
+        shelf.heavyIndexAllowed = heavyIndexAllowed
+        shelf.indexRequests = { [store] in store.indexRequests }
+        shelf.requestIndex = { [store] name in store.requestIndex(name) }
+        shelf.removeIndexRequest = { [store] name in store.removeIndexRequest(name) }
+        shelf.driveReachable = { [access] in access.isCurrentReachable() }
+        shelf.onIndexingChange = { [weak self] building in self?.updateIdleTimer(building: building) }
+        shelf.onContentChange = { [weak self] content in self?.contentChanged(content) }
+        shelf.onDriveFailure = { [weak self] in self?.reportDriveFailure() }
     }
 
     /// The app as launched by the user, or the demo drive for UI tests and screenshots
@@ -80,22 +120,36 @@ final class AppModel {
                let parsed = AppLanguage(rawValue: language) {
                 store.settings.language = parsed
             }
-            return AppModel(store: store, access: DriveAccess(bookmarkFile: nil), factory: DemoContentSourceFactory(), isDemo: true)
+            return demo(store: store)
         }
         #endif
         return AppModel(
             store: UserStore(fileURL: UserStore.defaultFileURL()),
             access: DriveAccess(bookmarkFile: DriveAccess.defaultBookmarkFile()),
-            factory: CoreContentSourceFactory()
+            engine: CoreContentEngine(),
+            scanner: { try DriveScanner().scan(root: $0) },
+            indexDirectory: Shelf.defaultIndexDirectory(),
+            bundledGuidesPath: Bundle.main.path(forResource: "offlinka_cs_prirucky", ofType: "zim")
         )
+    }
+
+    /// The demo drive (fake engine; the bundled guides are the demo guides).
+    static func demo(store: UserStore) -> AppModel {
+        AppModel(store: store, access: DriveAccess(bookmarkFile: nil), engine: FakeContentEngine.demo(),
+                 scanner: { _ in FakeContentEngine.demoScan() }, indexDirectory: nil,
+                 bundledGuidesPath: "/bundle/offlinka_cs_prirucky.zim", isDemo: true)
     }
 
     var driveName: String? {
         isDemo ? "OFFLINKA" : access.displayName
     }
 
+    var hasRememberedDrive: Bool { access.hasBookmark }
+
+    var content: ShelfContent? { shelf.content }
+
     var books: [BookRecord] {
-        content?.books ?? []
+        shelf.content?.books ?? []
     }
 
     var edition: String? {
@@ -106,8 +160,9 @@ final class AppModel {
 
     func start() {
         guard phase == .starting else { return }
+        Task { await shelf.openBuiltinGuides() }
         if isDemo {
-            open(URL(fileURLWithPath: "/OFFLINKA"), picked: true)
+            open(URL(fileURLWithPath: "/OFFLINKA"), mode: .restore)
             return
         }
         restoreRememberedDrive()
@@ -115,6 +170,9 @@ final class AppModel {
 
     func sceneDidBecomeActive() {
         isActive = true
+        endBackgroundTask()
+        shelf.setForeground(true)
+        updateIdleTimer(building: shelf.isIndexing)
         switch phase {
         case .ready:
             checkDrive()
@@ -126,38 +184,78 @@ final class AppModel {
         startWatching()
     }
 
+    /// Indexes are built in the foreground only. A build that is running gets the usual background
+    /// time to finish; when that runs out it stops cleanly and continues on the next start.
     func sceneDidEnterBackground() {
         isActive = false
         watchTask?.cancel()
         watchTask = nil
         store.flush()
+        shelf.setForeground(false)
+        UIApplication.shared.isIdleTimerDisabled = false
+        guard shelf.isIndexing, backgroundTask == .invalid else { return }
+        backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "offlinka-index") { [weak self] in
+            MainActor.assumeIsolated {
+                self?.shelf.pauseIndexing()
+                self?.endBackgroundTask()
+            }
+        }
+        shelf.whenIndexingStops { [weak self] in self?.endBackgroundTask() }
+    }
+
+    func didReceiveMemoryWarning() {
+        shelf.trimMemory()
     }
 
     // MARK: - Picking the drive
 
+    /// The Files sheet returned a folder (connect screen, or "Vybrat jinou flashku" with books open).
     func didPick(_ result: Result<URL, Error>) {
         switch result {
         case .success(let url):
-            do {
-                try access.adopt(url)
-            } catch {
-                // No bookmark: works now, but the app will ask again next launch.
-            }
-            open(url, picked: true)
+            let accessing = url.startAccessingSecurityScopedResource()
+            open(url, mode: .picked(accessing: accessing))
         case .failure:
-            phase = .connect(problem: .noAccess)
+            if phase == .ready {
+                showToast(ConnectProblem.noAccess.title)
+            } else {
+                phase = .connect(problem: .noAccess)
+            }
         }
     }
 
-    /// Settings > "Vybrat jinou flashku" and the unplugged screen.
+    /// The unplugged screen: pick another drive.
     func chooseAnotherDrive() {
-        closeContent()
+        shelf.retire()
         access.release()
+        phase = .connect(problem: nil)
+    }
+
+    /// Settings → "Zapomenout flashku". Nothing on the drive changes.
+    func forgetDrive() {
+        shelf.retire()
+        access.forget()
+        router.reset()
+        resumeLocations = [:]
         phase = .connect(problem: nil)
     }
 
     func retry() {
         restoreRememberedDrive()
+    }
+
+    func retryBook(_ tileId: String) {
+        Task { await shelf.retry(tileId) }
+    }
+
+    /// The guides bundled with the app, without a drive (unplugged and connect screens).
+    func openBundledGuides() {
+        guard let content = shelf.guidesContent(), let guides = shelf.builtinGuides else { return }
+        if guidesEngine == nil {
+            let settings = store.settings
+            guidesEngine = ReaderEngine(content: content, appearance: ReaderAppearance(theme: settings.theme, textScale: settings.textScale))
+        }
+        guidesReader = ReaderTarget(bookId: guides.id, path: BookCatalog.firstAidPath)
     }
 
     // MARK: - Drive failures
@@ -170,7 +268,7 @@ final class AppModel {
             driveDisappeared()
         } else if Date().timeIntervalSince(lastReopen) > 10, let root = access.current {
             lastReopen = Date()
-            open(root, picked: false)
+            open(root, mode: .restore)
         }
     }
 
@@ -183,6 +281,7 @@ final class AppModel {
             // Before the store changes: the root view rebuilds on that change and reads L10n.
             L10n.apply(settings.language)
             engine?.refreshTexts()
+            guidesEngine?.refreshTexts()
         }
         store.settings = settings
     }
@@ -207,100 +306,136 @@ final class AppModel {
 
     // MARK: - Private
 
+    /// New books published: a new reader engine (scheme handler) for them. Read errors from an
+    /// older engine (requests still in flight on retired books) are ignored.
+    private func contentChanged(_ content: ShelfContent?) {
+        guard let content else {
+            engine = nil
+            return
+        }
+        let settings = store.settings
+        let newEngine = ReaderEngine(content: content, appearance: ReaderAppearance(theme: settings.theme, textScale: settings.textScale))
+        newEngine.schemeHandler.onDriveFailure = { [weak self, weak newEngine] in
+            guard let self, let newEngine, self.engine === newEngine else { return }
+            self.reportDriveFailure()
+        }
+        engine = newEngine
+    }
+
     private func restoreRememberedDrive() {
         switch access.restore() {
         case .none:
             phase = .connect(problem: nil)
         case .unavailable:
-            closeContent()
+            shelf.retire()
             phase = .unplugged
             startWatching()
         case .available(let url):
-            open(url, picked: false)
+            open(url, mode: .restore)
         }
     }
 
-    private func open(_ root: URL, picked: Bool) {
+    private func open(_ root: URL, mode: OpenMode) {
         openGeneration += 1
         let generation = openGeneration
-        if phase != .ready {
+        let wasReady = phase == .ready
+        if !wasReady {
             phase = .opening
         }
-        let factory = self.factory
-        let isDemo = self.isDemo
+        let scanner = self.scanner
         Task { [weak self] in
-            let outcome = await Task.detached(priority: .userInitiated) { () -> Result<(ContentSource, [DriveEntry]), Error> in
-                do {
-                    if isDemo {
-                        let scan = DriveScan(root: root, books: [], shadowed: [])
-                        return .success((try factory.open(scan: scan), []))
-                    }
-                    let scan = try DriveScanner().scan(root: root)
-                    return .success((try factory.open(scan: scan), scan.shadowed))
-                } catch {
-                    return .failure(error)
-                }
+            let scanned = await Task.detached(priority: .userInitiated) { () -> Result<DriveScan, Error> in
+                Result { try scanner(root) }
             }.value
             guard let self, generation == self.openGeneration else { return }
-            switch outcome {
-            case .success(let (source, shadowed)):
-                self.closeContent()
-                self.content = source
-                let settings = self.store.settings
-                let engine = ReaderEngine(content: source, appearance: ReaderAppearance(theme: settings.theme, textScale: settings.textScale))
-                engine.schemeHandler.onDriveFailure = { [weak self] in self?.reportDriveFailure() }
-                self.engine = engine
-                self.shadowed = shadowed
-                if picked {
-                    // Another drive: start fresh. Same drive back: keep the tabs and open readers.
+            switch scanned {
+            case .failure(let error):
+                self.openFailed(error, root: root, mode: mode, wasReady: wasReady)
+            case .success(let scan):
+                if case .picked(let accessing) = mode {
+                    // Only a usable pick replaces the remembered drive.
+                    do {
+                        try self.access.adopt(root, alreadyAccessing: accessing)
+                    } catch {
+                        // No bookmark: works now, but the app will ask again next launch.
+                    }
                     self.router.reset()
                     self.resumeLocations = [:]
                 }
-                self.phase = .ready
-                self.startWatching()
-            case .failure(let error):
-                self.handleOpenFailure(error, picked: picked)
+                let result = await self.shelf.load(scan: scan)
+                guard generation == self.openGeneration else { return }
+                switch result {
+                case .ready:
+                    self.phase = .ready
+                    self.startWatching()
+                case .driveGone:
+                    self.openFailed(ContentError.io("first book not readable"), root: root, mode: mode, wasReady: wasReady)
+                case .superseded:
+                    break
+                }
             }
         }
     }
 
-    private func handleOpenFailure(_ error: Error, picked: Bool) {
-        closeContent()
+    private func openFailed(_ error: Error, root: URL, mode: OpenMode, wasReady: Bool) {
+        let problem: ConnectProblem
         let driveGone: Bool
-        if let problem = error as? DriveScanProblem {
-            if case .noBooks = problem {
-                phase = .connect(problem: .wrongFolder)
-                return
+        if let scanProblem = error as? DriveScanProblem {
+            if case .noBooks = scanProblem {
+                problem = .wrongFolder
+                driveGone = false
+            } else {
+                problem = .notFound
+                driveGone = true
             }
-            driveGone = true
         } else if let contentError = error as? ContentError, contentError.isDriveFailure {
+            problem = .notFound
             driveGone = true
         } else {
-            phase = .connect(problem: .unreadable)
-            return
+            problem = .unreadable
+            driveGone = false
         }
-        if driveGone && picked {
-            phase = .connect(problem: .notFound)
-        } else {
-            phase = .unplugged
-            startWatching()
+        switch mode {
+        case .picked(let accessing):
+            if accessing && access.current != root {
+                root.stopAccessingSecurityScopedResource()
+            }
+            if wasReady {
+                // The books already open stay; the problem is a short message.
+                showToast(problem.title)
+            } else {
+                phase = .connect(problem: problem)
+            }
+        case .restore:
+            if driveGone {
+                driveDisappeared()
+            } else {
+                shelf.retire()
+                phase = .connect(problem: problem)
+            }
         }
     }
 
     private func driveDisappeared() {
-        closeContent()
+        shelf.retire()
         access.release()
         phase = .unplugged
         startWatching()
     }
 
-    private func closeContent() {
-        engine = nil
-        content = nil
-        shadowed = []
+    /// A long index build (English top1m: about 10 minutes) needs the screen on: with the screen off
+    /// the app is suspended and the build stops (code review r2). Foreground only.
+    private func updateIdleTimer(building: Bool) {
+        UIApplication.shared.isIdleTimerDisabled = building && isActive
     }
 
-    /// While reading: is the drive still there? While unplugged: is it back?
+    private func endBackgroundTask() {
+        guard backgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTask)
+        backgroundTask = .invalid
+    }
+
+    /// While reading: is the drive still there? While unplugged: is it back? (Foreground only.)
     private func startWatching() {
         guard !isDemo, isActive, watchTask == nil else { return }
         watchTask = Task { [weak self] in
@@ -312,7 +447,7 @@ final class AppModel {
                     self.checkDrive()
                 case .unplugged:
                     if case .available(let url) = self.access.restore() {
-                        self.open(url, picked: false)
+                        self.open(url, mode: .restore)
                     }
                 default:
                     self.watchTask = nil
@@ -332,18 +467,19 @@ final class AppModel {
 
 #if DEBUG
 extension AppModel {
-    /// A ready app on the demo drive, for SwiftUI previews.
+    /// The demo drive for SwiftUI previews (books fill in a moment after the preview appears).
     static func preview(phase: Phase = .ready, language: AppLanguage = .cs) -> AppModel {
         let store = UserStore(fileURL: nil)
         store.settings.language = language
-        let model = AppModel(store: store, access: DriveAccess(bookmarkFile: nil), factory: DemoContentSourceFactory(), isDemo: true)
-        let source = FakeContentSource.demo()
-        model.content = source
-        model.engine = ReaderEngine(content: source, appearance: ReaderAppearance(theme: .system, textScale: 1))
-        model.phase = phase
+        let model = demo(store: store)
         store.recordVisit(ArticleRef(bookName: "wikipedia_cs_all", path: "Sněžka", title: "Sněžka", date: Date()))
         store.toggleSaved(ArticleRef(bookName: "wikipedia_cs_all", path: "Praha", title: "Praha", date: Date()))
         store.addRecentSearch("Komenský")
+        if phase == .ready {
+            model.start()
+        } else {
+            model.phase = phase
+        }
         return model
     }
 }

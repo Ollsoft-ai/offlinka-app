@@ -33,7 +33,8 @@ extension ReaderTexts {
             noBookTitle: tr(.savedUnavailable),
             noBookBody: tr(.readerNotFoundBody),
             errorTitle: tr(.errorTitle),
-            errorBody: tr(.errorBody)
+            errorBody: tr(.errorBody),
+            openingTitle: tr(.libraryOpening)
         )
     }
 }

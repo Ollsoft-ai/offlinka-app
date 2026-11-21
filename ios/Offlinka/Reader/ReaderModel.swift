@@ -41,6 +41,7 @@ final class ReaderModel {
     @ObservationIgnored private var observations: [NSKeyValueObservation] = []
     @ObservationIgnored private var appearance: ReaderAppearance
     @ObservationIgnored private var initialTarget: ReaderTarget?
+    @ObservationIgnored private var waitingForBook: String?
 
     init(target: ReaderTarget, engine: ReaderEngine, store: UserStore, appearance: ReaderAppearance) {
         self.engine = engine
@@ -97,6 +98,23 @@ final class ReaderModel {
 
     var canSave: Bool {
         location != nil && book != nil && !(location?.path.isEmpty ?? true)
+    }
+
+    var isMap: Bool {
+        guard let book else { return false }
+        switch BookKind.of(name: book.name) {
+        case .mapsCz, .mapsSk, .maps: return true
+        default: return false
+        }
+    }
+
+    /// Maps and games: no find and no text size (they are web apps, not articles).
+    var isWebApp: Bool {
+        guard let book else { return false }
+        switch BookKind.of(name: book.name) {
+        case .mapsCz, .mapsSk, .maps, .games: return true
+        default: return false
+        }
     }
 
     var usesReaderStyle: Bool {
@@ -191,8 +209,10 @@ final class ReaderModel {
         guard let url = action.request.url else { return .cancel }
         let scheme = url.scheme?.lowercased() ?? ""
         if scheme == "tel" {
-            // Calling (e.g. 155 from the first-aid guide) needs no internet.
-            UIApplication.shared.open(url)
+            // Calling (e.g. 155 from the first-aid guide) needs no internet; only on a real tap.
+            if action.navigationType == .linkActivated {
+                UIApplication.shared.open(url)
+            }
             return .cancel
         }
         if OfflinkaURL.isExternal(url) {
@@ -208,6 +228,19 @@ final class ReaderModel {
     func didFinishNavigation() {
         headings = []
         recordVisit()
+        // The page's book was still opening ("Otevírám…"): reload once it is open.
+        if let location, engine.content.book(id: location.bookId) == nil, engine.content.isPending(bookId: location.bookId) {
+            waitingForBook = location.bookId
+        } else {
+            waitingForBook = nil
+        }
+    }
+
+    /// Called when books finished opening: reload a page that was waiting for its book.
+    func reloadIfBookOpened() {
+        guard let waiting = waitingForBook, engine.content.book(id: waiting) != nil else { return }
+        waitingForBook = nil
+        webView.reload()
     }
 
     func openInThisView(_ request: URLRequest) {

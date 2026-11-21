@@ -52,6 +52,8 @@ struct UserData: Codable, Equatable, Sendable {
     var history: [ArticleRef] = []
     var recentSearches: [String] = []
     var settings = AppSettings()
+    /// Books (ZIM names) whose heavy search index the user asked for: a restart resumes the build.
+    var indexRequests: [String] = []
 
     init() {}
 
@@ -62,6 +64,7 @@ struct UserData: Codable, Equatable, Sendable {
         history = (try? container.decodeIfPresent([ArticleRef].self, forKey: .history)) ?? []
         recentSearches = (try? container.decodeIfPresent([String].self, forKey: .recentSearches)) ?? []
         settings = (try? container.decodeIfPresent(AppSettings.self, forKey: .settings)) ?? AppSettings()
+        indexRequests = (try? container.decodeIfPresent([String].self, forKey: .indexRequests)) ?? []
     }
 }
 
@@ -178,6 +181,23 @@ final class UserStore {
 
     func clearRecentSearches() {
         data.recentSearches.removeAll()
+        persist()
+    }
+
+    // MARK: - Index requests
+
+    var indexRequests: Set<String> { Set(data.indexRequests) }
+
+    /// "Zastavit přípravu": the build is not resumed on the next start either.
+    func removeIndexRequest(_ bookName: String) {
+        guard data.indexRequests.contains(bookName) else { return }
+        data.indexRequests.removeAll { $0 == bookName }
+        persist()
+    }
+
+    func requestIndex(_ bookName: String) {
+        guard !data.indexRequests.contains(bookName) else { return }
+        data.indexRequests.append(bookName)
         persist()
     }
 

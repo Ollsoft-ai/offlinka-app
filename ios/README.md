@@ -5,12 +5,13 @@ SwiftUI app (iOS 17+, iPhone 15+ and USB-C iPads) that reads the Offlinka flash 
 ## Layout
 
 - `project.yml`: XcodeGen spec (targets `Offlinka`, `OfflinkaTests`, `OfflinkaUITests`). The `.xcodeproj` is generated and git-ignored.
-- `Offlinka/App`: `OfflinkaApp` (root, tabs, routes), `AppModel` (drive state machine, reader engine), `Router`.
-- `Offlinka/Core`: `ContentSource` protocol + value types, `CoreContentSource` (the only file that touches the UniFFI bindings), `FakeContentSource` (previews, demo drive, tests).
-- `Offlinka/Drive`: `DriveScanner` (finds `Knihovna/*.zim`, `Telefon/*.zim`, `.offidx`; best edition per book), `DriveAccess` (security-scoped bookmark, scope lifetime, reachability).
+- `Offlinka/App`: `OfflinkaApp` (root, tabs, routes), `AppModel` (drive phases, picking, reader engine, background time, memory), `Router`.
+- `Offlinka/Core`: `ContentEngine`/`ContentBook`/`ContentLibrary` (the core, book by book), `CoreContentEngine` (the only file that touches the UniFFI bindings), `FakeContentEngine` + `FakeContentSource` (demo drive, previews, tests), `ContentSource` (what reader and search read).
+- `Offlinka/Drive`: `DriveScanner` (finds `Knihovna/*.zim`, `Telefon/*.zim`, `.offidx`; best edition per book), `DriveAccess` (security-scoped bookmark), `Shelf` (opens the UI-language Wikipedia first and the rest 3 at a time, failed tiles with retry, publishes before closing old books, builds missing search indexes in Application Support, bundled guides), `ShelfContent` (the open books, thread-safe).
 - `Offlinka/Reader`: `OfflinkaURL` (`offlinka://<bookId>/<path>`), `SchemeResponder` (pure: MIME, ranges, ZIM redirects, error pages, reader CSS hook), `OfflinkaSchemeHandler` (WKURLSchemeHandler), `ReaderEngine` (configuration, offline content rules), `ReaderModel` + `ReaderScreen`.
 - `Offlinka/Search`, `Offlinka/Screens`, `Offlinka/Library`, `Offlinka/Persistence` (JSON `UserStore`), `Offlinka/Localization` (`L10n`, generated `Str.swift`), `Offlinka/Design` (components; colours/type come from `design/out/ios/Brand.swift`).
 - `Offlinka/Generated/`: UniFFI Swift bindings, committed by the core and rewritten by `scripts/build-ios-core.sh` / `scripts/gen-bindings.sh`.
+- `Offlinka/Resources/offlinka_cs_prirucky.zim`: the guides bundled in the app (first aid works without the drive; same file as Android's asset).
 - Used straight from `design/`: `Brand.swift`, `Localizable.xcstrings`, `fonts/*.ttf`, `Icons.xcassets`, `reader/offlinka-reader.css` + `reader/inject.js`. The app icon is copied by `tools/sync-design.sh` (an icon set must sit inside an asset catalog).
 - `tools/gen-str.py`: regenerates `Str.swift` from `design/strings/cs.json` after design adds a key. `tools/linux-check/`: type-check against SDK stand-ins + unit tests on Linux.
 

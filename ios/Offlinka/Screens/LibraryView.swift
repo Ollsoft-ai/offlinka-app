@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Every book on the drive (design mockup `library`): drive card, groups, phone editions last.
 /// Row tap opens the book's main page; the info button shows the details.
@@ -6,6 +7,8 @@ import SwiftUI
 struct LibraryView: View {
     @Environment(AppModel.self) private var app
     @State private var details: BookRecord?
+    @State private var failedTile: ShelfTile?
+    @State private var showPicker = false
 
     var body: some View {
         List {
@@ -21,24 +24,28 @@ struct LibraryView: View {
             }
 
             ForEach(LibraryGroup.allCases, id: \.self) { group in
-                let books = app.books.filter { BookCatalog.kind(of: $0).libraryGroup == group }
-                if !books.isEmpty {
+                let tiles = app.shelf.tiles.filter { $0.kind.libraryGroup == group }
+                if !tiles.isEmpty {
                     Section(tr(group.titleKey)) {
-                        ForEach(books) { book in
-                            BookRow(book: book, onOpen: {
-                                app.router.open(ReaderTarget(bookId: book.id, path: nil))
-                            }, onInfo: {
-                                details = book
-                            })
+                        ForEach(tiles) { tile in
+                            if let record = tile.record, tile.state == .open {
+                                BookRow(book: record, onOpen: {
+                                    app.router.open(ReaderTarget(bookId: record.id, path: nil))
+                                }, onInfo: {
+                                    details = record
+                                })
+                            } else {
+                                PendingRow(tile: tile) { failedTile = tile }
+                            }
                         }
                     }
                     .listRowBackground(Color.brandSurface)
                 }
             }
 
-            if !app.shadowed.isEmpty {
+            if !app.shelf.shadowed.isEmpty {
                 Section {
-                    ForEach(app.shadowed, id: \.self) { entry in
+                    ForEach(app.shelf.shadowed, id: \.self) { entry in
                         ShadowedRow(entry: entry)
                     }
                 } header: {
@@ -52,7 +59,7 @@ struct LibraryView: View {
             if !app.isDemo {
                 Section {
                     Button(tr(.libraryChangeDrive)) {
-                        app.chooseAnotherDrive()
+                        showPicker = true
                     }
                     .foregroundStyle(Color.brandLink)
                 }
@@ -69,6 +76,53 @@ struct LibraryView: View {
             }
             .presentationDetents([.medium, .large])
         }
+        .retryAlert(tile: $failedTile)
+        // Another drive while these books stay open; a wrong pick only shows a short message.
+        .fileImporter(isPresented: $showPicker, allowedContentTypes: [.folder]) { result in
+            app.didPick(result)
+        }
+    }
+}
+
+/// A book that is still opening, or failed to open (tap: „Zkusit znovu“).
+private struct PendingRow: View {
+    let tile: ShelfTile
+    let onFailedTap: () -> Void
+
+    var body: some View {
+        Button(action: onFailedTap) {
+            HStack(spacing: BrandSpace.m) {
+                BookIconBox(kind: tile.kind, box: BrandSize.bookIconBoxSmall)
+                VStack(alignment: .leading, spacing: BrandSpace.xxs) {
+                    Text(BookCatalog.title(of: tile))
+                        .brandText(.titleSmall)
+                        .foregroundStyle(Color.brandInk)
+                    HStack(spacing: BrandSpace.s) {
+                        if tile.state == .opening {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                        if tile.state == .failed {
+                            BrandIconView(icon: .warning, size: 16)
+                                .foregroundStyle(Color.brandWarnInk)
+                        }
+                        Text(tile.state == .opening ? tr(.libraryOpening) : tr(.libraryOpenFailed))
+                            .brandText(tile.state == .failed ? .label : .bodySmall)
+                            .foregroundStyle(tile.state == .failed ? Color.brandWarnInk : Color.brandInk2)
+                    }
+                }
+                Spacer(minLength: 0)
+                if tile.state == .failed {
+                    BrandIconView(icon: .retry, size: BrandSize.iconSmall)
+                        .foregroundStyle(Color.brandInk2)
+                }
+            }
+            .frame(minHeight: BrandSize.listRow)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(tile.state != .failed)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -92,7 +146,7 @@ private struct DriveCard: View {
                         .brandText(.bodySmall)
                         .foregroundStyle(Color.brandOnHero2)
                 }
-                Text(tr(.libraryBooksCount, app.books.count) + ", " + tr(.librarySize, BookCatalog.gigabytes(totalBytes, significantDigits: 2)))
+                Text(tr(.libraryBooksCount, driveTiles.count) + ", " + tr(.librarySize, BookCatalog.gigabytes(totalBytes, significantDigits: 2)))
                     .brandText(.bodySmall)
                     .foregroundStyle(Color.brandOnHero2)
             }
@@ -105,8 +159,12 @@ private struct DriveCard: View {
         .accessibilityElement(children: .combine)
     }
 
+    private var driveTiles: [ShelfTile] {
+        app.shelf.tiles.filter { !$0.isBuiltin }
+    }
+
     private var totalBytes: Int64 {
-        app.books.reduce(0) { $0 + $1.sizeBytes }
+        driveTiles.reduce(0) { $0 + ($1.entry?.sizeBytes ?? 0) }
     }
 }
 
@@ -152,23 +210,24 @@ private struct BookRow: View {
     }
 }
 
-/// A phone edition that is not used because the big edition is on the drive.
+/// A phone edition that is not used because the big edition is on the drive (full contrast and a
+/// tag instead of dimming, UX review).
 private struct ShadowedRow: View {
     let entry: DriveEntry
 
     var body: some View {
         HStack(spacing: BrandSpace.m) {
             BookIconBox(kind: BookKind.of(name: entry.name.baseKey), box: BrandSize.bookIconBoxSmall)
-            VStack(alignment: .leading, spacing: BrandSpace.xxs) {
+            VStack(alignment: .leading, spacing: BrandSpace.xs) {
                 Text(BookCatalog.title(ofEntry: entry))
                     .brandText(.titleSmall)
-                    .foregroundStyle(Color.brandInk2)
-                Text(tr(.libraryReplaced) + ", " + tr(.librarySize, BookCatalog.gigabytes(entry.sizeBytes)))
+                    .foregroundStyle(Color.brandInk)
+                Text(tr(.librarySize, BookCatalog.gigabytes(entry.sizeBytes)))
                     .brandText(.caption)
-                    .foregroundStyle(Color.brandInk3)
+                    .foregroundStyle(Color.brandInk2)
+                TagView(text: tr(.libraryReplaced))
             }
         }
-        .opacity(0.6)
         .frame(minHeight: BrandSize.listRow - 8)
         .accessibilityElement(children: .combine)
     }
@@ -216,12 +275,50 @@ struct BookDetailView: View {
                 detail(.libraryDetailSize, tr(.librarySize, BookCatalog.gigabytes(book.sizeBytes)))
                 detail(.libraryDetailDate, ContentDate.monthYear(book.date))
                 detail(.libraryDetailLanguage, BookCatalog.languageName(book.language))
-                detail(.libraryDetailSearch, book.hasIndex ? tr(.librarySearchIndexed) : tr(.librarySearchBasic))
-                if !book.publisher.isEmpty {
-                    detail(.libraryDetailPublisher, book.publisher)
+            }
+            .listRowBackground(Color.brandSurface)
+
+            if indexOffered(book) {
+                Section(tr(.libraryIndexOfferTitle)) {
+                    if app.shelf.buildingBookId == book.id {
+                        if let progress = app.shelf.indexing, progress.bookId == book.id {
+                            Text(tr(.searchIndexBuilding, progress.percent))
+                                .brandText(.body)
+                                .foregroundStyle(Color.brandInk2)
+                        } else {
+                            ProgressView()
+                        }
+                        // „Zastavit přípravu“ (the final label comes with design's next strings).
+                        Button(tr(.actionCancel)) {
+                            app.shelf.cancelIndexing(book)
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                    } else {
+                        Text(tr(.libraryIndexOfferBody))
+                            .brandText(.bodySmall)
+                            .foregroundStyle(Color.brandInk2)
+                        Button(tr(.libraryIndexOfferButton)) {
+                            app.shelf.buildIndexNow(book)
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                    }
                 }
-                detail(.libraryDetailFolder, book.folder.rawValue)
-                detail(.libraryDetailFile, book.fileName)
+                .listRowBackground(Color.brandSurface)
+            }
+
+            // Things only support needs, folded away (UX review).
+            Section {
+                DisclosureGroup(tr(.librarySupport)) {
+                    detail(.libraryDetailSearch, book.hasIndex ? tr(.librarySearchIndexed) : tr(.librarySearchBasic))
+                    if !book.publisher.isEmpty {
+                        detail(.libraryDetailPublisher, book.publisher)
+                    }
+                    if book.folder != .app {
+                        detail(.libraryDetailFolder, book.folder.rawValue)
+                    }
+                    detail(.libraryDetailFile, book.fileName)
+                }
+                .tint(Color.brandInk2)
             }
             .listRowBackground(Color.brandSurface)
 
@@ -255,6 +352,14 @@ struct BookDetailView: View {
                 }
             }
         }
+    }
+
+    /// English top1m: offered on request only (3 GB+ phones), or shown while its index is built.
+    /// The index section: English top1m's offer (on request only, 3 GB+ phones), or any book whose
+    /// index is being built now, with „Zastavit přípravu“.
+    private func indexOffered(_ book: BookRecord) -> Bool {
+        guard !book.hasIndex else { return false }
+        return app.shelf.buildingBookId == book.id || app.shelf.canBuildOnDemand(book)
     }
 
     private func detail(_ label: Str, _ value: String) -> some View {

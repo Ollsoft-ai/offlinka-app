@@ -2,6 +2,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// First run (and after a failed pick): plug in the drive and pick it in the Files sheet.
+/// „Vybrat flashku“ is pinned to the bottom so it stays visible on small phones and at large
+/// text sizes (UX review r2).
 @MainActor
 struct ConnectView: View {
     @Environment(AppModel.self) private var app
@@ -34,6 +36,30 @@ struct ConnectView: View {
                     }
                 }
 
+                Button(tr(.connectHelpLink)) {
+                    showHelp = true
+                }
+                .brandText(.label)
+                .foregroundStyle(Color.brandLink)
+                .frame(maxWidth: .infinity, minHeight: BrandSize.touch)
+
+                // First aid without the drive (no exFAT, drive not at hand, gift not yet plugged in).
+                if app.shelf.builtinGuides != nil {
+                    Button {
+                        app.openBundledGuides()
+                    } label: {
+                        Label {
+                            Text(tr(.unpluggedGuides))
+                        } icon: {
+                            BrandIconView(icon: .firstAid)
+                        }
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .accessibilityIdentifier("connect.guides")
+                }
+            }
+        } bottom: {
+            VStack(spacing: BrandSpace.s) {
                 Button {
                     showPicker = true
                 } label: {
@@ -49,13 +75,7 @@ struct ConnectView: View {
                 Text(tr(.connectRemember))
                     .brandText(.bodySmall)
                     .foregroundStyle(Color.brandInk2)
-
-                Button(tr(.connectHelpLink)) {
-                    showHelp = true
-                }
-                .brandText(.label)
-                .foregroundStyle(Color.brandLink)
-                .frame(maxWidth: .infinity, minHeight: BrandSize.touch)
+                    .multilineTextAlignment(.center)
             }
         }
         .fileImporter(isPresented: $showPicker, allowedContentTypes: [.folder]) { result in
@@ -133,7 +153,7 @@ struct HelpSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: BrandSpace.l) {
-                    ForEach([Str.help1, .help2, .help4Ios, .help5], id: \.self) { key in
+                    ForEach([Str.help1, .help2, .helpPickFolder, .help4Ios, .help5], id: \.self) { key in
                         HStack(alignment: .firstTextBaseline, spacing: BrandSpace.m) {
                             Circle().fill(Color.brandPrimary).frame(width: 8, height: 8)
                             Text(tr(key))
@@ -186,6 +206,23 @@ struct UnpluggedView: View {
                         .foregroundStyle(Color.brandInk2)
                 }
                 .accessibilityElement(children: .combine)
+            }
+        } bottom: {
+            VStack(spacing: BrandSpace.s) {
+                // The guides bundled with the app work without the drive (the emergency promise).
+                if app.shelf.builtinGuides != nil {
+                    Button {
+                        app.openBundledGuides()
+                    } label: {
+                        Label {
+                            Text(tr(.unpluggedGuides))
+                        } icon: {
+                            BrandIconView(icon: .firstAid)
+                        }
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .accessibilityIdentifier("unplugged.guides")
+                }
                 // The app reopens by itself when the drive is back (checked every 2 s and on
                 // return to the app); this button is only for another drive.
                 Button(tr(.unpluggedPickOther)) { app.chooseAnotherDrive() }
@@ -196,29 +233,53 @@ struct UnpluggedView: View {
 }
 
 /// Forest hero with the wordmark in the bar and the ridge into the paper below, then content
-/// (Connect and Unplugged, design mockups `connect`, `unplugged`).
-struct HeroScreen<Hero: View, Content: View>: View {
+/// (Connect and Unplugged, design mockups `connect`, `unplugged`). `bottom` is pinned in a paper bar.
+/// The illustration is hidden at large text sizes and in landscape, where it would push the
+/// content below the fold.
+struct HeroScreen<Hero: View, Content: View, Bottom: View>: View {
     @ViewBuilder let hero: () -> Hero
     @ViewBuilder let content: () -> Content
+    @ViewBuilder let bottom: () -> Bottom
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
+    private var showsHero: Bool {
+        dynamicTypeSize < .xxLarge && verticalSizeClass != .compact
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 0) {
-                    hero()
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, BrandSpace.l)
-                        .padding(.bottom, BrandSize.ridge * 2)
-                        .background(HeroBackground().ignoresSafeArea(edges: .horizontal))
+                    Group {
+                        if showsHero {
+                            hero()
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, BrandSpace.l)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, BrandSize.ridge * 2)
+                    .background(HeroBackground().ignoresSafeArea(edges: .horizontal))
                     content()
                         .padding(.horizontal, BrandSize.gutter)
                         .padding(.top, BrandSpace.l)
-                        .padding(.bottom, BrandSpace.huge)
+                        .padding(.bottom, BrandSpace.xxl)
                         .frame(maxWidth: 560, alignment: .leading)
                 }
                 .frame(maxWidth: .infinity)
             }
             .background(Color.brandBg.ignoresSafeArea())
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                bottom()
+                    .padding(.horizontal, BrandSize.gutter)
+                    .padding(.top, BrandSpace.m)
+                    .padding(.bottom, BrandSpace.s)
+                    .frame(maxWidth: 560)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.brandBg.ignoresSafeArea(edges: .bottom))
+                    .overlay(alignment: .top) { Rectangle().fill(Color.brandLineSoft).frame(height: 1) }
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Wordmark(size: 26)
@@ -234,6 +295,8 @@ struct HeroScreen<Hero: View, Content: View>: View {
 
 /// While the books are being found and opened.
 struct OpeningView: View {
+    @State private var slow = false
+
     var body: some View {
         VStack(spacing: BrandSpace.l) {
             Wordmark(onDark: false)
@@ -241,16 +304,35 @@ struct OpeningView: View {
             Text(tr(.connectSearching))
                 .brandText(.bodySmall)
                 .foregroundStyle(Color.brandInk2)
+            if slow {
+                // After 3 s: a time expectation instead of a spinner alone (UX review).
+                Text(tr(.connectSlow))
+                    .brandText(.bodySmall)
+                    .foregroundStyle(Color.brandInk2)
+                    .multilineTextAlignment(.center)
+                    .transition(.opacity)
+            }
         }
+        .padding(.horizontal, BrandSize.gutter)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.brandBg.ignoresSafeArea())
         .accessibilityElement(children: .combine)
+        .task {
+            try? await Task.sleep(for: .seconds(3))
+            withAnimation { slow = true }
+        }
     }
 }
 
 /// A phone with the drive in its USB-C port (or pulled out), drawn for the forest hero.
 struct DriveIllustration: View {
     var pluggedIn = true
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// The phone's screen: paper in light mode, a soft step in dark mode (not harsh at night).
+    private var screen: Color {
+        colorScheme == .dark ? Color.brandOnHero3.opacity(0.55) : Color.brandOnHero
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -261,15 +343,15 @@ struct DriveIllustration: View {
                 .frame(width: 128, height: 214)
                 .overlay(alignment: .top) {
                     VStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 3).fill(Color.brandOnHero).frame(width: 84, height: 12).padding(.top, 26)
-                        RoundedRectangle(cornerRadius: 4).fill(Color.brandOnHero).frame(width: 84, height: 20)
+                        RoundedRectangle(cornerRadius: 3).fill(screen).frame(width: 84, height: 12).padding(.top, 26)
+                        RoundedRectangle(cornerRadius: 4).fill(screen).frame(width: 84, height: 20)
                         HStack(spacing: 6) {
-                            RoundedRectangle(cornerRadius: 4).fill(Color.brandOnHero).frame(width: 39, height: 38)
-                            RoundedRectangle(cornerRadius: 4).fill(Color.brandOnHero).frame(width: 39, height: 38)
+                            RoundedRectangle(cornerRadius: 4).fill(screen).frame(width: 39, height: 38)
+                            RoundedRectangle(cornerRadius: 4).fill(screen).frame(width: 39, height: 38)
                         }
                         HStack(spacing: 6) {
-                            RoundedRectangle(cornerRadius: 4).fill(Color.brandOnHero).frame(width: 39, height: 38)
-                            RoundedRectangle(cornerRadius: 4).fill(Color.brandOnHero).frame(width: 39, height: 38)
+                            RoundedRectangle(cornerRadius: 4).fill(screen).frame(width: 39, height: 38)
+                            RoundedRectangle(cornerRadius: 4).fill(screen).frame(width: 39, height: 38)
                         }
                     }
                     .opacity(pluggedIn ? 1 : 0.35)

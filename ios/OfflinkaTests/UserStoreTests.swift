@@ -100,6 +100,17 @@ final class UserStoreTests: XCTestCase {
         XCTAssertTrue(reloaded.settings.saveHistory)
     }
 
+    func testIndexRequestsPersistAndCanBeForgotten() {
+        let store = UserStore(fileURL: file)
+        store.requestIndex("wikipedia_en_top1m")
+        store.requestIndex("wikipedia_en_top1m")
+        store.flush()
+        let reloaded = UserStore(fileURL: file)
+        XCTAssertEqual(reloaded.indexRequests, ["wikipedia_en_top1m"])
+        reloaded.removeIndexRequest("wikipedia_en_top1m")
+        XCTAssertTrue(reloaded.indexRequests.isEmpty)
+    }
+
     func testTextScaleSteps() {
         var settings = AppSettings()
         XCTAssertEqual(settings.steppedTextScale(1), 1.15)

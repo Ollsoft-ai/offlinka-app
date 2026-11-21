@@ -5,6 +5,8 @@ import SwiftUI
 struct HomeView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var failedTile: ShelfTile?
 
     var body: some View {
         ScrollView {
@@ -16,15 +18,21 @@ struct HomeView: View {
                             app.router.open(ReaderTarget(bookId: last.book.id, path: last.article.path))
                         }
                     }
-                    SectionTitle(text: tr(.homeBooksTitle), trailing: tr(.libraryBooksCount, app.books.count))
-                    // The first book (Czech Wikipedia on the real drive) gets a wide tile.
-                    if let first = app.books.first {
-                        BookTile(book: first, wide: true)
+                    SectionTitle(text: tr(.homeBooksTitle), trailing: tr(.libraryBooksCount, app.shelf.tiles.count))
+                    // The first book (the UI-language Wikipedia) gets a wide tile.
+                    if let first = app.shelf.tiles.first {
+                        BookTile(tile: first, wide: true) { failedTile = first }
                     }
                     LazyVGrid(columns: columns, alignment: .leading, spacing: BrandSpace.m) {
-                        ForEach(app.books.dropFirst()) { book in
-                            BookTile(book: book)
+                        ForEach(app.shelf.tiles.dropFirst()) { tile in
+                            BookTile(tile: tile) { failedTile = tile }
                         }
+                    }
+                    if let progress = app.shelf.indexing {
+                        Text(tr(.searchIndexBuilding, progress.percent))
+                            .brandText(.label)
+                            .foregroundStyle(Color.brandInk2)
+                            .accessibilityAddTraits(.updatesFrequently)
                     }
                 }
                 .padding(.horizontal, BrandSize.gutter)
@@ -46,10 +54,15 @@ struct HomeView: View {
         .toolbarBackground(Color.brandHero, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .retryAlert(tile: $failedTile)
     }
 
+    /// One column at large text sizes, so expanded titles never break mid-word (UX review r2).
     private var columns: [GridItem] {
-        [GridItem(.adaptive(minimum: sizeClass == .regular ? 260 : 160), spacing: BrandSpace.m, alignment: .top)]
+        if dynamicTypeSize >= .xxLarge && sizeClass != .regular {
+            return [GridItem(.flexible(), spacing: BrandSpace.m, alignment: .top)]
+        }
+        return [GridItem(.adaptive(minimum: sizeClass == .regular ? 260 : 160), spacing: BrandSpace.m, alignment: .top)]
     }
 
     // MARK: - Header
@@ -154,28 +167,28 @@ struct HomeView: View {
 }
 
 /// One book on the home screen; `wide` spans the whole row with the icon beside the text.
+/// A book still opening is dimmed with „Otevírám…“; one that failed is dimmed with „Nejde otevřít“
+/// and offers „Zkusit znovu“.
 @MainActor
 struct BookTile: View {
     @Environment(AppModel.self) private var app
-    let book: BookRecord
+    let tile: ShelfTile
     var wide = false
+    var onFailedTap: () -> Void = {}
 
     var body: some View {
-        let kind = BookCatalog.kind(of: book)
-        Button {
-            app.router.open(ReaderTarget(bookId: book.id, path: nil))
-        } label: {
+        Button(action: tap) {
             Group {
                 if wide {
                     HStack(alignment: .top, spacing: BrandSpace.l) {
-                        BookIconBox(kind: kind)
+                        BookIconBox(kind: tile.kind)
                         texts
                         tag
                     }
                 } else {
                     VStack(alignment: .leading, spacing: BrandSpace.s) {
                         HStack(alignment: .top) {
-                            BookIconBox(kind: kind)
+                            BookIconBox(kind: tile.kind)
                             Spacer(minLength: 0)
                             tag
                         }
@@ -186,44 +199,142 @@ struct BookTile: View {
             }
             .padding(BrandSpace.l)
             .frame(maxWidth: .infinity, minHeight: wide ? 0 : 168, alignment: .topLeading)
-            .brandCard()
+            .brandCard(shadow: tile.state == .open)
         }
         .buttonStyle(.plain)
+        .disabled(tile.state == .opening)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(tr(.cdOpenBook, BookCatalog.title(of: book)))
-        .accessibilityHint(BookCatalog.description(of: book))
-        .accessibilityIdentifier("tile.\(book.id)")
+        .accessibilityLabel(tr(.cdOpenBook, BookCatalog.title(of: tile)))
+        .accessibilityHint(subtitle)
+        .accessibilityIdentifier("tile.\(tile.id)")
         .contextMenu {
-            Button(tr(.libraryDetails)) {
-                app.router.push(.book(book.id))
+            if let record = tile.record {
+                Button(tr(.libraryDetails)) {
+                    app.router.push(.book(record.id))
+                }
+                Button(tr(.libraryOpenMain)) {
+                    app.router.open(ReaderTarget(bookId: record.id, path: nil))
+                }
             }
-            Button(tr(.libraryOpenMain)) {
-                app.router.open(ReaderTarget(bookId: book.id, path: nil))
+        }
+    }
+
+    private func tap() {
+        switch tile.state {
+        case .open:
+            if let record = tile.record {
+                app.router.open(ReaderTarget(bookId: record.id, path: nil))
             }
+        case .failed:
+            onFailedTap()
+        case .opening:
+            break
+        }
+    }
+
+    private var subtitle: String {
+        switch tile.state {
+        case .open: return BookCatalog.description(of: tile)
+        case .opening: return tr(.libraryOpening)
+        case .failed: return tr(.libraryOpenFailed)
         }
     }
 
     private var texts: some View {
         VStack(alignment: .leading, spacing: BrandSpace.xs) {
-            Text(BookCatalog.title(of: book))
+            Text(BookCatalog.title(of: tile))
                 .brandText(wide ? .headline : .title)
                 .foregroundStyle(Color.brandInk)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(BookCatalog.description(of: book))
-                .brandText(.bodySmall)
-                .foregroundStyle(Color.brandInk2)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
+            switch tile.state {
+            case .open:
+                Text(subtitle)
+                    .brandText(.bodySmall)
+                    .foregroundStyle(Color.brandInk2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            case .opening:
+                HStack(spacing: BrandSpace.s) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(subtitle)
+                        .brandText(.bodySmall)
+                        .foregroundStyle(Color.brandInk2)
+                }
+            case .failed:
+                // Full contrast, not dimmed like "opening" (UX review r2).
+                HStack(alignment: .firstTextBaseline, spacing: BrandSpace.xs) {
+                    BrandIconView(icon: .warning, size: 16)
+                        .foregroundStyle(Color.brandWarnInk)
+                        .padding(3)
+                        .background(Circle().fill(Color.brandWarnBg))
+                    Text(subtitle)
+                        .brandText(.label)
+                        .foregroundStyle(Color.brandWarnInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
     private var tag: some View {
-        if let tag = BookCatalog.languageTag(of: book) {
+        if let tag = BookCatalog.languageTag(kind: tile.kind) {
             TagView(text: tag)
         }
+    }
+}
+
+extension View {
+    /// A book that could not be opened: the calm error and „Zkusit znovu“ (Home and Library), as a
+    /// branded card instead of a stock alert (UX review r2).
+    @MainActor
+    func retryAlert(tile: Binding<ShelfTile?>) -> some View {
+        sheet(item: tile) { failed in
+            RetryCard(tile: failed)
+                .presentationDetents([.height(280), .medium])
+                .presentationDragIndicator(.visible)
+        }
+    }
+}
+
+@MainActor
+private struct RetryCard: View {
+    @Environment(AppModel.self) private var app
+    @Environment(\.dismiss) private var dismiss
+    let tile: ShelfTile
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: BrandSpace.l) {
+            HStack(spacing: BrandSpace.m) {
+                BookIconBox(kind: tile.kind, box: BrandSize.bookIconBoxSmall)
+                VStack(alignment: .leading, spacing: BrandSpace.xxs) {
+                    Text(tr(.errorTitle))
+                        .brandText(.title)
+                        .foregroundStyle(Color.brandInk)
+                        .accessibilityAddTraits(.isHeader)
+                    Text(BookCatalog.title(of: tile))
+                        .brandText(.label)
+                        .foregroundStyle(Color.brandInk2)
+                }
+            }
+            Text(tr(.errorBody))
+                .brandText(.body)
+                .foregroundStyle(Color.brandInk)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(tr(.actionRetry)) {
+                app.retryBook(tile.id)
+                dismiss()
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            Button(tr(.actionClose)) { dismiss() }
+                .buttonStyle(SecondaryButtonStyle())
+        }
+        .padding(BrandSize.gutter)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.brandSurface.ignoresSafeArea())
     }
 }
 

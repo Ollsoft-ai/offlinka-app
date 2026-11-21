@@ -5,6 +5,7 @@ import SwiftUI
 struct SearchView: View {
     @Environment(AppModel.self) private var app
     @State private var model: SearchModel
+    @State private var noteHidden = false
     @FocusState private var focused: Bool
 
     init(source: ContentSource, scopeBookId: String?) {
@@ -17,12 +18,31 @@ struct SearchView: View {
                 .padding(.horizontal, BrandSize.gutter)
                 .padding(.vertical, BrandSpace.s)
             Divider().overlay(Color.brandLineSoft)
+            if let progress = app.shelf.indexing, !noteHidden {
+                // The X only hides the note; stopping is in the book's details (UX review r2).
+                InfoNote(text: tr(.searchIndexBuilding, progress.percent)) {
+                    Button {
+                        noteHidden = true
+                    } label: {
+                        BrandIconView(icon: .close, size: BrandSize.iconSmall)
+                            .foregroundStyle(Color.brandInk2)
+                            .frame(width: BrandSize.touch, height: BrandSize.touch)
+                    }
+                    .accessibilityLabel(tr(.actionClose))
+                }
+                .padding(.horizontal, BrandSize.gutter)
+                .padding(.top, BrandSpace.m)
+            }
             results
         }
         .background(Color.brandBg.ignoresSafeArea())
         .navigationTitle(scopeTitle ?? "")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { focused = true }
+        .onAppear {
+            focused = true
+            // The core loads an index's lookup tables lazily: do it now, before the first keystroke.
+            app.shelf.preloadIndexes()
+        }
     }
 
     private var scopeTitle: String? {
@@ -78,11 +98,23 @@ struct SearchView: View {
             Spacer()
         case .searching, .results:
             List {
+                if let word = model.retriedWord {
+                    Text(tr(.searchRetryWord, word))
+                        .brandText(.label)
+                        .foregroundStyle(Color.brandInk2)
+                        .listRowBackground(Color.brandBg)
+                        .listRowSeparator(.hidden)
+                }
                 ForEach(model.groups) { group in
                     Section {
                         let visible = group.isExpanded ? group.hits : Array(group.hits.prefix(SearchModel.collapsedCount))
                         ForEach(visible, id: \.self) { hit in
-                            HitRow(hit: hit, query: model.trimmedQuery, onOpen: { open(hit) }, onFill: { model.query = hit.title })
+                            HitRow(hit: hit, query: model.trimmedQuery, onOpen: { open(hit) })
+                                .contextMenu {
+                                    // Filling the query is a long-press action, not a button people
+                                    // hit when they meant to open the article (UX review r2).
+                                    Button(tr(.searchFill)) { model.query = hit.title }
+                                }
                         }
                         if !group.isExpanded && group.hits.count >= SearchModel.collapsedCount {
                             Button(tr(.searchShowMore)) {
@@ -144,12 +176,14 @@ struct SearchView: View {
                 }
                 .listRowBackground(Color.brandSurface)
             }
-            Section {
-                Text(tr(.searchTip))
-                    .brandText(.bodySmall)
-                    .foregroundStyle(Color.brandInk2)
+            // "Háčky a čárky psát nemusíte" is true only once the Wikipedia has its index.
+            if app.shelf.primaryWikipediaIndexed {
+                Section {
+                    InfoNote(text: tr(.searchTip)) { EmptyView() }
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: BrandSpace.s, leading: 0, bottom: BrandSpace.s, trailing: 0))
             }
-            .listRowBackground(Color.clear)
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
@@ -173,38 +207,27 @@ private struct HitRow: View {
     let hit: SearchHit
     let query: String
     let onOpen: () -> Void
-    let onFill: () -> Void
 
     var body: some View {
-        HStack(spacing: BrandSpace.s) {
-            Button(action: onOpen) {
-                VStack(alignment: .leading, spacing: BrandSpace.xxs) {
-                    Self.highlighted(hit.title, query: query)
-                        .lineLimit(2)
-                    if let snippet = hit.snippet, !snippet.isEmpty {
-                        HStack(spacing: BrandSpace.xs) {
-                            BrandIconView(icon: .redirect, size: 16)
-                            Text(snippet)
-                        }
-                        .brandText(.bodySmall)
-                        .foregroundStyle(Color.brandInk2)
+        Button(action: onOpen) {
+            VStack(alignment: .leading, spacing: BrandSpace.xxs) {
+                Self.highlighted(hit.title, query: query)
+                    .lineLimit(2)
+                if let snippet = hit.snippet, !snippet.isEmpty {
+                    HStack(spacing: BrandSpace.xs) {
+                        BrandIconView(icon: .redirect, size: 16)
+                        Text(snippet)
                     }
-                }
-                .padding(.leading, 26 + BrandSpace.m)
-                .frame(maxWidth: .infinity, minHeight: BrandSize.touch, alignment: .leading)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("search.hit")
-
-            Button(action: onFill) {
-                BrandIconView(icon: .fillQuery, size: BrandSize.iconSmall)
+                    .brandText(.bodySmall)
                     .foregroundStyle(Color.brandInk2)
-                    .frame(width: BrandSize.touch, height: BrandSize.touch)
+                }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(tr(.searchFill))
+            .padding(.leading, 26 + BrandSpace.m)
+            .frame(maxWidth: .infinity, minHeight: BrandSize.touch, alignment: .leading)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("search.hit")
     }
 
     /// The title with the part that matched the query in bold (diacritics-insensitive), the rest regular.

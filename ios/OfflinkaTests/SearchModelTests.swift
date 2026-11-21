@@ -22,7 +22,7 @@ final class SearchModelTests: XCTestCase {
         model.query = "praha"
         await model.settle()
         XCTAssertEqual(model.phase, .results)
-        // Czech Wikipedia first (core ranking: same match class, Czech Wikipedia before others).
+        // The UI-language (Czech) Wikipedia first.
         XCTAssertEqual(model.groups.map(\.book.id), [FakeContentSource.demoWikipediaId, FakeContentSource.demoWikipediaSkId])
         XCTAssertEqual(model.groups.first?.hits.first?.title, "Praha")
 
@@ -77,6 +77,27 @@ final class SearchModelTests: XCTestCase {
         let group = try XCTUnwrap(model.groups.first)
         await model.expand(group)
         XCTAssertEqual(model.groups.first?.isExpanded, true)
+    }
+
+    func testSlovakUIPutsSlovakWikipediaFirstAndGuidesLead() {
+        let books = FakeContentSource.demo().books
+        let hits = [
+            SearchHit(bookId: FakeContentSource.demoWikipediaId, title: "Praha", path: "Praha", snippet: nil),
+            SearchHit(bookId: FakeContentSource.demoWikipediaSkId, title: "Praha", path: "Praha", snippet: nil),
+            SearchHit(bookId: FakeContentSource.demoGuidesId, title: "První pomoc", path: "prvni-pomoc.html", snippet: nil),
+        ]
+        XCTAssertEqual(SearchModel.group(hits, books: books, uiLanguage: "sk").map(\.book.id),
+                       [FakeContentSource.demoGuidesId, FakeContentSource.demoWikipediaSkId, FakeContentSource.demoWikipediaId])
+    }
+
+    func testRetriesWithTheLongestWord() async {
+        let (model, _) = makeModel()
+        model.query = "hora sněžka v zimě"
+        await model.settle()
+        XCTAssertEqual(model.retriedWord, "sněžka")
+        XCTAssertEqual(model.topHit?.title, "Sněžka")
+        XCTAssertNil(SearchModel.longestWord(of: "praha"))
+        XCTAssertEqual(SearchModel.longestWord(of: "krvácení z nosu u dětí"), "krvácení")
     }
 
     func testGroupingDropsUnknownBooksAndDuplicates() {

@@ -20,7 +20,7 @@ fi
 mkdir -p "$WORK/mods" "$WORK/ffi"
 
 # --- stub SDK modules
-for m in UIKit UniformTypeIdentifiers WebKit SwiftUI; do
+for m in Combine UIKit UniformTypeIdentifiers WebKit SwiftUI; do
   swiftc -swift-version 5 -parse-as-library -emit-module -module-name "$m" -I "$WORK/mods" \
     -emit-module-path "$WORK/mods/$m.swiftmodule" "$HERE/stubs/$m.swift"
 done
@@ -40,7 +40,8 @@ done
 # --- unit tests (SwiftPM package of symlinks)
 P="$WORK/pkg"; mkdir -p "$P/Sources/Offlinka" "$P/Sources/offlinka_coreFFI" "$P/Tests/OfflinkaTests"
 cp "$WORK/ffi/"* "$P/Sources/offlinka_coreFFI/"
-for f in Core/ContentSource.swift Core/FakeContentSource.swift Core/CoreContentSource.swift Drive/DriveScanner.swift \
+for f in Core/ContentSource.swift Core/ContentEngine.swift Core/FakeContentSource.swift Core/FakeContentEngine.swift \
+         Core/CoreContentEngine.swift Drive/DriveScanner.swift Drive/Shelf.swift Drive/ShelfContent.swift \
          Reader/OfflinkaURL.swift Reader/ByteRange.swift Reader/SchemeResponder.swift Localization/L10n.swift \
          Localization/Str.swift Library/BookCatalog.swift Design/BrandIcon.swift Persistence/UserStore.swift \
          Search/SearchModel.swift Generated/OfflinkaCore.swift; do
@@ -63,5 +64,6 @@ SWIFT
 FIX="${OFFLINKA_FIXTURES:-/srv/offlinka/drive/release/current/files/Knihovna}"
 mkdir -p "$WORK/fixtures"
 for z in offlinka_cs_prirucky.zim offlinka_mul_hry.zim; do [ -f "$FIX/$z" ] && ln -sf "$FIX/$z" "$WORK/fixtures/$z"; done
-(cd "$P" && OFFLINKA_FIXTURES="$WORK/fixtures" swift test -j 4 2>&1 | grep -E "error:|failed|Executed [0-9]+ tests" | tail -20) || status=1
+(cd "$P" && OFFLINKA_FIXTURES="$WORK/fixtures" swift test -j 4 2>&1 \
+  | grep -E "error:|Test Suite '[A-Za-z]+Tests' (passed|failed)|Executed [0-9]+ tests" | tail -40) || status=1
 exit $status

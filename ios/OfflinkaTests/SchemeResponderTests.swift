@@ -180,6 +180,20 @@ final class SchemeResponderTests: XCTestCase {
         XCTAssertEqual(head.inject(into: html), html)
     }
 
+    /// Code review r2 #2: a book that is still opening answers 503 "Otevírám…" (the reader reloads), not 404.
+    func testBookStillOpeningGetsOpeningPage() throws {
+        let content = ShelfContent(library: FakeContentLibrary(), coreVersion: "fake", uiLanguage: "cs")
+        content.setPending(["wikivoyage_en_europe"])
+        let texts = ReaderTexts(noBookTitle: "nobook", openingTitle: "Otevírám…")
+        let responder = SchemeResponder(source: content, assets: .none, texts: texts)
+        let reply = responder.reply(to: SchemeRequest(url: try XCTUnwrap(URL(string: "offlinka://wikivoyage_en_europe/Prague"))))
+        XCTAssertEqual(reply.statusCode, 503)
+        XCTAssertFalse(reply.driveFailed)
+        XCTAssertTrue(String(decoding: reply.body, as: UTF8.self).contains("Otevírám…"))
+        let unknown = responder.reply(to: SchemeRequest(url: try XCTUnwrap(URL(string: "offlinka://wikiquote_cs_all/X"))))
+        XCTAssertEqual(unknown.statusCode, 404)
+    }
+
     func testDriveFailureIsFlagged() throws {
         source.simulatesUnpluggedDrive = true
         let reply = try reply("offlinka://wikipedia_cs_all/Praha")

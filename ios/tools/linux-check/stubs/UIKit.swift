@@ -24,9 +24,19 @@ public final class NSKeyValueObservation { public init() {} }
 @MainActor open class UIWindow: UIView { public var overrideUserInterfaceStyle: UIUserInterfaceStyle = .unspecified }
 @MainActor open class UIScene {}
 @MainActor open class UIWindowScene: UIScene { public var windows: [UIWindow] = [] }
+public struct UIBackgroundTaskIdentifier: Hashable, Sendable { public static let invalid = UIBackgroundTaskIdentifier() }
+@MainActor open class UIFont { public enum TextStyle: Sendable { case body, caption1 } }
+@MainActor open class UIFontMetrics {
+    public init(forTextStyle: UIFont.TextStyle) {}
+    public func scaledValue(for value: CGFloat) -> CGFloat { value }
+}
 @MainActor open class UIApplication {
     public static let shared = UIApplication()
+    nonisolated public static let didReceiveMemoryWarningNotification = Notification.Name("mw")
+    public func beginBackgroundTask(withName: String?, expirationHandler: (@MainActor @Sendable () -> Void)?) -> UIBackgroundTaskIdentifier { .invalid }
+    public func endBackgroundTask(_ id: UIBackgroundTaskIdentifier) {}
     public var connectedScenes: Set<UIScene> { [] }
+    public var isIdleTimerDisabled = false
     public struct OpenExternalURLOptionsKey: Hashable { }
     public func open(_ url: URL, options: [OpenExternalURLOptionsKey: Any] = [:], completionHandler: (@MainActor @Sendable (Bool) -> Void)? = nil) {}
 }

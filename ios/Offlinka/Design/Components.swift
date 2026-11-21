@@ -106,22 +106,24 @@ struct SecondaryButtonStyle: ButtonStyle {
     }
 }
 
-/// Small chip-like button (quick links on the home screen).
+/// Quick-link chip on the forest header: 40 high with a 48 hit area, `heroDeep` fill at 35 % and an
+/// `onHero2` outline at 50 % (3.5:1, UX review).
 struct ChipButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .brandText(.label)
             .foregroundStyle(Color.brandOnHero)
             .padding(.horizontal, BrandSpace.m)
-            .frame(minHeight: BrandSize.touch)
+            .frame(minHeight: BrandSize.buttonSmall)
             .background(
                 RoundedRectangle(cornerRadius: BrandRadius.s, style: .continuous)
-                    .fill(configuration.isPressed ? Color.brandOnHero.opacity(0.12) : Color.clear)
+                    .fill(Color.brandHeroDeep.opacity(configuration.isPressed ? 0.6 : 0.35))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: BrandRadius.s, style: .continuous)
-                    .strokeBorder(Color.brandHeroLine, lineWidth: 1)
+                    .strokeBorder(Color.brandOnHero2.opacity(0.5), lineWidth: 1)
             )
+            .padding(.vertical, (BrandSize.touch - BrandSize.buttonSmall) / 2)
             .contentShape(Rectangle())
     }
 }
@@ -254,6 +256,29 @@ struct EmptyStateView: View {
         .padding(BrandSpace.xxxl)
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// A calm note in a box (search tip, index progress), with an optional trailing control.
+struct InfoNote<Trailing: View>: View {
+    let text: String
+    @ViewBuilder let trailing: () -> Trailing
+
+    var body: some View {
+        HStack(alignment: .center, spacing: BrandSpace.s) {
+            BrandIconView(icon: .info, size: BrandSize.iconSmall)
+                .foregroundStyle(Color.brandInk2)
+            Text(text)
+                .brandText(.bodySmall)
+                .foregroundStyle(Color.brandInk)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+            trailing()
+        }
+        .padding(.leading, BrandSpace.m)
+        .padding(.vertical, BrandSpace.s)
+        .background(RoundedRectangle(cornerRadius: BrandRadius.m, style: .continuous).fill(Color.brandAccentSoft))
+        .accessibilityElement(children: .contain)
     }
 }
 

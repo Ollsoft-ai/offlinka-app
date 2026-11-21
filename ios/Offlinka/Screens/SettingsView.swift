@@ -1,9 +1,12 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Language, light/dark, text size, the drive, history and searches (design mockup `settings`).
 @MainActor
 struct SettingsView: View {
     @Environment(AppModel.self) private var app
+    @State private var showPicker = false
+    @State private var confirmForget = false
 
     var body: some View {
         Form {
@@ -53,29 +56,18 @@ struct SettingsView: View {
 
                 if !app.isDemo {
                     Button(tr(.settingsDriveChange)) {
-                        app.chooseAnotherDrive()
+                        showPicker = true
                     }
                     .foregroundStyle(Color.brandLink)
+                    if app.hasRememberedDrive {
+                        Button(tr(.settingsDriveForget), role: .destructive) {
+                            confirmForget = true
+                        }
+                        .foregroundStyle(Color.brandDanger)
+                    }
                 }
 
-                VStack(alignment: .leading, spacing: BrandSpace.xs) {
-                    HStack {
-                        Text(tr(.settingsKeepCopyTitle))
-                            .foregroundStyle(Color.brandInk2)
-                        Spacer()
-                        Text(tr(.settingsSoon))
-                            .brandText(.labelSmall)
-                            .foregroundStyle(Color.brandWarnInk)
-                            .padding(.horizontal, BrandSpace.s)
-                            .padding(.vertical, BrandSpace.xxs)
-                            .background(RoundedRectangle(cornerRadius: BrandRadius.xs).fill(Color.brandWarnBg))
-                    }
-                    Text(tr(.settingsKeepCopyBody))
-                        .brandText(.bodySmall)
-                        .foregroundStyle(Color.brandInk3)
-                }
-                .opacity(0.7)
-                .accessibilityElement(children: .combine)
+                // „Česká Wikipedie i bez flashky“ stays hidden until it ships (UX review r2).
             }
             .listRowBackground(Color.brandSurface)
 
@@ -114,6 +106,16 @@ struct SettingsView: View {
         .scrollContentBackground(.hidden)
         .background(Color.brandBg.ignoresSafeArea())
         .navigationTitle(tr(.settingsTitle))
+        // Another drive while these books stay open; a wrong pick only shows a short message.
+        .fileImporter(isPresented: $showPicker, allowedContentTypes: [.folder]) { result in
+            app.didPick(result)
+        }
+        .confirmationDialog(tr(.settingsDriveForget), isPresented: $confirmForget, titleVisibility: .visible) {
+            Button(tr(.settingsDriveForget), role: .destructive) {
+                app.forgetDrive()
+            }
+            Button(tr(.actionCancel), role: .cancel) {}
+        }
     }
 }
 

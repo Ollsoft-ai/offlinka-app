@@ -102,7 +102,7 @@ struct DriveScanner {
         var found: [DriveEntry] = []
         var sawDriveFolders = false
         let children = listing(of: root)
-        for folder in DriveFolder.allCases {
+        for folder in DriveFolder.onDrive {
             let match = children.first { child in
                 Self.sameName(child.lastPathComponent, folder.rawValue) && isDirectory(child)
             }
@@ -114,7 +114,7 @@ struct DriveScanner {
 
         if !sawDriveFolders {
             // The user picked `Knihovna` or `Telefon` itself, or some folder that just holds ZIMs.
-            let pickedFolder = DriveFolder.allCases.first { Self.sameName(root.lastPathComponent, $0.rawValue) }
+            let pickedFolder = DriveFolder.onDrive.first { Self.sameName(root.lastPathComponent, $0.rawValue) }
             found += zims(in: root, folder: pickedFolder ?? .library)
         }
 

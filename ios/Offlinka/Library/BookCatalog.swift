@@ -34,6 +34,53 @@ enum BookKind: String, CaseIterable, Sendable {
 
     var order: Int { Self.allCases.firstIndex(of: self) ?? Self.allCases.count }
 
+    /// `cs`, `sk`, `en` for the Wikipedias, nil otherwise.
+    var wikipediaLanguage: String? {
+        switch self {
+        case .wikipediaCs: return "cs"
+        case .wikipediaSk: return "sk"
+        case .wikipediaEn: return "en"
+        default: return nil
+        }
+    }
+
+    var isWikipedia: Bool {
+        switch self {
+        case .wikipediaCs, .wikipediaSk, .wikipediaEn, .wikipediaOther: return true
+        default: return false
+        }
+    }
+
+    /// Home and library order (design README "Tile order"): the UI-language Wikipedia (wide tile),
+    /// Mapa Česka, Nouzové příručky, the other Wikipedia, English Wikipedia, Medicína, Mapa Slovenska,
+    /// Hry, Wikivoyage, Wikiknihy, Wikizdroje, Wikicitáty, Wikislovník, Wikiverzita, unknown books.
+    /// Same numbers as Android's `BookSelector.homeOrder`.
+    func homeOrder(uiLanguage: String) -> Int {
+        if let language = wikipediaLanguage, language == uiLanguage { return 0 }
+        // The map of the UI language's country comes right after its Wikipedia (UX review r2).
+        if self == .mapsSk && uiLanguage == "sk" { return 10 }
+        if self == .mapsCz && uiLanguage == "sk" { return 60 }
+        switch self {
+        case .mapsCz: return 10
+        case .guides: return 20
+        case .wikipediaCs: return 30
+        case .wikipediaSk: return 31
+        case .wikipediaEn: return 40
+        case .wikipediaOther: return 45
+        case .medicine: return 50
+        case .mapsSk: return 60
+        case .maps: return 65
+        case .games: return 70
+        case .wikivoyage: return 80
+        case .wikibooks: return 90
+        case .wikisource: return 100
+        case .wikiquote: return 110
+        case .wiktionary: return 120
+        case .wikiversity: return 130
+        case .other: return 200
+        }
+    }
+
     var icon: BrandIcon {
         switch self {
         case .wikipediaCs, .wikipediaSk, .wikipediaOther: return .bookWikipedia
@@ -141,14 +188,50 @@ enum LibraryGroup: String, CaseIterable, Sendable {
 
 /// Display helpers for books.
 enum BookCatalog {
-    /// Home and library order: by kind, then title.
-    static func sorted(_ books: [BookRecord]) -> [BookRecord] {
+    /// Home and library order for the UI language, then title.
+    static func sorted(_ books: [BookRecord], uiLanguage: String = "cs") -> [BookRecord] {
         books.sorted { lhs, rhs in
-            let left = BookKind.of(name: lhs.name).order
-            let right = BookKind.of(name: rhs.name).order
+            let left = BookKind.of(name: lhs.name).homeOrder(uiLanguage: uiLanguage)
+            let right = BookKind.of(name: rhs.name).homeOrder(uiLanguage: uiLanguage)
             if left != right { return left < right }
             return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
         }
+    }
+
+    /// English top1m: too heavy to index unasked (about 10 minutes and 220 MB); only from its details.
+    static func isOnDemandIndex(_ name: String) -> Bool {
+        name.lowercased().contains("top1m")
+    }
+
+    /// Order in which missing search indexes are built (lower first; nil = not automatically):
+    /// the guides (they take no time), the UI-language Wikipedia, the other Wikipedias, the other
+    /// text books, maps and games last; English top1m only when asked. Same as Android.
+    static func indexPriority(name: String, uiLanguage: String, requested: Bool) -> Int? {
+        if isOnDemandIndex(name) { return requested ? 10 : nil }
+        let kind = BookKind.of(name: name)
+        if kind == .guides { return 0 }
+        if kind.isWikipedia { return kind.wikipediaLanguage == uiLanguage ? 1 : 2 }
+        switch kind {
+        case .mapsCz, .mapsSk, .maps, .games, .other: return 4
+        default: return 3
+        }
+    }
+
+    /// File name of a search index built on the phone for one exact ZIM file (name + size, so a
+    /// new edition never reuses an old index): `wikipedia_cs_all_maxi-offlinka_2026-09-9958167476.offidx`.
+    static func indexFileName(zimFileName: String, size: Int64) -> String {
+        let stem = (zimFileName as NSString).deletingPathExtension
+        let safe = String(stem.unicodeScalars.map { scalar -> Character in
+            let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+            return allowed.contains(scalar) ? Character(scalar) : "_"
+        })
+        return "\(safe)-\(size).offidx"
+    }
+
+    /// The book (`baseKey`) an index file built by `indexFileName` belongs to.
+    static func bookKey(ofIndexFile fileName: String) -> String? {
+        guard fileName.hasSuffix(".offidx"), let dash = fileName.lastIndex(of: "-") else { return nil }
+        return ZimFileName(fileName: String(fileName[..<dash]) + ".zim").baseKey
     }
 
     static func kind(of book: BookRecord) -> BookKind {
@@ -228,12 +311,16 @@ enum BookCatalog {
         return formatter.string(from: NSNumber(value: value)) ?? String(format: "%.2f", value)
     }
 
-    /// Tag on the Wikipedia tiles.
+    /// Language tag on the tiles (the Wikipedias, and the English-only Medicína and Wikivoyage).
     static func languageTag(of book: BookRecord) -> String? {
-        switch kind(of: book) {
+        languageTag(kind: kind(of: book))
+    }
+
+    static func languageTag(kind: BookKind) -> String? {
+        switch kind {
         case .wikipediaCs: return "CZ"
         case .wikipediaSk: return "SK"
-        case .wikipediaEn: return "EN"
+        case .wikipediaEn, .medicine, .wikivoyage: return "EN"
         default: return nil
         }
     }

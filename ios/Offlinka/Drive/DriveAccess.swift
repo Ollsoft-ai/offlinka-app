@@ -36,12 +36,20 @@ final class DriveAccess {
         current?.lastPathComponent
     }
 
-    /// Takes over the folder returned by the folder picker and remembers it.
+    /// Takes over a folder from the folder picker (after it scanned fine) and remembers it.
+    /// `alreadyAccessing`: the caller started its security scope; it is ended on `release()`.
     /// Throws when no bookmark could be made; the folder is still usable for this session.
-    func adopt(_ picked: URL) throws {
-        release()
-        accessing = picked.startAccessingSecurityScopedResource()
-        current = picked
+    func adopt(_ picked: URL, alreadyAccessing: Bool) throws {
+        if current != picked || !accessing {
+            release()
+        } else if alreadyAccessing {
+            // Same folder picked again: balance the extra start.
+            picked.stopAccessingSecurityScopedResource()
+        }
+        if current == nil {
+            accessing = alreadyAccessing
+            current = picked
+        }
         let data = try picked.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
         store(data)
     }
