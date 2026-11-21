@@ -285,7 +285,7 @@ PICKER_ROOT="(sd karta|karta sd|sd card).*|.*virtual.*|.*usb.*"
 # Android 11+ refuses the root of an SD card (not of a USB drive) for a folder grant.
 PICKER_REFUSED="tuto složku nelze použít|can.t use this folder"
 
-# keyboard_open <name>: open a DocumentsUI folder with the keyboard: DPAD into the list, type-to-focus the
+# keyboard_open <name>: open a DocumentsUI folder with the keyboard: Tab into the tiles, type-to-focus the
 # name, else walk the grid with DPAD down / right; Enter on the folder.
 keyboard_open() {
   local f prev="" typed="" key=KEYCODE_DPAD_DOWN
@@ -308,7 +308,8 @@ keyboard_open() {
           [ "$key" = KEYCODE_DPAD_RIGHT ] && key=KEYCODE_DPAD_DOWN
         fi ;;
       *)
-        adb shell input keyevent KEYCODE_DPAD_DOWN ;;
+        # Outside the tiles (e.g. the "create folder" card above them, which ignores DPAD): Tab onwards.
+        if [ "$f" = "$prev" ]; then adb shell input keyevent KEYCODE_DPAD_DOWN; else adb shell input keyevent KEYCODE_TAB; fi ;;
     esac
     prev="$f"
     sleep 0.5
