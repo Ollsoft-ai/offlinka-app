@@ -7,6 +7,7 @@
   uidump.py packages <dump.xml>           print the packages on screen
   uidump.py focus <dump.xml>              print "item|other|none" (focused node is a DocumentsUI list item
                                           or not) and the texts under the focused node
+  uidump.py focused <dump.xml> <regex>    exit 0 when the focused node's text/content-desc fully matches
   uidump.py crashes <logcat.txt> <pkg>    print crash / ANR blocks of <pkg> (prefix match), exit 1 when found
   uidump.py size <file.png>               print "width height" of a PNG
 
@@ -95,6 +96,10 @@ def main():
                 return
         print("none")
         return
+    if cmd == "focused":
+        rx = re.compile(args[1], re.I)
+        sys.exit(0 if any(n.get("focused") == "true" and any(rx.fullmatch(s) for s in labels(n))
+                          for n in nodes(args[0])) else 1)
     if cmd == "crashes":
         sys.exit(crashes(args[0], args[1]))
     if cmd == "size":

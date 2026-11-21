@@ -317,6 +317,22 @@ keyboard_open() {
   return 1
 }
 
+# keyboard_press <regex>: Tab to the control whose text fully matches and press Enter (for buttons that
+# uiautomator reports without bounds after keyboard use).
+keyboard_press() {
+  for _ in $(seq 1 10); do
+    dump || return 1
+    if python3 "$UIPY" focused "$UIX" "$1"; then
+      log "enter on '$1'"
+      adb shell input keyevent KEYCODE_ENTER
+      return 0
+    fi
+    adb shell input keyevent KEYCODE_TAB
+    sleep 0.5
+  done
+  return 1
+}
+
 picker_shown() { dump && python3 "$UIPY" packages "$UIX" | grep -q documentsui; }
 
 # The system folder picker (DocumentsUI): "use this folder" on the volume, then "allow". API 29+ opens on
@@ -358,11 +374,11 @@ pick_drive() {
     snap knihovna
   fi
   wait_for "$PICKER_BUTTON" 10 || return 1
-  tap "$PICKER_BUTTON" || return 1
+  tap "$PICKER_BUTTON" || keyboard_press "$PICKER_BUTTON" || return 1
   sleep 2
   if wait_for "$PICKER_ALLOW" 10; then
     snap allow
-    tap "$PICKER_ALLOW" || return 1
+    tap "$PICKER_ALLOW" || keyboard_press "$PICKER_ALLOW" || return 1
   fi
   return 0
 }
