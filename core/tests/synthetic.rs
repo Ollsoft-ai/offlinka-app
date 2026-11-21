@@ -463,6 +463,7 @@ fn heavy_prefixes_rank_like_a_full_scan() {
         z.article(&w.replace(' ', "_"), &w, "<p>x</p>", c);
     }
     z.article("Te", "Te", "<p>x</p>", c).article("Tešín", "Tešín", "<p>x</p>", c);
+    z.article("!!!_(Tešín)", "!!! (Tešín)", "<p>x</p>", c); // normalises like "Tešín"
     z.redirect(b'C', "Tes", "Tes", b'C', "Test_0007");
     z.uuid = *b"heavy-prefix-zim";
     let zim = tmp_path("heavy.zim");
@@ -475,9 +476,10 @@ fn heavy_prefixes_rank_like_a_full_scan() {
     assert!(st.heavy_prefixes > 0, "{st:?}");
     b.attach_index_path(idx).unwrap();
     let titles = |q: &str, n: u32| b.suggest(q.into(), n).into_iter().map(|s| s.title).collect::<Vec<_>>();
-    assert_eq!(titles("t", 4), ["Te", "Tešín", "Test 0000", "Test 0001"], "articles first, shorter first");
-    assert_eq!(titles("te", 3), ["Te", "Tešín", "Test 0000"]);
-    assert_eq!(titles("tes", 3), ["Tes", "Tešín", "Test 0000"], "exact redirect first");
+    assert_eq!(titles("t", 4), ["Te", "Tešín", "!!! (Tešín)", "Test 0000"], "articles first, shorter first");
+    assert_eq!(titles("te", 3), ["Te", "Tešín", "!!! (Tešín)"], "same key: shorter written title first");
+    assert_eq!(titles("tesin", 2), ["Tešín", "!!! (Tešín)"]);
+    assert_eq!(titles("tes", 4), ["Tes", "Tešín", "!!! (Tešín)", "Test 0000"], "exact redirect first");
     assert_eq!(b.suggest("tes".into(), 1)[0].path, "Test_0007");
     assert_eq!(titles("test 1", 2), ["Test 1000", "Test 1001"]);
     assert_eq!(titles("test 2999", 5), ["Test 2999", "Okres Test 2999 Sever"]);

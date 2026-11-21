@@ -3,7 +3,8 @@
 //!
 //! Records are (display entry, target entry) pairs, one per article and one per
 //! redirect that ends at an article. Record ids are assigned in rank order
-//! (articles before redirects, shorter normalised titles first, then alphabetical), so
+//! (articles before redirects, shorter normalised titles first, then shorter titles as
+//! written, then alphabetical), so
 //! "best" always means "smallest id" and top-k is a min-selection.
 //!
 //! Two `fst` maps take normalised keys to their ordinal: the full title, and every word
@@ -427,6 +428,9 @@ pub fn build(a: &Archive, out: &mut dyn Write, progress: &mut dyn FnMut(&str)) -
     let mut arena = String::new();
     let mut spans: Vec<(u32, u32)> = Vec::with_capacity(n);
     let mut dirent_offs: Vec<u64> = Vec::with_capacity(n);
+    // Title length as written: breaks ties between titles that normalise alike
+    // ("Ostrava" before "!!! (Ostrava)").
+    let mut title_chars: Vec<u16> = Vec::with_capacity(n);
     let mut sc = DirentScanner::new(a);
     let mut done = 0u64;
     pointers(a, range.clone(), &mut |i, off| {
@@ -447,6 +451,7 @@ pub fn build(a: &Archive, out: &mut dyn Write, progress: &mut dyn FnMut(&str)) -
         let start = arena.len() as u32;
         arena.push_str(&norm);
         spans.push((start, norm.len() as u32));
+        title_chars.push(d.title().chars().count().min(u16::MAX as usize) as u16);
         done += 1;
         if done % 500_000 == 0 {
             progress(&format!("scanned {done}/{n} entries"));
@@ -502,9 +507,11 @@ pub fn build(a: &Archive, out: &mut dyn Write, progress: &mut dyn FnMut(&str)) -
             sub(&arena, s, l)
         };
         recs.sort_unstable_by(|x, y| {
-            (x.redirect, x.chars, key_of(x.display), x.display).cmp(&(
+            let tc = |r: &Rec| title_chars[(r.display - base) as usize];
+            (x.redirect, x.chars, tc(x), key_of(x.display), x.display).cmp(&(
                 y.redirect,
                 y.chars,
+                tc(y),
                 key_of(y.display),
                 y.display,
             ))
