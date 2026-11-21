@@ -1,0 +1,9 @@
+Offlinka číta USB kľúč Offlinka priamo v telefóne. Slovenská a česká Wikipédia s obrázkami, anglická Wikipédia, mapy Slovenska a Česka, núdzové príručky a hry. Všetko funguje bez internetu.
+
+USB kľúč zapojíte do konektora USB-C a raz ho vyberiete. Aplikácia si ho zapamätá. Nič sa nekopíruje do telefónu a na USB kľúči sa nič nemení.
+
+Hľadanie funguje aj bez mäkčeňov a dĺžňov. Články si môžete uložiť a vrátiť sa k nim v histórii. Veľkosť písma a tmavý režim nastavíte v aplikácii.
+
+Aplikácia nemá prístup na internet, nezbiera žiadne údaje a nemá účty ani reklamy.
+
+Potrebujete USB kľúč Offlinka (offlinka.sk) a iPhone alebo iPad s konektorom USB-C.

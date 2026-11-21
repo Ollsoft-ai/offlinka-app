@@ -1,0 +1,120 @@
+import XCTest
+@testable import Offlinka
+
+@MainActor
+final class UserStoreTests: XCTestCase {
+    private var directory: URL!
+    private var file: URL { directory.appendingPathComponent("user-data.json") }
+
+    override func setUp() async throws {
+        directory = FileManager.default.temporaryDirectory.appendingPathComponent("offlinka-store-\(UUID().uuidString)")
+    }
+
+    override func tearDown() async throws {
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    private func article(_ path: String, title: String? = nil, book: String = "wikipedia_cs_all") -> ArticleRef {
+        ArticleRef(bookName: book, path: path, title: title ?? path, date: Date(timeIntervalSinceReferenceDate: 1000))
+    }
+
+    func testSavedToggleAndPersistence() {
+        let store = UserStore(fileURL: file)
+        XCTAssertTrue(store.toggleSaved(article("Praha")))
+        XCTAssertTrue(store.isSaved(bookName: "wikipedia_cs_all", path: "Praha"))
+        XCTAssertFalse(store.isSaved(bookName: "wikipedia_sk_all", path: "Praha"))
+        store.toggleSaved(article("Sněžka"))
+        store.flush()
+
+        let reloaded = UserStore(fileURL: file)
+        XCTAssertEqual(reloaded.saved.map(\.path), ["Sněžka", "Praha"])
+
+        XCTAssertFalse(reloaded.toggleSaved(article("Praha")))
+        XCTAssertEqual(reloaded.saved.map(\.path), ["Sněžka"])
+    }
+
+    func testHistoryMovesRevisitsToTopAndSkipsUntitled() {
+        let store = UserStore(fileURL: nil)
+        store.recordVisit(article("Praha"))
+        store.recordVisit(article("Brno"))
+        store.recordVisit(article("Praha"))
+        store.recordVisit(article("I/obrazek.png", title: "  "))
+        XCTAssertEqual(store.history.map(\.path), ["Praha", "Brno"])
+    }
+
+    func testHistoryIsCapped() {
+        let store = UserStore(fileURL: nil)
+        for index in 0..<(UserStore.historyLimit + 20) {
+            store.recordVisit(article("A\(index)"))
+        }
+        XCTAssertEqual(store.history.count, UserStore.historyLimit)
+        XCTAssertEqual(store.history.first?.path, "A\(UserStore.historyLimit + 19)")
+    }
+
+    func testHistoryOffRecordsNothing() {
+        let store = UserStore(fileURL: nil)
+        store.settings.saveHistory = false
+        store.recordVisit(article("Praha"))
+        XCTAssertTrue(store.history.isEmpty)
+    }
+
+    func testRecentSearchesDedupeIgnoringCaseAndDiacritics() {
+        let store = UserStore(fileURL: nil)
+        store.addRecentSearch("Praha")
+        store.addRecentSearch("snezka")
+        store.addRecentSearch("  praha ")
+        store.addRecentSearch("")
+        XCTAssertEqual(store.recentSearches, ["praha", "snezka"])
+        for index in 0..<30 {
+            store.addRecentSearch("q\(index)")
+        }
+        XCTAssertEqual(store.recentSearches.count, UserStore.recentSearchLimit)
+        store.clearRecentSearches()
+        XCTAssertTrue(store.recentSearches.isEmpty)
+    }
+
+    func testSettingsRoundTrip() {
+        let store = UserStore(fileURL: file)
+        store.settings.language = .sk
+        store.settings.theme = .dark
+        store.settings.textScale = 1.3
+        store.flush()
+        let reloaded = UserStore(fileURL: file)
+        XCTAssertEqual(reloaded.settings.language, .sk)
+        XCTAssertEqual(reloaded.settings.theme, .dark)
+        XCTAssertEqual(reloaded.settings.textScale, 1.3)
+        XCTAssertTrue(reloaded.settings.saveHistory)
+    }
+
+    func testTextScaleSteps() {
+        var settings = AppSettings()
+        XCTAssertEqual(settings.steppedTextScale(1), 1.15)
+        XCTAssertEqual(settings.steppedTextScale(-1), 0.9)
+        settings.textScale = 1.6
+        XCTAssertEqual(settings.steppedTextScale(1), 1.6)
+        settings.textScale = 0.8
+        XCTAssertEqual(settings.steppedTextScale(-1), 0.8)
+        // A value from an older version snaps to the nearest step.
+        settings.textScale = 2.0
+        XCTAssertEqual(settings.steppedTextScale(-1), 1.45)
+    }
+
+    func testOlderOrPartialFileStillLoads() throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let json = #"{"saved":[{"bookName":"wikipedia_cs_all","path":"Praha","title":"Praha","date":1000}],"settings":{"theme":"dark"},"futureField":42}"#
+        try Data(json.utf8).write(to: file)
+        let store = UserStore(fileURL: file)
+        XCTAssertEqual(store.saved.map(\.path), ["Praha"])
+        XCTAssertEqual(store.settings.theme, .dark)
+        XCTAssertEqual(store.settings.language, .system)
+        XCTAssertTrue(store.history.isEmpty)
+    }
+
+    func testCorruptFileIsSetAsideNotFatal() throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data("{not json".utf8).write(to: file)
+        let store = UserStore(fileURL: file)
+        XCTAssertTrue(store.saved.isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: directory.appendingPathComponent("user-data.corrupt.json").path))
+    }
+}

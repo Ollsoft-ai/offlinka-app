@@ -1,0 +1,1 @@
+The app reads ZIM files from the Offlinka USB-C flash drive picked in the Files folder picker. A test drive or a folder with the ZIM files (Knihovna/*.zim) is needed to see content; details are provided with each submission.

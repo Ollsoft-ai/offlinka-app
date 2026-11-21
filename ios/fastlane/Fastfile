@@ -1,0 +1,89 @@
+# Offlinka iOS lanes. Run from ios/:  bundle exec fastlane <lane>   (or plain `fastlane <lane>`)
+#
+#   test     build the Rust core if needed, generate the project, run unit + UI tests
+#   beta     archive and upload to TestFlight (build number = latest TestFlight + 1)
+#   release  archive, upload, and push metadata from fastlane/metadata (no auto-submit)
+#
+# Secrets never live in this repo: see Appfile for the environment variables.
+
+default_platform(:ios)
+
+PROJECT = "Offlinka.xcodeproj"
+SCHEME = "Offlinka"
+
+# App Store Connect API key from the environment, or nil (then fastlane asks for an Apple ID login).
+def asc_api_key
+  return nil unless ENV["ASC_KEY_ID"] && ENV["ASC_ISSUER_ID"] && ENV["ASC_KEY_PATH"]
+  app_store_connect_api_key(
+    key_id: ENV["ASC_KEY_ID"],
+    issuer_id: ENV["ASC_ISSUER_ID"],
+    key_filepath: ENV["ASC_KEY_PATH"]
+  )
+end
+
+platform :ios do
+  desc "Build the Rust core XCFramework when missing and generate the Xcode project"
+  private_lane :prepare do
+    # Fastfile code and `sh` run inside ios/fastlane, so ".." is ios/ and "../.." the repo root.
+    unless File.directory?("../Frameworks/OfflinkaCore.xcframework")
+      sh("cd ../.. && scripts/build-ios-core.sh")
+    end
+    sh("cd .. && xcodegen generate")
+  end
+
+  desc "Unit and UI tests on a simulator"
+  lane :test do
+    prepare
+    run_tests(
+      project: PROJECT,
+      scheme: SCHEME,
+      devices: [ENV.fetch("OFFLINKA_TEST_DEVICE", "iPhone 15")],
+      clean: true,
+      code_coverage: true,
+      result_bundle: true,
+      output_directory: "fastlane/test_output"
+    )
+  end
+
+  desc "Archive and upload a build to TestFlight"
+  lane :beta do
+    prepare
+    api_key = asc_api_key
+    previous = latest_testflight_build_number(api_key: api_key, app_identifier: "cz.offlinka.app", initial_build_number: 0)
+    increment_build_number(xcodeproj: PROJECT, build_number: previous + 1)
+    build_app(
+      project: PROJECT,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "build",
+      clean: true
+    )
+    upload_to_testflight(api_key: api_key, skip_waiting_for_build_processing: true)
+  end
+
+  desc "Archive, upload and update the App Store listing (submit for review by hand)"
+  lane :release do
+    prepare
+    api_key = asc_api_key
+    previous = latest_testflight_build_number(api_key: api_key, app_identifier: "cz.offlinka.app", initial_build_number: 0)
+    increment_build_number(xcodeproj: PROJECT, build_number: previous + 1)
+    build_app(
+      project: PROJECT,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "build",
+      clean: true
+    )
+    upload_to_app_store(
+      api_key: api_key,
+      metadata_path: "./fastlane/metadata",
+      skip_screenshots: true,
+      submit_for_review: false,
+      automatic_release: false,
+      force: true,
+      precheck_include_in_app_purchases: false
+    )
+  end
+end

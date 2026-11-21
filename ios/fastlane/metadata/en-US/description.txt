@@ -1,0 +1,9 @@
+Offlinka reads the Offlinka USB-C drive right on your phone: Czech and Slovak Wikipedia with pictures, English Wikipedia, maps of Czechia and Slovakia, emergency guides and games. Everything works without the internet.
+
+Plug the drive into the USB-C port and select it once. The app remembers it. Nothing is copied to the phone and nothing on the drive changes.
+
+Search works without accents. Save articles and find them again in the history. Set the text size and dark mode in the app.
+
+The app has no internet access, collects no data, and has no accounts or ads.
+
+You need an Offlinka drive (offlinka.cz) and an iPhone or iPad with a USB-C port.

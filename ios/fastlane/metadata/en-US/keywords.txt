@@ -1,0 +1,1 @@
+wikipedia,offline,no internet,usb drive,maps,first aid,encyclopedia,dictionary,usb-c

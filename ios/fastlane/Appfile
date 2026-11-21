@@ -1,0 +1,8 @@
+# Offlinka iOS: fastlane app settings. No secrets here.
+# Apple ID / team ids come from the environment of the machine that runs fastlane:
+#   FASTLANE_APPLE_ID, FASTLANE_TEAM_ID, FASTLANE_ITC_TEAM_ID
+# App Store Connect API key (preferred for CI): ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH (.p8 file outside the repo).
+app_identifier("cz.offlinka.app")
+apple_id(ENV["FASTLANE_APPLE_ID"]) if ENV["FASTLANE_APPLE_ID"]
+team_id(ENV["FASTLANE_TEAM_ID"]) if ENV["FASTLANE_TEAM_ID"]
+itc_team_id(ENV["FASTLANE_ITC_TEAM_ID"]) if ENV["FASTLANE_ITC_TEAM_ID"]
