@@ -183,6 +183,7 @@ jobs:
           name: debug-apk
           path: ${{ runner.temp }}/apk
 
+      # Gradle (JDK, SDK) and the core's .so files are only needed for connectedDebugAndroidTest.
       - name: androidTest sources?
         id: android-test
         run: |
@@ -202,7 +203,7 @@ jobs:
           name: jniLibs
           path: android/app/src/main/jniLibs
 
-      - name: Emulator smoke test
+      - name: Emulator tests (adb smoke + instrumented)
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: ${{ matrix.api }}
@@ -213,10 +214,8 @@ jobs:
           disk-size: 6G
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: >-
-            bash scripts/ci/emulator-smoke.sh "$RUNNER_TEMP/apk" "$RUNNER_TEMP/emulator"
-            && if [ "${{ steps.android-test.outputs.present }}" = true ]; then
-            cd android && ./gradlew --no-daemon connectedDebugAndroidTest; fi
+          # adb smoke test, then connectedDebugAndroidTest when there are androidTest sources (both always run).
+          script: bash scripts/ci/emulator-tests.sh "$RUNNER_TEMP/apk" "$RUNNER_TEMP/emulator"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
