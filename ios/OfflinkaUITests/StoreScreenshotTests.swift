@@ -50,13 +50,14 @@ final class StoreScreenshotTests: XCTestCase {
         let field = app.textFields["search.field"]
         XCTAssertTrue(field.waitForExistence(timeout: 10), "[\(loc)] search did not open")
         field.typeText("cesky krumlov")   // not return: that opens the top hit
+        dismissKeyboardTip(app)
         let hit = app.buttons["search.hit"].firstMatch
         XCTAssertTrue(hit.waitForExistence(timeout: 10), "[\(loc)] no search result")
         dismissKeyboard()
         try capture("ScreensTest_search[\(loc)-light]")
 
         hit.tap()
-        XCTAssertTrue(app.webViews.firstMatch.staticTexts.firstMatch.waitForExistence(timeout: 15), "[\(loc)] article did not load")
+        XCTAssertTrue(app.webViews.firstMatch.staticTexts.firstMatch.waitForExistence(timeout: 60), "[\(loc)] article did not load")
         try capture("ScreensTest_reader[\(loc)-light]")
 
         // The map.
@@ -64,7 +65,7 @@ final class StoreScreenshotTests: XCTestCase {
         let map = tile("maps_")
         XCTAssertTrue(map.waitForExistence(timeout: 10), "[\(loc)] no map tile")
         map.tap()
-        XCTAssertTrue(app.buttons["reader.back"].firstMatch.waitForExistence(timeout: 15), "[\(loc)] map did not open")
+        XCTAssertTrue(app.buttons["reader.back"].firstMatch.waitForExistence(timeout: 60), "[\(loc)] map did not open")
         try capture("ScreenStatesTest_readerMap[\(loc)-light]")
 
         // First aid from the guides.
@@ -72,7 +73,7 @@ final class StoreScreenshotTests: XCTestCase {
         let firstAid = app.buttons["home.firstAid"]
         XCTAssertTrue(firstAid.waitForExistence(timeout: 10), "[\(loc)] no first-aid link")
         firstAid.tap()
-        XCTAssertTrue(app.webViews.firstMatch.staticTexts.firstMatch.waitForExistence(timeout: 15), "[\(loc)] guide did not load")
+        XCTAssertTrue(app.webViews.firstMatch.staticTexts.firstMatch.waitForExistence(timeout: 60), "[\(loc)] guide did not load")
         try capture("ScreenStatesTest_readerGuides[\(loc)-light]")
 
         // Library.
@@ -89,7 +90,7 @@ final class StoreScreenshotTests: XCTestCase {
         let wikipedia = tile("wikipedia_\(loc == "sk" ? "sk" : "cs")_all")
         XCTAssertTrue(wikipedia.waitForExistence(timeout: 10), "[\(loc)] no Wikipedia tile")
         wikipedia.tap()
-        XCTAssertTrue(app.webViews.firstMatch.staticTexts.firstMatch.waitForExistence(timeout: 15), "[\(loc)] dark article did not load")
+        XCTAssertTrue(app.webViews.firstMatch.staticTexts.firstMatch.waitForExistence(timeout: 60), "[\(loc)] dark article did not load")
         try capture("ScreensTest_reader[\(loc)-dark]")
     }
 
@@ -98,7 +99,7 @@ final class StoreScreenshotTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["-demo-drive", "-demo-language", language, "-demo-theme", theme]
         app.launch()
-        XCTAssertTrue(app.buttons["home.search"].waitForExistence(timeout: 20), "[\(language)] home did not appear")
+        XCTAssertTrue(app.buttons["home.search"].waitForExistence(timeout: 30), "[\(language)] home did not appear")
     }
 
     private func tile(_ prefix: String) -> XCUIElement {

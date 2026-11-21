@@ -155,6 +155,7 @@ private struct DriveCard: View {
         .padding(EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 14))
         .background(RoundedRectangle(cornerRadius: BrandRadius.m, style: .continuous).fill(Color.brandHero))
         .overlay(RoundedRectangle(cornerRadius: BrandRadius.m, style: .continuous).strokeBorder(Color.brandOutline, lineWidth: BrandSize.outline))
+        .compositingGroup()
         .hardShadow(BrandElevation.card)
         .accessibilityElement(children: .combine)
     }
@@ -394,12 +395,16 @@ struct BookDetailView: View {
     }
 }
 
+#if DEBUG
 #Preview("Knihovna") {
     NavigationStack { LibraryView() }
         .environment(AppModel.preview())
 }
+#endif
 
+#if DEBUG
 #Preview("Detail knihy") {
     NavigationStack { BookDetailView(bookId: FakeContentSource.demoWikipediaId) }
         .environment(AppModel.preview())
 }
+#endif

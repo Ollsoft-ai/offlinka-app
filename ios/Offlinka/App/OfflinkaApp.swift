@@ -153,7 +153,9 @@ struct RouteView: View {
     }
 }
 
+#if DEBUG
 #Preview("Aplikace (EN)") {
     RootView()
         .environment(AppModel.preview(language: .en))
 }
+#endif

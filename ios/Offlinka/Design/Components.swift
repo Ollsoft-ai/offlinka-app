@@ -58,6 +58,7 @@ struct CardModifier: ViewModifier {
                 RoundedRectangle(cornerRadius: BrandRadius.m, style: .continuous)
                     .strokeBorder(Color.brandOutline, lineWidth: BrandSize.outline)
             )
+            .compositingGroup()
             .hardShadow(shadow ? BrandElevation.card : BrandShadow(x: 0, y: 0, color: .clear))
     }
 }
@@ -303,6 +304,7 @@ struct ToastView: View {
         .padding(.horizontal, BrandSpace.l)
         .frame(minHeight: 52)
         .background(RoundedRectangle(cornerRadius: BrandRadius.m, style: .continuous).fill(Color.brandHeroDeep))
+        .compositingGroup()
         .hardShadow(BrandElevation.raised)
         .padding(.horizontal, BrandSize.gutter)
         .padding(.bottom, 104)

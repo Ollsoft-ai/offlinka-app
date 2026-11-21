@@ -124,6 +124,7 @@ final class ReaderModel {
     // MARK: - Actions
 
     func open(_ target: ReaderTarget) {
+        DebugLog.note("reader open \(target.bookId)/\(target.path ?? "")")
         guard let url = OfflinkaURL.make(bookId: target.bookId, path: target.path ?? "") else { return }
         webView.load(URLRequest(url: url))
     }
@@ -307,8 +308,29 @@ final class ReaderWebCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         MainActor.assumeIsolated {
+            DebugLog.note("reader finished \(webView.url?.absoluteString ?? "-")")
             model?.didFinishNavigation()
         }
+    }
+
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        MainActor.assumeIsolated {
+            DebugLog.note("reader provisional \(webView.url?.absoluteString ?? "-")")
+        }
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        MainActor.assumeIsolated {
+            DebugLog.note("reader committed \(webView.url?.absoluteString ?? "-")")
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        DebugLog.note("reader failed \(error.localizedDescription)")
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        DebugLog.note("reader failed provisional \(error.localizedDescription)")
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {

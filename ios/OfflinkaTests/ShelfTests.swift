@@ -271,6 +271,8 @@ final class ShelfTests: XCTestCase {
     func testAReadErrorOnOneBookFailsOnlyThatBookWhileTheDriveIsThere() async throws {
         let list = books(indexed: false)
         let engine = engine(list)
+        // Guides and the Czech Wikipedia are built first: time to break the Slovak one before its turn.
+        engine.setBuildDelay(0.4)
         let shelf = shelf(engine, indexes: true)
         var failures = 0
         shelf.onDriveFailure = { failures += 1 }

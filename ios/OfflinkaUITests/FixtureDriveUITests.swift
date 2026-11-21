@@ -19,7 +19,7 @@ final class FixtureDriveUITests: XCTestCase {
 
     func testConnectSearchFirstAidAndBack() throws {
         let connect = app.buttons["connect.pick"]
-        XCTAssertTrue(connect.waitForExistence(timeout: 20), "connect screen did not appear")
+        XCTAssertTrue(connect.waitForExistence(timeout: 30), "connect screen did not appear")
         keepScreenshot("fixture-1-connect")
         connect.tap()
 
@@ -33,13 +33,17 @@ final class FixtureDriveUITests: XCTestCase {
         let field = app.textFields["search.field"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.typeText("prvni pomoc")
+        dismissKeyboardTip(app)
         let hit = app.buttons["search.hit"].firstMatch
         XCTAssertTrue(hit.waitForExistence(timeout: 30), "no search result for „prvni pomoc“")
         keepScreenshot("fixture-3-search")
         hit.tap()
 
+        // The first page of a launch starts WebKit's processes: slow on a cold CI simulator.
+        let opened = Date()
         let heading = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "První pomoc")).firstMatch
-        XCTAssertTrue(heading.waitForExistence(timeout: 20), "the article did not load from the ZIM")
+        XCTAssertTrue(heading.waitForExistence(timeout: 90), "the article did not load from the ZIM")
+        XCTContext.runActivity(named: String(format: "article shown after %.1f s", Date().timeIntervalSince(opened))) { _ in }
         keepScreenshot("fixture-4-article")
 
         app.buttons["reader.back"].firstMatch.tap()
@@ -50,6 +54,14 @@ final class FixtureDriveUITests: XCTestCase {
 }
 
 extension XCTestCase {
+    /// The simulator's one-time keyboard tip („Speed up your typing…“) covers half the screen.
+    func dismissKeyboardTip(_ app: XCUIApplication) {
+        let next = app.buttons["Continue"]
+        if next.waitForExistence(timeout: 1) {
+            next.tap()
+        }
+    }
+
     /// A full-resolution PNG screenshot kept in the result bundle under `name` (also when the test passes).
     func keepScreenshot(_ name: String) {
         let png = XCUIScreen.main.screenshot().pngRepresentation

@@ -246,7 +246,9 @@ private struct HitRow: View {
     }
 }
 
+#if DEBUG
 #Preview("Hledání") {
     NavigationStack { SearchView(source: FakeContentSource.demo(), scopeBookId: nil) }
         .environment(AppModel.preview())
 }
+#endif

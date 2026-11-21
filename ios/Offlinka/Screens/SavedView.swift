@@ -206,7 +206,9 @@ private struct ArticleRow<Trailing: View>: View {
     }
 }
 
+#if DEBUG
 #Preview("Uložené") {
     NavigationStack { SavedView() }
         .environment(AppModel.preview())
 }
+#endif

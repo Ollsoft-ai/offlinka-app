@@ -105,6 +105,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # A simulator's first boot takes minutes on these runners: start it now, it boots during the build.
+      - name: Boot simulator
+        id: sim
+        run: |
+          udid=$(ios/tools/pick-simulator.py "iPhone 17")
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          (xcrun simctl boot "$udid" >/dev/null 2>&1 &)
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ios-core
@@ -131,13 +139,6 @@ jobs:
           mkdir -p "$RUNNER_TEMP/fixture-drive/OFFLINKA/Knihovna"
           cp android/app/src/main/assets/offlinka_cs_prirucky.zim "$RUNNER_TEMP/fixture-drive/OFFLINKA/Knihovna/"
 
-      - name: Simulator
-        id: sim
-        run: |
-          udid=$(ios/tools/pick-simulator.py "iPhone 17")
-          echo "udid=$udid" >> "$GITHUB_OUTPUT"
-          ios/tools/sim-prepare.sh "$udid"
-
       - name: Build (app + tests)
         env:
           UDID: ${{ steps.sim.outputs.udid }}
@@ -152,14 +153,21 @@ jobs:
           TEST_RUNNER_OFFLINKA_FIXTURE_DRIVE: ${{ runner.temp }}/fixture-drive/OFFLINKA
         run: |
           set -o pipefail
+          ios/tools/sim-prepare.sh "$UDID"
           xcodebuild test-without-building -project "$PROJECT" -scheme "$SCHEME" -configuration Debug \
             -destination "id=$UDID" -derivedDataPath build/dd \
             -parallel-testing-enabled NO -resultBundlePath build/Offlinka.xcresult | xcbeautify --renderer github-actions
 
-      - name: Export screenshots
+      - name: Export screenshots and app log
         if: always()
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
         run: |
           [ -d build/Offlinka.xcresult ] && ios/tools/export-shots.py build/Offlinka.xcresult build/screenshots || true
+          mkdir -p build/screenshots
+          xcrun simctl spawn "$UDID" log show --last 60m --style compact \
+            --predicate 'subsystem == "cz.offlinka.app"' > build/screenshots/app-log.txt 2>&1 || true
+          tail -n 80 build/screenshots/app-log.txt || true
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
@@ -177,10 +185,20 @@ jobs:
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.store_shots)
     runs-on: macos-26
     timeout-minutes: 90
+    env:
+      # Store sizes: 6.9" 1320x2868, 6.3" 1206x2622, iPad 13" 2064x2752.
+      SHOT_DEVICES: "iPhone 17 Pro Max:iphone-69|iPhone 17 Pro:iphone-63|iPad Pro 13-inch (M5):ipad-13"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Boot simulators
+        run: |
+          IFS='|'; for pair in $SHOT_DEVICES; do
+            udid=$(ios/tools/pick-simulator.py "${pair%%:*}")
+            (xcrun simctl boot "$udid" >/dev/null 2>&1 &)
+          done
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ios-core
@@ -204,7 +222,6 @@ jobs:
           xcodebuild build-for-testing -project "$PROJECT" -scheme "$SCHEME" -configuration Debug \
             -destination "generic/platform=iOS Simulator" -derivedDataPath build/dd | xcbeautify --renderer github-actions
 
-      # Store sizes: 6.9" 1320x2868 (iPhone 17 Pro Max), 6.3" 1206x2622 (iPhone 17 Pro), iPad 13" 2064x2752.
       - name: Capture
         env:
           TEST_RUNNER_OFFLINKA_STORE_SHOTS: "1"
@@ -212,7 +229,8 @@ jobs:
         run: |
           set -o pipefail
           status=0
-          for pair in "iPhone 17 Pro Max:iphone-69" "iPhone 17 Pro:iphone-63" "iPad Pro 13-inch (M5):ipad-13"; do
+          IFS='|' read -r -a pairs <<< "$SHOT_DEVICES"
+          for pair in "${pairs[@]}"; do
             device="${pair%%:*}"; folder="${pair##*:}"
             udid=$(ios/tools/pick-simulator.py "$device")
             ios/tools/sim-prepare.sh "$udid"

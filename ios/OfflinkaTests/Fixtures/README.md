@@ -1,3 +1,6 @@
 # Test fixtures
 
-Copy small real ZIMs here to run `CoreContentSourceTests` against the Rust core (they are git-ignored): `offlinka_cs_prirucky.zim` and `offlinka_mul_hry.zim` from `/srv/offlinka/drive/release/<edition>/files/Knihovna/`. Without them those tests are skipped. This folder is copied into the test bundle as `Fixtures/`.
+Real ZIMs for `CoreEngineTests` (git-ignored; without them those tests are skipped). This folder is copied into the test bundle as `Fixtures/`.
+
+- `offlinka_cs_prirucky.zim`: copy `android/app/src/main/assets/offlinka_cs_prirucky.zim` (CI does).
+- Or point `OFFLINKA_FIXTURES` at a folder holding it, e.g. `/srv/offlinka/drive/release/<edition>/files/Knihovna/`.

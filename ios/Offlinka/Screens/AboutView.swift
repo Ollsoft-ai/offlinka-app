@@ -214,7 +214,9 @@ private struct NoticesView: View {
     }
 }
 
+#if DEBUG
 #Preview("O aplikaci") {
     NavigationStack { AboutView() }
         .environment(AppModel.preview())
 }
+#endif

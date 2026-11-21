@@ -15,7 +15,7 @@ final class SmokeUITests: XCTestCase {
 
     func testSearchOpenSaveAndBrowse() throws {
         let search = app.buttons["home.search"]
-        XCTAssertTrue(search.waitForExistence(timeout: 10), "home screen did not appear")
+        XCTAssertTrue(search.waitForExistence(timeout: 30), "home screen did not appear")
         XCTAssertTrue(app.buttons["tile.wikipedia_cs_all"].exists)
         keepScreenshot("demo-home")
 
@@ -23,12 +23,13 @@ final class SmokeUITests: XCTestCase {
         let field = app.textFields["search.field"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.typeText("cesky krumlov")
+        dismissKeyboardTip(app)
         let hit = app.buttons["search.hit"].firstMatch
         XCTAssertTrue(hit.waitForExistence(timeout: 5), "no search result")
         hit.tap()
 
         let article = app.webViews.staticTexts["Město na Vltavě se zámkem."]
-        XCTAssertTrue(article.waitForExistence(timeout: 10), "article did not load from the scheme handler")
+        XCTAssertTrue(article.waitForExistence(timeout: 60), "article did not load from the scheme handler")
 
         app.buttons["reader.save"].tap()
         // „Zpět“ is never disabled: with no page history it returns to Search, query kept.
@@ -43,14 +44,19 @@ final class SmokeUITests: XCTestCase {
         XCTAssertTrue(element(containing: "Česká Wikipedie").waitForExistence(timeout: 5))
 
         app.tabBars.buttons["Nastavení"].tap()
-        XCTAssertTrue(app.buttons["settings.about"].waitForExistence(timeout: 5))
+        // „O aplikaci“ is the last row: lists create rows only when they scroll into view.
+        let about = app.descendants(matching: .any)["settings.about"].firstMatch
+        for _ in 0..<4 where !about.waitForExistence(timeout: 2) {
+            app.swipeUp()
+        }
+        XCTAssertTrue(about.exists, "no About row in Settings")
     }
 
     func testFirstAidQuickLink() throws {
-        let firstAid = app.buttons["První pomoc"]
-        XCTAssertTrue(firstAid.waitForExistence(timeout: 10))
+        let firstAid = app.buttons["home.firstAid"]
+        XCTAssertTrue(firstAid.waitForExistence(timeout: 30))
         firstAid.tap()
-        XCTAssertTrue(app.webViews.staticTexts["Volejte 155 nebo 112."].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.webViews.staticTexts["Volejte 155 nebo 112."].waitForExistence(timeout: 60))
     }
 
     func testSlovakUILeadsWithTheSlovakWikipedia() throws {
@@ -58,17 +64,17 @@ final class SmokeUITests: XCTestCase {
         app.launchArguments = ["-demo-drive", "-demo-language", "sk"]
         app.launch()
         let tile = app.buttons["tile.wikipedia_sk_all"]
-        XCTAssertTrue(tile.waitForExistence(timeout: 10))
+        XCTAssertTrue(tile.waitForExistence(timeout: 30))
         let czech = app.buttons["tile.wikipedia_cs_all"]
         XCTAssertTrue(czech.waitForExistence(timeout: 10))
         XCTAssertLessThan(tile.frame.minY, czech.frame.minY, "the UI-language Wikipedia is the first, wide tile")
     }
 
     func testExternalLinkShowsOfflineNotice() throws {
-        XCTAssertTrue(app.buttons["tile.wikipedia_cs_all"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["tile.wikipedia_cs_all"].waitForExistence(timeout: 30))
         app.buttons["tile.wikipedia_cs_all"].tap()
         let praha = app.webViews.links["Praha"]
-        XCTAssertTrue(praha.waitForExistence(timeout: 10))
+        XCTAssertTrue(praha.waitForExistence(timeout: 60), "the main page did not load")
         praha.tap()
         let external = app.webViews.links["Oficiální web"]
         XCTAssertTrue(external.waitForExistence(timeout: 10))

@@ -478,7 +478,9 @@ final class Shelf {
                 if isPrimaryWikipedia(target.record) {
                     indexing = IndexProgress(bookId: target.record.id, fraction: 0)
                 }
+                let buildStart = DispatchTime.now().uptimeNanoseconds
                 let outcome = await build(target.book, to: file, bookId: target.record.id, gen: gen)
+                DebugLog.note("index \(target.record.id): \(outcome) in \(DebugLog.ms(since: buildStart)) ms")
                 buildingBookId = nil
                 switch outcome {
                 case .built:

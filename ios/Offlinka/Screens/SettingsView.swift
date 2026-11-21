@@ -119,7 +119,9 @@ struct SettingsView: View {
     }
 }
 
+#if DEBUG
 #Preview("Nastavení") {
     NavigationStack { SettingsView() }
         .environment(AppModel.preview())
 }
+#endif

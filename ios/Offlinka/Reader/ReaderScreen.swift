@@ -95,6 +95,7 @@ private struct ReaderContent: View {
                         .frame(minHeight: BrandSize.buttonSmall)
                         .background(Capsule().fill(Color.brandSurface))
                         .overlay(Capsule().strokeBorder(Color.brandOutline, lineWidth: BrandSize.outline))
+                        .compositingGroup()
                         .hardShadow(BrandElevation.card)
                     }
                     .buttonStyle(.plain)

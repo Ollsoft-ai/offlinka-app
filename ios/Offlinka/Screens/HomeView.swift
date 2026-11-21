@@ -42,14 +42,7 @@ struct HomeView: View {
             .frame(maxWidth: .infinity)
         }
         .background(Color.brandBg.ignoresSafeArea())
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Wordmark(size: 26)
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                offlineBadge
-            }
-        }
+        .modifier(HeroToolbar(leading: Wordmark(size: 26), trailing: offlineBadge))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.brandHero, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
@@ -89,6 +82,7 @@ struct HomeView: View {
                 .frame(minHeight: BrandSize.searchField)
                 .background(RoundedRectangle(cornerRadius: BrandRadius.m, style: .continuous).fill(Color.brandSurface))
                 .overlay(RoundedRectangle(cornerRadius: BrandRadius.m, style: .continuous).strokeBorder(Color.brandOutline, lineWidth: BrandSize.outline))
+                .compositingGroup()
                 .hardShadow(BrandElevation.raised)
             }
             .buttonStyle(.plain)
@@ -375,7 +369,32 @@ struct ContinueCard: View {
     }
 }
 
+#if DEBUG
 #Preview("Domů") {
     NavigationStack { HomeView() }
         .environment(AppModel.preview())
+}
+#endif
+
+/// The logo and the offline badge in Home's dark bar. On iOS 26 the bar would put each item in a
+/// glass bubble (the logo cut to a circle): they sit on the hero colour without one.
+private struct HeroToolbar<Leading: View, Trailing: View>: ViewModifier {
+    let leading: Leading
+    let trailing: Trailing
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.toolbar {
+                ToolbarItem(placement: .topBarLeading) { leading }
+                    .sharedBackgroundVisibility(.hidden)
+                ToolbarItem(placement: .topBarTrailing) { trailing }
+                    .sharedBackgroundVisibility(.hidden)
+            }
+        } else {
+            content.toolbar {
+                ToolbarItem(placement: .topBarLeading) { leading }
+                ToolbarItem(placement: .topBarTrailing) { trailing }
+            }
+        }
+    }
 }

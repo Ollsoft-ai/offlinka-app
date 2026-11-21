@@ -27,7 +27,8 @@ final class LocalizationTests: XCTestCase {
         XCTAssertEqual(tr(.settingsDriveConnected, "OFFLINKA"), "Zapojená: OFFLINKA")
 
         L10n.apply(.sk)
-        XCTAssertEqual(tr(.connectTitle), "Zapojte USB kľúč Offlinka")
+        // design keeps short words with the next one (non-breaking spaces)
+        XCTAssertEqual(tr(.connectTitle).replacingOccurrences(of: "\u{00A0}", with: " "), "Zapojte USB kľúč Offlinka")
 
         L10n.apply(.en)
         XCTAssertEqual(tr(.libraryBooksCount, 1), "1 book")

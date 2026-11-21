@@ -379,17 +379,23 @@ struct DriveIllustration: View {
     }
 }
 
+#if DEBUG
 #Preview("Zapojte flashku") {
     ConnectView(problem: nil)
         .environment(AppModel.preview(phase: .connect(problem: nil)))
 }
+#endif
 
+#if DEBUG
 #Preview("Špatná složka") {
     ConnectView(problem: .wrongFolder)
         .environment(AppModel.preview(phase: .connect(problem: .wrongFolder)))
 }
+#endif
 
+#if DEBUG
 #Preview("Odpojeno") {
     UnpluggedView()
         .environment(AppModel.preview(phase: .unplugged))
 }
+#endif

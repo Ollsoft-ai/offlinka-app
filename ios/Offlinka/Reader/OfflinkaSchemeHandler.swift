@@ -3,10 +3,13 @@ import WebKit
 
 /// Serves `offlinka://<bookId>/<path>` to WKWebView from the content source.
 ///
-/// WebKit calls `start`/`stop` on the main thread. The core read runs off the main thread and the
-/// reply is delivered back on the main thread, unless WebKit stopped the task meanwhile (calling
-/// a stopped task raises an exception, so every task is tracked by a token).
+/// WebKit calls `start`/`stop` on the main thread. The core read runs on `reads` (blocking reads from
+/// a slow drive must not hold Swift's cooperative threads) and the reply is delivered back on the
+/// main thread, unless WebKit stopped the task meanwhile (calling a stopped task raises an
+/// exception, so every task is tracked by a token).
 final class OfflinkaSchemeHandler: NSObject, WKURLSchemeHandler {
+    private static let reads = DispatchQueue(label: "cz.offlinka.reader-reads", qos: .userInitiated, attributes: .concurrent)
+
     private let source: ContentSource
     private let assets: AppAssets
     /// Texts of the small error pages. Main thread only; refreshed when the language changes.
@@ -40,10 +43,16 @@ final class OfflinkaSchemeHandler: NSObject, WKURLSchemeHandler {
 
             let request = SchemeRequest(url: url, headers: urlSchemeTask.request.allHTTPHeaderFields ?? [:])
             let responder = SchemeResponder(source: source, assets: assets, texts: texts, readerHead: readerHead)
-            Task.detached(priority: .userInitiated) { [weak self] in
+            let started = DispatchTime.now().uptimeNanoseconds
+            DebugLog.note("scheme #\(token) start \(url.absoluteString)")
+            Self.reads.async { [weak self] in
                 let reply = responder.reply(to: request)
-                guard let handler = self else { return }
-                await handler.deliver(reply, url: url, token: token)
+                DebugLog.note("scheme #\(token) read \(reply.statusCode) \(reply.body.count) B in \(DebugLog.ms(since: started)) ms")
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        self?.deliver(reply, url: url, token: token)
+                    }
+                }
             }
         }
     }
@@ -52,6 +61,7 @@ final class OfflinkaSchemeHandler: NSObject, WKURLSchemeHandler {
         MainActor.assumeIsolated {
             if let token = tokens.removeValue(forKey: ObjectIdentifier(urlSchemeTask as AnyObject)) {
                 tasks.removeValue(forKey: token)
+                DebugLog.note("scheme #\(token) stopped by WebKit")
             }
         }
     }

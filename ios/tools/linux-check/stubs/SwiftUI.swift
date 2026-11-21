@@ -61,6 +61,13 @@ public struct EnvironmentValues {
     public var locale: Locale { get { .current } set {} }
     public var dynamicTypeSize: DynamicTypeSize { .large }
     public var verticalSizeClass: UserInterfaceSizeClass? { nil }
+    public var openURL: OpenURLAction { OpenURLAction() }
+}
+public struct OpenURLAction { public func callAsFunction(_ url: URL) {} }
+public struct _ToolbarMod<C: ToolbarContent>: ToolbarContent {}
+extension ToolbarContent {
+    @available(iOS 26.0, macOS 26.0, *)
+    public func sharedBackgroundVisibility(_ v: Visibility) -> some ToolbarContent { _ToolbarMod<Self>() }
 }
 public enum DynamicTypeSize: Comparable, Sendable { case xSmall, small, medium, large, xLarge, xxLarge, xxxLarge, accessibility1 }
 public enum VerticalEdge: Sendable { case top, bottom }
@@ -278,6 +285,7 @@ extension View {
     public func opacity(_ o: Double) -> some View { _Mod<Self>() }
     public func offset(x: CGFloat = 0, y: CGFloat = 0) -> some View { _Mod<Self>() }
     public func shadow(color: Color = .clear, radius: CGFloat, x: CGFloat = 0, y: CGFloat = 0) -> some View { _Mod<Self>() }
+    public func compositingGroup() -> some View { _Mod<Self>() }
     public func tint(_ c: Color?) -> some View { _Mod<Self>() }
     public func disabled(_ d: Bool) -> some View { _Mod<Self>() }
     public func contentShape<S: Shape>(_ s: S) -> some View { _Mod<Self>() }
