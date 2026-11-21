@@ -279,6 +279,7 @@ extension View {
     public func lineLimit(_ n: Int?) -> some View { _Mod<Self>() }
     public func multilineTextAlignment(_ a: TextAlignment) -> some View { _Mod<Self>() }
     public func fixedSize(horizontal: Bool, vertical: Bool) -> some View { _Mod<Self>() }
+    public func fixedSize() -> some View { _Mod<Self>() }
     public func textCase(_ c: TextCase?) -> some View { _Mod<Self>() }
     public func monospacedDigit() -> some View { _Mod<Self>() }
     public func scaledToFit() -> some View { _Mod<Self>() }

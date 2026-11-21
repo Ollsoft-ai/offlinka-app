@@ -286,11 +286,7 @@ struct HeroScreen<Hero: View, Content: View, Bottom: View>: View {
                     .background(Color.brandBg.ignoresSafeArea(edges: .bottom))
                     .overlay(alignment: .top) { Rectangle().fill(Color.brandLineSoft).frame(height: 1) }
             }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Wordmark(size: 26)
-                }
-            }
+            .heroToolbar(trailing: EmptyView())
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Color.brandHero, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)

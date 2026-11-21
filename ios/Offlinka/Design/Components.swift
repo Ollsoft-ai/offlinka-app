@@ -179,8 +179,38 @@ struct Wordmark: View {
                 .font(.custom("ArchivoExpanded-ExtraBold", size: size, relativeTo: .headline))
                 .foregroundStyle(onDark ? Color.brandOnHero : Color.brandInk)
         }
+        .fixedSize()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(tr(.cdLogo))
+    }
+}
+
+/// The logo (and an item on the right) in the dark bar of Home and the connect screens. On iOS 26 the
+/// bar would put each item in a glass bubble and squeeze the logo to a circle: they sit on the hero
+/// colour without one.
+struct HeroToolbar<Trailing: View>: ViewModifier {
+    let trailing: Trailing
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.toolbar {
+                ToolbarItem(placement: .topBarLeading) { Wordmark(size: 26) }
+                    .sharedBackgroundVisibility(.hidden)
+                ToolbarItem(placement: .topBarTrailing) { trailing }
+                    .sharedBackgroundVisibility(.hidden)
+            }
+        } else {
+            content.toolbar {
+                ToolbarItem(placement: .topBarLeading) { Wordmark(size: 26) }
+                ToolbarItem(placement: .topBarTrailing) { trailing }
+            }
+        }
+    }
+}
+
+extension View {
+    func heroToolbar<Trailing: View>(trailing: Trailing) -> some View {
+        modifier(HeroToolbar(trailing: trailing))
     }
 }
 

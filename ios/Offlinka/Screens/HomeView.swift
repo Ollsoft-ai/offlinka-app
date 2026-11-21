@@ -42,7 +42,7 @@ struct HomeView: View {
             .frame(maxWidth: .infinity)
         }
         .background(Color.brandBg.ignoresSafeArea())
-        .modifier(HeroToolbar(leading: Wordmark(size: 26), trailing: offlineBadge))
+        .heroToolbar(trailing: offlineBadge)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.brandHero, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
@@ -376,25 +376,3 @@ struct ContinueCard: View {
 }
 #endif
 
-/// The logo and the offline badge in Home's dark bar. On iOS 26 the bar would put each item in a
-/// glass bubble (the logo cut to a circle): they sit on the hero colour without one.
-private struct HeroToolbar<Leading: View, Trailing: View>: ViewModifier {
-    let leading: Leading
-    let trailing: Trailing
-
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content.toolbar {
-                ToolbarItem(placement: .topBarLeading) { leading }
-                    .sharedBackgroundVisibility(.hidden)
-                ToolbarItem(placement: .topBarTrailing) { trailing }
-                    .sharedBackgroundVisibility(.hidden)
-            }
-        } else {
-            content.toolbar {
-                ToolbarItem(placement: .topBarLeading) { leading }
-                ToolbarItem(placement: .topBarTrailing) { trailing }
-            }
-        }
-    }
-}
