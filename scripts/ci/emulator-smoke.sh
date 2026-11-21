@@ -285,6 +285,28 @@ PICKER_ROOT="(sd karta|karta sd|sd card).*|.*virtual.*|.*usb.*"
 # Android 11+ refuses the root of an SD card (not of a USB drive) for a folder grant.
 PICKER_REFUSED="tuto složku nelze použít|can.t use this folder"
 
+# keyboard_open <name>: open a DocumentsUI list item with DPAD focus, type-to-focus and Enter.
+keyboard_open() {
+  local f
+  for _ in $(seq 1 12); do
+    dump || return 1
+    f="$(python3 "$UIPY" focus "$UIX")"
+    log "focus: ${f:0:80}"
+    case "$f" in
+      "list $1"*)
+        adb shell input keyevent KEYCODE_ENTER
+        return 0 ;;
+      list*)
+        adb shell input text "$1"
+        sleep 1 ;;
+      *)
+        adb shell input keyevent KEYCODE_DPAD_DOWN
+        sleep 0.5 ;;
+    esac
+  done
+  return 1
+}
+
 picker_shown() { dump && python3 "$UIPY" packages "$UIX" | grep -q documentsui; }
 
 # The system folder picker (DocumentsUI): "use this folder" on the volume, then "allow". API 29+ opens on
@@ -315,13 +337,14 @@ pick_drive() {
     # The virtual disk is an SD card, whose root Android 11+ refuses. The app's help covers this case
     # ("some phones refuse the drive's root, then people pick Knihovna"): pick Knihovna/.
     log "the volume root is refused: picking Knihovna"
-    local opened=""
-    for _ in 1 2 3; do
-      # DocumentsUI sometimes drops a tap while it settles: tap again until the folder opens.
-      scroll_tap "Knihovna" || return 1
-      if wait_for "offlinka_cs_prirucky" 8 && ! has "$PICKER_REFUSED"; then opened=1; break; fi
-    done
-    [ -n "$opened" ] || return 1
+    scroll_tap "Knihovna" || return 1
+    if ! { wait_for "offlinka_cs_prirucky" 8 && ! has "$PICKER_REFUSED"; }; then
+      # API 30's `input tap` injects touches without a tool type, which DocumentsUI's list (AndroidX
+      # SelectionTracker) ignores. Use the keyboard: focus the list, type-to-focus the folder, Enter.
+      log "the tap did not open Knihovna: opening it with the keyboard"
+      keyboard_open "Knihovna" || return 1
+      wait_for "offlinka_cs_prirucky" 10 && ! has "$PICKER_REFUSED" || return 1
+    fi
     snap knihovna
   fi
   wait_for "$PICKER_BUTTON" 10 || return 1

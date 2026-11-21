@@ -5,6 +5,8 @@
   uidump.py center <dump.xml> <regex>     print "x y" of the first node whose text/content-desc fully matches
   uidump.py texts <dump.xml>              print every text / content-desc on screen (for the log)
   uidump.py packages <dump.xml>           print the packages on screen
+  uidump.py focus <dump.xml>              print "list|other|none" (focused node inside a RecyclerView or not)
+                                          and the texts under the focused node
   uidump.py crashes <logcat.txt> <pkg>    print crash / ANR blocks of <pkg> (prefix match), exit 1 when found
   uidump.py size <file.png>               print "width height" of a PNG
 
@@ -79,6 +81,25 @@ def main():
         return
     if cmd == "packages":
         print(" ".join(sorted({n.get("package") or "" for n in nodes(args[0])} - {""})))
+        return
+    if cmd == "focus":
+        try:
+            root = ET.parse(args[0]).getroot()
+        except ET.ParseError:
+            print("none")
+            return
+        parent = {c: p for p in root.iter() for c in p}
+        for n in root.iter("node"):
+            if n.get("focused") == "true":
+                where, x = "other", parent.get(n)
+                while x is not None:
+                    if "RecyclerView" in (x.get("class") or ""):
+                        where = "list"
+                        break
+                    x = parent.get(x)
+                print(where, "|".join(s for d in n.iter("node") for s in labels(d)))
+                return
+        print("none")
         return
     if cmd == "crashes":
         sys.exit(crashes(args[0], args[1]))
