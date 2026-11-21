@@ -37,14 +37,16 @@ final class ShelfTests: XCTestCase {
             }
     }
 
-    private func engine(_ books: [FakeContentSource.FakeBook], guidesInBundle: Bool = true) -> FakeContentEngine {
+    private func engine(_ books: [FakeContentSource.FakeBook], guidesInBundle: Bool = true,
+                        bundledGuidesIndexed: Bool = true) -> FakeContentEngine {
         var byFile: [String: FakeContentSource.FakeBook] = [:]
         for book in books {
             byFile[book.record.fileName] = book
         }
         // The bundled guides have the same file name: the drive's copy (if any) is what the test set up.
-        if guidesInBundle, let guides = FakeContentSource.demoBooks().first(where: { $0.record.name == "offlinka_cs_prirucky" }),
+        if guidesInBundle, var guides = FakeContentSource.demoBooks().first(where: { $0.record.name == "offlinka_cs_prirucky" }),
            byFile[guides.record.fileName] == nil {
+            guides.record = guides.record.withIndex(bundledGuidesIndexed)
             byFile[guides.record.fileName] = guides
         }
         return FakeContentEngine(books: byFile)
@@ -199,7 +201,7 @@ final class ShelfTests: XCTestCase {
     /// Without guides on the drive, the bundled ones get a search index too („prvni pomoc“ needs it).
     func testBundledGuidesGetASearchIndex() async throws {
         let list = books(indexed: true, withGuides: false)
-        let engine = engine(list)
+        let engine = engine(list, bundledGuidesIndexed: false)
         let shelf = shelf(engine, indexes: true)
         _ = await shelf.load(scan: scan(list))
         await waitUntil("guides indexed") {
