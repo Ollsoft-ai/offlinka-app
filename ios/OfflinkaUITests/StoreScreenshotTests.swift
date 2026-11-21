@@ -62,7 +62,7 @@ final class StoreScreenshotTests: XCTestCase {
         XCTAssertTrue(map.waitForExistence(timeout: 10), "[\(loc)] no map tile")
         map.tap()
         XCTAssertTrue(app.buttons["reader.back"].firstMatch.waitForExistence(timeout: 60), "[\(loc)] map did not open")
-        try capture("ScreenStatesTest_readerMap[\(loc)-light]", settle: 8)
+        try capture("ScreenStatesTest_readerMap[\(loc)-light]", settle: 20)
 
         // First aid from the guides.
         app = launchApp(language: loc, theme: "light")

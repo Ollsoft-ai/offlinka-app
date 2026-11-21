@@ -106,7 +106,7 @@ final class FixtureDriveUITests: XCTestCase {
         XCTAssertTrue(map.waitForExistence(timeout: 10), "no map tile")
         map.tap()
         XCTAssertTrue(app.buttons["reader.back"].firstMatch.waitForExistence(timeout: 60), "map did not open")
-        pause(6)
+        pause(12)   // MapLibre draws its tiles after the page loaded
         app.buttons["reader.back"].firstMatch.tap()
         XCTAssertTrue(search.waitForExistence(timeout: 10))
         pause()

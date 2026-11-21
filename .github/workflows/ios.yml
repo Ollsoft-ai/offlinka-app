@@ -315,11 +315,21 @@ jobs:
             device="${pair%%:*}"; folder="${pair##*:}"
             udid=$(ios/tools/pick-simulator.py "$device")
             ios/tools/sim-prepare.sh "$udid"
-            xcodebuild test-without-building -project "$PROJECT" -scheme "$SCHEME" -configuration Debug \
-              -destination "id=$udid" -derivedDataPath build/dd -parallel-testing-enabled NO \
-              -only-testing:OfflinkaUITests/StoreScreenshotTests \
-              -resultBundlePath "build/shots-$folder.xcresult" | xcbeautify --renderer github-actions || status=1
+            # A simulator that has just finished booting is sometimes not yet a destination: try again.
+            ok=0
+            for attempt in 1 2 3; do
+              rm -rf "build/shots-$folder.xcresult"
+              if xcodebuild test-without-building -project "$PROJECT" -scheme "$SCHEME" -configuration Debug \
+                  -destination "platform=iOS Simulator,id=$udid" -derivedDataPath build/dd -parallel-testing-enabled NO \
+                  -only-testing:OfflinkaUITests/StoreScreenshotTests \
+                  -resultBundlePath "build/shots-$folder.xcresult" | xcbeautify --renderer github-actions; then ok=1; break; fi
+              [ -d "build/shots-$folder.xcresult" ] && break   # the tests ran and failed: no retry
+              echo "::warning::$device: no destination yet (attempt $attempt)"; sleep 30
+            done
+            [ $ok = 1 ] || status=1
             ios/tools/export-shots.py "build/shots-$folder.xcresult" "build/store-shots/$folder" --prefix cz.offlinka.ui_ || status=1
+            xcrun simctl spawn "$udid" log show --last 90m --style compact \
+              --predicate 'subsystem == "cz.offlinka.app"' > "build/store-shots/$folder/app-log.txt" 2>&1 || true
             xcrun simctl shutdown "$udid" || true
           done
           exit $status
