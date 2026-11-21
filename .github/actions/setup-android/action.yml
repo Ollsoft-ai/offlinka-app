@@ -1,0 +1,38 @@
+name: Set up JDK, Android SDK and Gradle
+description: JDK 17 (+ 21 that Gradle runs on), the SDK platform the app compiles against, optionally the NDK the core is cross-compiled with, Gradle caching.
+inputs:
+  ndk:
+    description: Install the pinned NDK (scripts/build-android-core.sh) and export ANDROID_NDK_HOME.
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+      with:
+        distribution: temurin
+        # The last one is JAVA_HOME (the project's Java 17); Gradle itself runs on 21
+        # (android/gradle/gradle-daemon-jvm.properties).
+        java-version: |
+          21
+          17
+
+    - name: Android SDK packages
+      shell: bash
+      env:
+        WITH_NDK: ${{ inputs.ndk }}
+        # Same as ~/opt/offlinka-env.sh on the build box.
+        NDK_VERSION: 27.2.12479018
+      run: |
+        sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+        pkgs=("platforms;android-36" "platform-tools")
+        [ "$WITH_NDK" = true ] && pkgs+=("ndk;$NDK_VERSION")
+        yes | "$sdkmanager" --licenses > /dev/null || true
+        "$sdkmanager" --install "${pkgs[@]}" > /dev/null
+        if [ "$WITH_NDK" = true ]; then
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+        fi
+
+    - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      with:
+        # Open-source cache on the GitHub Actions cache (not the commercial "enhanced" service).
+        cache-provider: basic

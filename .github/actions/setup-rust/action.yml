@@ -1,0 +1,27 @@
+name: Set up Rust for offlinka-core
+description: Pinned Rust toolchain (same as the build box) plus the cargo cache of core/.
+inputs:
+  targets:
+    description: Extra rustup targets, comma separated.
+    default: ""
+  components:
+    description: Extra rustup components, comma separated.
+    default: ""
+  cache-key:
+    description: Cache key suffix, so jobs that build different targets keep separate caches.
+    required: true
+runs:
+  using: composite
+  steps:
+    # Same toolchain as ~/opt/offlinka-env.sh on the build box, so clippy and fmt agree with local runs.
+    - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master 2026-11-15
+      with:
+        toolchain: "1.99.0"
+        targets: ${{ inputs.targets }}
+        components: ${{ inputs.components }}
+    - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      with:
+        workspaces: core -> target
+        shared-key: ${{ inputs.cache-key }}
+        # Also keeps ~/.cargo/bin (cargo-ndk).
+        cache-bin: "true"

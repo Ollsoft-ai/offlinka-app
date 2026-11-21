@@ -1,0 +1,229 @@
+name: Android
+
+on:
+  push:
+    branches: [main]
+    paths: &android-paths
+      - android/**
+      - core/**
+      - design/**
+      - scripts/**
+      - .github/actions/**
+      - .github/workflows/android.yml
+  pull_request:
+    paths: *android-paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # No shared build lock on CI runners (scripts/lib-lock.sh).
+  OFFLINKA_NO_LOCK: "1"
+  GRADLE_OPTS: -Dorg.gradle.console=plain
+
+jobs:
+  build:
+    name: Build APKs
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-android
+        with:
+          ndk: "true"
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android
+          cache-key: android
+
+      - name: cargo-ndk
+        run: cargo ndk --version 2>/dev/null || cargo install cargo-ndk --version 4.1.2 --locked
+
+      - name: Core for Android (arm64-v8a, armeabi-v7a, x86_64)
+        run: scripts/build-android-core.sh
+
+      # Release without OFFLINKA_KEYSTORE*: signed with the debug key by design (android/README.md), no secrets.
+      - name: assembleDebug assembleRelease
+        working-directory: android
+        run: ./gradlew --no-daemon assembleDebug assembleRelease
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      # For connectedAndroidTest in the emulator job (built by Gradle there).
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: jniLibs
+          path: android/app/src/main/jniLibs
+          retention-days: 3
+
+  test:
+    name: Unit tests, Paparazzi, lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-android
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          cache-key: host
+
+      - name: Host core (JNA, for the host-core tests)
+        run: scripts/build-host-core.sh
+
+      - name: Robolectric jars cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ hashFiles('android/gradle/libs.versions.toml') }}
+
+      # No drive on the runner: the host-core test classes skip themselves here (next step runs them).
+      - name: Unit tests + verifyPaparazzi
+        working-directory: android
+        run: >
+          ./gradlew --no-daemon --continue
+          :app:testDebugUnitTest :core:testDebugUnitTest :ui:verifyPaparazziDebug
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: unit-test-reports
+          path: |
+            android/*/build/reports/tests/
+            android/*/build/test-results/
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ failure() }}
+        with:
+          name: paparazzi-failures
+          path: android/ui/build/paparazzi/failures/
+          if-no-files-found: ignore
+
+      # Host-core tests (generated bindings + host-built core through JNA) against the guides ZIM bundled
+      # with the app. Only the tests that need nothing but the guides: the others also need the games ZIM
+      # or the Wikipedia minis, which are only on the drive.
+      - name: Host-core tests on the bundled guides
+        if: ${{ !cancelled() }}
+        working-directory: android
+        run: |
+          OFFLINKA_DRIVE_FILES="$(../scripts/ci/guides-drive.sh "$RUNNER_TEMP/drive")"
+          export OFFLINKA_DRIVE_FILES
+          ./gradlew --no-daemon --continue \
+            :core:testDebugUnitTest \
+              --tests '*CoreBindingsTest.core reports*' --tests '*CoreBindingsTest.guides*' \
+              --tests '*CoreBindingsTest.missing path*' --tests '*CoreBindingsTest.not a zim*' \
+              --tests '*CoreBindingsTest.illustration*' \
+            :app:testDebugUnitTest \
+              --tests '*CoreIntegrationTest.metadata*' --tests '*CoreIntegrationTest.guides*' \
+              --tests '*CoreIntegrationTest.missing article*' --tests '*CoreIntegrationTest.*index*'
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: host-core-test-reports
+          path: |
+            android/app/build/reports/tests/
+            android/app/build/test-results/
+            android/core/build/reports/tests/
+            android/core/build/test-results/
+          if-no-files-found: ignore
+
+      - name: lint
+        if: ${{ !cancelled() }}
+        working-directory: android
+        run: ./gradlew --no-daemon lint
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: lint-reports
+          path: android/*/build/reports/lint-results-*
+          if-no-files-found: ignore
+
+  emulator:
+    name: Emulator API ${{ matrix.api }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 30, 36]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: debug-apk
+          path: ${{ runner.temp }}/apk
+
+      - name: androidTest sources?
+        id: android-test
+        run: |
+          if compgen -G 'android/*/src/androidTest' > /dev/null; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No androidTest sources: connectedAndroidTest skipped."
+          fi
+
+      - if: steps.android-test.outputs.present == 'true'
+        uses: ./.github/actions/setup-android
+
+      - if: steps.android-test.outputs.present == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: jniLibs
+          path: android/app/src/main/jniLibs
+
+      - name: Emulator smoke test
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          ram-size: 3072M
+          disk-size: 6G
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: >-
+            bash scripts/ci/emulator-smoke.sh "$RUNNER_TEMP/apk" "$RUNNER_TEMP/emulator"
+            && if [ "${{ steps.android-test.outputs.present }}" = true ]; then
+            cd android && ./gradlew --no-daemon connectedDebugAndroidTest; fi
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: emulator-api-${{ matrix.api }}
+          path: |
+            ${{ runner.temp }}/emulator
+            android/app/build/reports/androidTests/
+            android/app/build/outputs/androidTest-results/
+          if-no-files-found: ignore
