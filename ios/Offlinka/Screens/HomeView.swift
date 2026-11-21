@@ -16,9 +16,13 @@ struct HomeView: View {
                             app.router.open(ReaderTarget(bookId: last.book.id, path: last.article.path))
                         }
                     }
-                    SectionTitle(text: tr(.homeBooksTitle))
+                    SectionTitle(text: tr(.homeBooksTitle), trailing: tr(.libraryBooksCount, app.books.count))
+                    // The first book (Czech Wikipedia on the real drive) gets a wide tile.
+                    if let first = app.books.first {
+                        BookTile(book: first, wide: true)
+                    }
                     LazyVGrid(columns: columns, alignment: .leading, spacing: BrandSpace.m) {
-                        ForEach(app.books) { book in
+                        ForEach(app.books.dropFirst()) { book in
                             BookTile(book: book)
                         }
                     }
@@ -31,8 +35,11 @@ struct HomeView: View {
         }
         .background(Color.brandBg.ignoresSafeArea())
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                Wordmark()
+            ToolbarItem(placement: .topBarLeading) {
+                Wordmark(size: 26)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                offlineBadge
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -49,18 +56,6 @@ struct HomeView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: BrandSpace.l) {
-            HStack(spacing: BrandSpace.xs) {
-                Circle().fill(Color.brandOk).frame(width: 8, height: 8)
-                Text(tr(.statusOffline))
-                    .brandText(.labelSmall)
-                    .textCase(.uppercase)
-                    .foregroundStyle(Color.brandOnHero2)
-            }
-            .padding(.horizontal, BrandSpace.s)
-            .padding(.vertical, BrandSpace.xs)
-            .overlay(RoundedRectangle(cornerRadius: BrandRadius.xs).strokeBorder(Color.brandHeroLine, lineWidth: 1))
-            .accessibilityElement(children: .combine)
-
             Text(tr(.homeTitle))
                 .brandText(.display)
                 .foregroundStyle(Color.brandOnHero)
@@ -81,7 +76,7 @@ struct HomeView: View {
                 .frame(minHeight: BrandSize.searchField)
                 .background(RoundedRectangle(cornerRadius: BrandRadius.m, style: .continuous).fill(Color.brandSurface))
                 .overlay(RoundedRectangle(cornerRadius: BrandRadius.m, style: .continuous).strokeBorder(Color.brandOutline, lineWidth: BrandSize.outline))
-                .brandShadow(BrandElevation.raised)
+                .hardShadow(BrandElevation.raised)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(tr(.homeSearchPlaceholder))
@@ -90,11 +85,24 @@ struct HomeView: View {
             quickLinks
         }
         .padding(.horizontal, BrandSize.gutter)
-        .padding(.top, BrandSpace.xl)
+        .padding(.top, BrandSpace.s)
         .padding(.bottom, BrandSize.ridge * 2)
         .frame(maxWidth: 900, alignment: .leading)
         .frame(maxWidth: .infinity)
         .background(HeroBackground().ignoresSafeArea(edges: .horizontal))
+    }
+
+    private var offlineBadge: some View {
+        HStack(spacing: BrandSpace.s) {
+            Circle().fill(Color.brandOk).frame(width: 8, height: 8)
+            Text(tr(.statusOffline))
+                .brandText(.label)
+                .foregroundStyle(Color.brandOnHero2)
+        }
+        .padding(.horizontal, BrandSpace.m)
+        .padding(.vertical, BrandSpace.s)
+        .overlay(RoundedRectangle(cornerRadius: BrandRadius.s).strokeBorder(Color.brandHeroLine, lineWidth: 1))
+        .accessibilityElement(children: .combine)
     }
 
     private var quickLinks: some View {
@@ -145,33 +153,39 @@ struct HomeView: View {
     }
 }
 
-/// One book on the home screen.
+/// One book on the home screen; `wide` spans the whole row with the icon beside the text.
 @MainActor
 struct BookTile: View {
     @Environment(AppModel.self) private var app
     let book: BookRecord
+    var wide = false
 
     var body: some View {
         let kind = BookCatalog.kind(of: book)
         Button {
             app.router.open(ReaderTarget(bookId: book.id, path: nil))
         } label: {
-            VStack(alignment: .leading, spacing: BrandSpace.s) {
-                BookIconBox(kind: kind)
-                Text(BookCatalog.title(of: book))
-                    .brandText(.titleSmall)
-                    .foregroundStyle(Color.brandInk)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(BookCatalog.description(of: book))
-                    .brandText(.bodySmall)
-                    .foregroundStyle(Color.brandInk2)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
+            Group {
+                if wide {
+                    HStack(alignment: .top, spacing: BrandSpace.l) {
+                        BookIconBox(kind: kind)
+                        texts
+                        tag
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: BrandSpace.s) {
+                        HStack(alignment: .top) {
+                            BookIconBox(kind: kind)
+                            Spacer(minLength: 0)
+                            tag
+                        }
+                        texts
+                        Spacer(minLength: 0)
+                    }
+                }
             }
-            .padding(BrandSpace.m)
-            .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
+            .padding(BrandSpace.l)
+            .frame(maxWidth: .infinity, minHeight: wide ? 0 : 168, alignment: .topLeading)
             .brandCard()
         }
         .buttonStyle(.plain)
@@ -188,6 +202,29 @@ struct BookTile: View {
             }
         }
     }
+
+    private var texts: some View {
+        VStack(alignment: .leading, spacing: BrandSpace.xs) {
+            Text(BookCatalog.title(of: book))
+                .brandText(wide ? .headline : .title)
+                .foregroundStyle(Color.brandInk)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(BookCatalog.description(of: book))
+                .brandText(.bodySmall)
+                .foregroundStyle(Color.brandInk2)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var tag: some View {
+        if let tag = BookCatalog.languageTag(of: book) {
+            TagView(text: tag)
+        }
+    }
 }
 
 /// "Pokračovat ve čtení": the last article from the history.
@@ -202,8 +239,7 @@ struct ContinueCard: View {
                 BookIconBox(kind: BookCatalog.kind(of: book), box: BrandSize.bookIconBoxSmall)
                 VStack(alignment: .leading, spacing: BrandSpace.xxs) {
                     Text(tr(.homeContinue))
-                        .brandText(.labelSmall)
-                        .textCase(.uppercase)
+                        .brandText(.label)
                         .foregroundStyle(Color.brandInk2)
                     Text(article.title)
                         .brandText(.subhead)
@@ -219,7 +255,8 @@ struct ContinueCard: View {
             }
             .padding(BrandSpace.m)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .brandCard()
+            .background(RoundedRectangle(cornerRadius: BrandRadius.m, style: .continuous).fill(Color.brandSurface))
+            .overlay(RoundedRectangle(cornerRadius: BrandRadius.m, style: .continuous).strokeBorder(Color.brandLine, lineWidth: BrandSize.outline))
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)

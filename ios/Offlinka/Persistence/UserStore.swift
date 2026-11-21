@@ -127,6 +127,13 @@ final class UserStore {
         persist()
     }
 
+    /// Puts an article back where it was (Undo after removing).
+    func restoreSaved(_ article: ArticleRef, at index: Int) {
+        guard !data.saved.contains(where: { $0.id == article.id }) else { return }
+        data.saved.insert(article, at: min(max(index, 0), data.saved.count))
+        persist()
+    }
+
     // MARK: - History
 
     var history: [ArticleRef] { data.history }

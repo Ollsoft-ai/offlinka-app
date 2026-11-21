@@ -50,6 +50,29 @@ final class BookCatalogTests: XCTestCase {
         XCTAssertNil(BookCatalog.edition(of: []))
     }
 
+    func testSizesUseThreeSignificantDigits() {
+        L10n.apply(.cs)
+        defer { L10n.apply(.system) }
+        XCTAssertEqual(BookCatalog.gigabytes(9_958_167_476), "9,96")
+        XCTAssertEqual(BookCatalog.gigabytes(3_501_486_592), "3,5")
+        XCTAssertEqual(BookCatalog.gigabytes(17_134_155_148), "17,1")
+        XCTAssertEqual(BookCatalog.gigabytes(539_516_304), "0,54")
+        XCTAssertEqual(BookCatalog.gigabytes(32_400_000_000, significantDigits: 2), "32")
+    }
+
+    func testLanguageTagsOnlyOnWikipedias() {
+        let books = FakeContentSource.demo().books
+        XCTAssertEqual(books.map { BookCatalog.languageTag(of: $0) }, ["CZ", "SK", nil, nil, nil])
+    }
+
+    func testContentDates() {
+        L10n.apply(.cs)
+        defer { L10n.apply(.system) }
+        XCTAssertEqual(ContentDate.monthYear("2026-09-29"), "září 2026")
+        XCTAssertEqual(ContentDate.monthYear("2026-11"), "listopad 2026")
+        XCTAssertEqual(ContentDate.monthYear("bad"), "bad")
+    }
+
     func testEveryKindHasStringsAndAnIcon() {
         for kind in BookKind.allCases {
             XCTAssertFalse(kind.descriptionKey(isMini: false).rawValue.isEmpty)

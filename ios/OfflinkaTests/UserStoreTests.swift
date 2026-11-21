@@ -33,6 +33,20 @@ final class UserStoreTests: XCTestCase {
         XCTAssertEqual(reloaded.saved.map(\.path), ["Sněžka"])
     }
 
+    func testUndoPutsSavedArticleBackInPlace() {
+        let store = UserStore(fileURL: nil)
+        store.toggleSaved(article("C"))
+        store.toggleSaved(article("B"))
+        store.toggleSaved(article("A"))
+        let removed = article("B")
+        store.removeSaved(removed)
+        XCTAssertEqual(store.saved.map(\.path), ["A", "C"])
+        store.restoreSaved(removed, at: 1)
+        XCTAssertEqual(store.saved.map(\.path), ["A", "B", "C"])
+        store.restoreSaved(removed, at: 0)
+        XCTAssertEqual(store.saved.map(\.path), ["A", "B", "C"], "no duplicates")
+    }
+
     func testHistoryMovesRevisitsToTopAndSkipsUntitled() {
         let store = UserStore(fileURL: nil)
         store.recordVisit(article("Praha"))

@@ -133,6 +133,9 @@ enum ReaderScripts {
     })()
     """
 
+    /// The article's address on the web, from `<link rel="canonical">` (empty when there is none).
+    static let canonicalLink = "(function () { var l = document.querySelector('link[rel=canonical]'); return l ? l.href : ''; })()"
+
     /// Scrolls to a heading, opening collapsed sections (`<details>`) around it.
     static func scrollTo(_ id: String) -> String {
         """

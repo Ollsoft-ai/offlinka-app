@@ -1,6 +1,16 @@
 import Foundation
 import Observation
 
+/// A transient message; equal when the text is (enough for animations).
+struct Toast: Equatable {
+    let id = UUID()
+    let message: String
+    let actionTitle: String?
+    let action: (@MainActor () -> Void)?
+
+    static func == (lhs: Toast, rhs: Toast) -> Bool { lhs.id == rhs.id }
+}
+
 /// App state: which drive is open, the content, the reader engine, navigation and user data.
 ///
 /// Phases: `starting` → (`connect` | `opening` | `unplugged`) → `ready`. While `ready`, the drive
@@ -34,8 +44,8 @@ final class AppModel {
     private(set) var engine: ReaderEngine?
     /// Phone editions that the big editions replace (shown greyed in the library).
     private(set) var shadowed: [DriveEntry] = []
-    /// Short message at the bottom of the screen ("Článek je v Uložených").
-    var toast: String?
+    /// Short message at the bottom of the screen ("Článek je v Uložených"), optionally with an action ("Vrátit").
+    var toast: Toast?
     /// Where each open reader has got to (by the page it was opened with), so a reader rebuilt after
     /// the drive came back, or after a language change, continues on the same page.
     @ObservationIgnored var resumeLocations: [ReaderTarget: ReaderTarget] = [:]
@@ -177,14 +187,22 @@ final class AppModel {
         store.settings = settings
     }
 
-    func showToast(_ message: String) {
-        toast = message
+    func showToast(_ message: String, actionTitle: String? = nil, action: (@MainActor () -> Void)? = nil) {
+        toast = Toast(message: message, actionTitle: actionTitle, action: action)
         toastTask?.cancel()
+        let seconds: Double = action == nil ? 2.5 : 5
         toastTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(2.5))
+            try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled else { return }
             self?.toast = nil
         }
+    }
+
+    /// Runs the toast's action (Undo) and hides it.
+    func performToastAction() {
+        let action = toast?.action
+        toast = nil
+        action?()
     }
 
     // MARK: - Private

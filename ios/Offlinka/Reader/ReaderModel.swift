@@ -30,6 +30,8 @@ final class ReaderModel {
     /// Book and path of the page on screen.
     private(set) var location: OfflinkaURL.Parsed?
     private(set) var headings: [ReaderHeading] = []
+    /// The article's own title has scrolled under the bar: show it in the bar instead of the book.
+    private(set) var titleScrolledAway = false
     /// A tapped link that needs the internet; the view shows a notice.
     var externalLink: URL?
 
@@ -163,6 +165,16 @@ final class ReaderModel {
         }
     }
 
+    /// The page's web address on Wikipedia (`<link rel="canonical">`), for "Kopírovat odkaz".
+    func canonicalLink(_ completion: @escaping @MainActor (String?) -> Void) {
+        webView.evaluateJavaScript(ReaderScripts.canonicalLink) { result, _ in
+            let link = (result as? String).flatMap { $0.isEmpty ? nil : $0 }
+            MainActor.assumeIsolated {
+                completion(link)
+            }
+        }
+    }
+
     func scrollTo(_ heading: ReaderHeading) {
         webView.evaluateJavaScript(ReaderScripts.scrollTo(heading.id), completionHandler: nil)
     }
@@ -235,6 +247,14 @@ final class ReaderModel {
             webView.observe(\.url, options: [.initial, .new]) { [weak self] webView, _ in
                 MainActor.assumeIsolated {
                     self?.location = webView.url.flatMap(OfflinkaURL.parse)
+                }
+            },
+            webView.scrollView.observe(\.contentOffset, options: [.new]) { [weak self] scrollView, _ in
+                MainActor.assumeIsolated {
+                    let scrolled = scrollView.contentOffset.y + scrollView.adjustedContentInset.top > 72
+                    if self?.titleScrolledAway != scrolled {
+                        self?.titleScrolledAway = scrolled
+                    }
                 }
             },
         ]

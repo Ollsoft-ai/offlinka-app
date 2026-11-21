@@ -11,12 +11,10 @@ struct ConnectView: View {
     @State private var showHelp = false
 
     var body: some View {
-        ScrollView {
+        HeroScreen {
+            DriveIllustration(pluggedIn: true)
+        } content: {
             VStack(alignment: .leading, spacing: BrandSpace.xl) {
-                DriveIllustration()
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, BrandSpace.xxl)
-
                 Text(tr(.connectTitle))
                     .brandText(.headline)
                     .foregroundStyle(Color.brandInk)
@@ -27,16 +25,23 @@ struct ConnectView: View {
                     .foregroundStyle(Color.brandInk2)
 
                 if let problem {
+                    // A problem note replaces the steps (design: connect-wrong-folder).
                     ProblemCard(problem: problem)
+                } else {
+                    VStack(alignment: .leading, spacing: BrandSpace.m) {
+                        StepRow(number: 1, text: tr(.connectStepPlug))
+                        StepRow(number: 2, text: tr(.connectStepPickIos))
+                    }
                 }
 
-                VStack(alignment: .leading, spacing: BrandSpace.m) {
-                    StepRow(number: 1, text: tr(.connectStepPlug))
-                    StepRow(number: 2, text: tr(.connectStepPickIos))
-                }
-
-                Button(problem == nil ? tr(.connectButton) : tr(.connectPickAgain)) {
+                Button {
                     showPicker = true
+                } label: {
+                    Label {
+                        Text(problem == nil ? tr(.connectButton) : tr(.connectPickAgain))
+                    } icon: {
+                        BrandIconView(icon: .drive)
+                    }
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .accessibilityIdentifier("connect.pick")
@@ -50,14 +55,9 @@ struct ConnectView: View {
                 }
                 .brandText(.label)
                 .foregroundStyle(Color.brandLink)
-                .frame(minHeight: BrandSize.touch)
+                .frame(maxWidth: .infinity, minHeight: BrandSize.touch)
             }
-            .padding(.horizontal, BrandSize.gutter)
-            .padding(.bottom, BrandSpace.huge)
-            .frame(maxWidth: 560)
-            .frame(maxWidth: .infinity)
         }
-        .background(Color.brandBg.ignoresSafeArea())
         .fileImporter(isPresented: $showPicker, allowedContentTypes: [.folder]) { result in
             app.didPick(result)
         }
@@ -164,37 +164,71 @@ struct UnpluggedView: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        VStack(spacing: BrandSpace.xl) {
-            Spacer(minLength: BrandSpace.huge)
-            BrandIconView(icon: .driveOff, size: 56)
-                .foregroundStyle(Color.brandInk2)
-            Text(tr(.unpluggedTitle))
-                .brandText(.headline)
-                .foregroundStyle(Color.brandInk)
-                .multilineTextAlignment(.center)
-                .accessibilityAddTraits(.isHeader)
-            Text(tr(.unpluggedBody))
-                .brandText(.body)
-                .foregroundStyle(Color.brandInk2)
-                .multilineTextAlignment(.center)
-            HStack(spacing: BrandSpace.s) {
-                ProgressView()
-                Text(tr(.unpluggedWaiting))
-                    .brandText(.bodySmall)
+        HeroScreen {
+            DriveIllustration(pluggedIn: false)
+        } content: {
+            VStack(alignment: .leading, spacing: BrandSpace.xl) {
+                Text(tr(.unpluggedTitle))
+                    .brandText(.headline)
+                    .foregroundStyle(Color.brandInk)
+                    .accessibilityAddTraits(.isHeader)
+                Text(tr(.unpluggedBody))
+                    .brandText(.body)
                     .foregroundStyle(Color.brandInk2)
+                HStack(spacing: BrandSpace.s) {
+                    Circle()
+                        .fill(Color.brandOk)
+                        .frame(width: 8, height: 8)
+                        .padding(5)
+                        .background(Circle().fill(Color.brandOk.opacity(0.25)))
+                    Text(tr(.unpluggedWaiting))
+                        .brandText(.bodySmall)
+                        .foregroundStyle(Color.brandInk2)
+                }
+                .accessibilityElement(children: .combine)
+                // The app reopens by itself when the drive is back (checked every 2 s and on
+                // return to the app); this button is only for another drive.
+                Button(tr(.unpluggedPickOther)) { app.chooseAnotherDrive() }
+                    .buttonStyle(SecondaryButtonStyle())
             }
-            .accessibilityElement(children: .combine)
-            Spacer()
-            Button(tr(.actionRetry)) { app.retry() }
-                .buttonStyle(PrimaryButtonStyle())
-            Button(tr(.unpluggedPickOther)) { app.chooseAnotherDrive() }
-                .buttonStyle(SecondaryButtonStyle())
         }
-        .padding(.horizontal, BrandSize.gutter)
-        .padding(.bottom, BrandSpace.xxl)
-        .frame(maxWidth: 560)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.brandBg.ignoresSafeArea())
+    }
+}
+
+/// Forest hero with the wordmark in the bar and the ridge into the paper below, then content
+/// (Connect and Unplugged, design mockups `connect`, `unplugged`).
+struct HeroScreen<Hero: View, Content: View>: View {
+    @ViewBuilder let hero: () -> Hero
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 0) {
+                    hero()
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, BrandSpace.l)
+                        .padding(.bottom, BrandSize.ridge * 2)
+                        .background(HeroBackground().ignoresSafeArea(edges: .horizontal))
+                    content()
+                        .padding(.horizontal, BrandSize.gutter)
+                        .padding(.top, BrandSpace.l)
+                        .padding(.bottom, BrandSpace.huge)
+                        .frame(maxWidth: 560, alignment: .leading)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .background(Color.brandBg.ignoresSafeArea())
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Wordmark(size: 26)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.brandHero, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+        }
     }
 }
 
@@ -214,38 +248,44 @@ struct OpeningView: View {
     }
 }
 
-/// A phone with the drive in its USB-C port, drawn in the brand style.
+/// A phone with the drive in its USB-C port (or pulled out), drawn for the forest hero.
 struct DriveIllustration: View {
+    var pluggedIn = true
+
     var body: some View {
         ZStack(alignment: .top) {
             // Phone
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.brandSurface)
-                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Color.brandOutline, lineWidth: 3))
-                .frame(width: 112, height: 196)
-                .brandShadow(BrandElevation.card)
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(Color.brandHeroDeep)
+                .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Color.brandOnHero, lineWidth: 4))
+                .frame(width: 128, height: 214)
                 .overlay(alignment: .top) {
-                    VStack(spacing: 10) {
-                        Capsule().fill(Color.brandOutline).frame(width: 30, height: 6).padding(.top, 12)
-                        RoundedRectangle(cornerRadius: 6).fill(Color.brandHero).frame(width: 80, height: 54)
-                            .overlay(Triangle().fill(Color.brandPrimary).frame(width: 22, height: 18).offset(y: 4))
-                        ForEach(0..<3, id: \.self) { index in
-                            Capsule().fill(Color.brandLine).frame(width: index == 2 ? 50 : 76, height: 6)
+                    VStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 3).fill(Color.brandOnHero).frame(width: 84, height: 12).padding(.top, 26)
+                        RoundedRectangle(cornerRadius: 4).fill(Color.brandOnHero).frame(width: 84, height: 20)
+                        HStack(spacing: 6) {
+                            RoundedRectangle(cornerRadius: 4).fill(Color.brandOnHero).frame(width: 39, height: 38)
+                            RoundedRectangle(cornerRadius: 4).fill(Color.brandOnHero).frame(width: 39, height: 38)
+                        }
+                        HStack(spacing: 6) {
+                            RoundedRectangle(cornerRadius: 4).fill(Color.brandOnHero).frame(width: 39, height: 38)
+                            RoundedRectangle(cornerRadius: 4).fill(Color.brandOnHero).frame(width: 39, height: 38)
                         }
                     }
+                    .opacity(pluggedIn ? 1 : 0.35)
                 }
-            // Drive in the port
+            // Drive: in the port, or pulled out a little
             VStack(spacing: 0) {
-                RoundedRectangle(cornerRadius: 2).fill(Color.brandOutline).frame(width: 18, height: 10)
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.brandPrimary)
-                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.brandOutline, lineWidth: 3))
-                    .frame(width: 44, height: 62)
-                    .overlay(Text(verbatim: "O").font(.custom("ArchivoExpanded-ExtraBold", size: 18)).foregroundStyle(Color.brandOnPrimary))
+                RoundedRectangle(cornerRadius: 2).fill(Color.brandOnHero2).frame(width: 22, height: 10)
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(Color.brandHeroDeep)
+                    .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color.brandOnHero, lineWidth: 4))
+                    .frame(width: 46, height: 72)
+                    .overlay(Triangle().fill(Color.brandPrimary).frame(width: 16, height: 14))
             }
-            .offset(y: 196)
+            .offset(y: pluggedIn ? 214 : 244)
         }
-        .frame(height: 196 + 72)
+        .frame(height: 214 + 112, alignment: .top)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(tr(.cdDriveIllustration))
     }

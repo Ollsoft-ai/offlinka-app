@@ -23,6 +23,13 @@ final class Router {
     var libraryPath: [Route] = []
     var savedPath: [Route] = []
     var settingsPath: [Route] = []
+    /// Saved tab shows the history segment (reader menu "Historie" opens it).
+    var savedShowsHistory = false
+
+    func showHistory() {
+        savedShowsHistory = true
+        tab = .saved
+    }
 
     /// Opens a page on the current tab.
     func open(_ target: ReaderTarget) {

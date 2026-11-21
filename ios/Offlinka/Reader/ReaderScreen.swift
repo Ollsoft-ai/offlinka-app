@@ -36,14 +36,18 @@ struct ReaderScreen: View {
     }
 }
 
-/// The article: web view with title, back/forward, save, find, contents and appearance.
+/// The article (design mockup `reader`): top bar with home, the book (the article title once its
+/// heading scrolled away), save and more; web view; bottom bar with back, forward, find, text size
+/// and the book's main page.
 @MainActor
 private struct ReaderContent: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     let model: ReaderModel
     let target: ReaderTarget
     @State private var showContents = false
+    @State private var showTextSize = false
 
     var body: some View {
         ReaderWebView(webView: model.webView)
@@ -57,10 +61,13 @@ private struct ReaderContent: View {
                 }
             }
             .background(Color.brandBg.ignoresSafeArea())
+            .navigationBarBackButtonHidden(true)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
             .toolbar(.hidden, for: .tabBar)
-            .toolbarBackground(Color.brandSurface, for: .navigationBar, .bottomBar)
+            .toolbarBackground(Color.brandBg, for: .navigationBar)
+            .toolbarBackground(Color.brandSurface, for: .bottomBar)
+            .toolbarBackground(.visible, for: .navigationBar, .bottomBar)
             .alert(tr(.readerExternalTitle), isPresented: externalLinkShown, presenting: model.externalLink) { url in
                 Button(tr(.readerCopyLink)) {
                     UIPasteboard.general.string = url.absoluteString
@@ -76,6 +83,9 @@ private struct ReaderContent: View {
                     model.scrollTo(heading)
                 }
             }
+            .sheet(isPresented: $showTextSize) {
+                TextSizeSheet()
+            }
             .onAppear(perform: applyAppearance)
             .onChange(of: app.store.settings.theme) { _, _ in applyAppearance() }
             .onChange(of: app.store.settings.textScale) { _, _ in applyAppearance() }
@@ -90,21 +100,26 @@ private struct ReaderContent: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .principal) {
-            VStack(spacing: 0) {
-                Text(model.displayTitle)
-                    .brandText(.subhead)
-                    .foregroundStyle(Color.brandInk)
-                    .lineLimit(1)
-                if !model.bookTitle.isEmpty && model.bookTitle != model.displayTitle {
-                    Text(model.bookTitle)
-                        .brandText(.caption)
-                        .foregroundStyle(Color.brandInk2)
-                        .lineLimit(1)
+        ToolbarItem(placement: .topBarLeading) {
+            HStack(spacing: BrandSpace.s) {
+                Button { dismiss() } label: {
+                    BrandIconView(icon: .home)
+                        .frame(width: BrandSize.touch, height: BrandSize.touch)
                 }
+                .accessibilityLabel(tr(.navHome))
+                barTitle
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
+        }
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            Button(action: toggleSaved) {
+                BrandIconView(icon: model.isSaved ? .bookmarkFilled : .bookmark)
+                    .foregroundStyle(Color.brandAccent)
+            }
+            .disabled(!model.canSave)
+            .accessibilityLabel(model.isSaved ? tr(.readerUnsave) : tr(.readerSave))
+            .accessibilityValue(model.isSaved ? tr(.cdSavedOn) : tr(.cdSavedOff))
+            .accessibilityIdentifier("reader.save")
+            moreMenu
         }
         ToolbarItemGroup(placement: .bottomBar) {
             Button { model.goBack() } label: { BrandIconView(icon: .arrowBack) }
@@ -115,24 +130,50 @@ private struct ReaderContent: View {
                 .disabled(!model.canGoForward)
                 .accessibilityLabel(tr(.actionForward))
             Spacer()
-            Button(action: toggleSaved) {
-                BrandIconView(icon: model.isSaved ? .bookmarkFilled : .bookmark)
-                    .foregroundStyle(model.isSaved ? Color.brandPrimary : Color.brandInk)
-            }
-            .disabled(!model.canSave)
-            .accessibilityLabel(model.isSaved ? tr(.readerUnsave) : tr(.readerSave))
-            .accessibilityValue(model.isSaved ? tr(.cdSavedOn) : tr(.cdSavedOff))
-            .accessibilityIdentifier("reader.save")
-            Spacer()
             Button { model.showFind() } label: { BrandIconView(icon: .findInPage) }
                 .accessibilityLabel(tr(.readerFind))
             Spacer()
-            moreMenu
+            Button { showTextSize = true } label: { BrandIconView(icon: .textSize) }
+                .accessibilityLabel(tr(.readerTextSize))
+            Spacer()
+            Button { model.openMainPage() } label: {
+                BrandIconView(icon: model.book.map { BookCatalog.kind(of: $0).icon } ?? .home)
+            }
+            .disabled(model.book == nil)
+            .accessibilityLabel(tr(.readerMainPage))
+        }
+    }
+
+    /// The book (icon box + name), or the article title once its own heading scrolled away.
+    @ViewBuilder
+    private var barTitle: some View {
+        if model.titleScrolledAway && !model.title.isEmpty {
+            Text(model.displayTitle)
+                .brandText(.subhead)
+                .foregroundStyle(Color.brandInk)
+                .lineLimit(1)
+                .transition(.opacity)
+                .accessibilityAddTraits(.isHeader)
+        } else if let book = model.book {
+            HStack(spacing: BrandSpace.s) {
+                BookIconBox(kind: BookCatalog.kind(of: book), box: 26)
+                Text(BookCatalog.title(of: book))
+                    .brandText(.label)
+                    .foregroundStyle(Color.brandInk2)
+                    .lineLimit(1)
+            }
+            .transition(.opacity)
+            .accessibilityElement(children: .combine)
         }
     }
 
     private var moreMenu: some View {
         Menu {
+            Button {
+                app.router.showHistory()
+            } label: {
+                Label(tr(.readerHistory), systemImage: BrandIcon.history.systemName)
+            }
             Button {
                 model.loadHeadings()
                 showContents = true
@@ -140,37 +181,23 @@ private struct ReaderContent: View {
                 Label(tr(.readerContents), systemImage: BrandIcon.toc.systemName)
             }
             Button {
-                model.openMainPage()
+                app.updateSettings { $0.theme = colorScheme == .dark ? .light : .dark }
             } label: {
-                Label(tr(.readerMainPage), systemImage: BrandIcon.home.systemName)
+                Label(tr(.readerThemeToggle), systemImage: colorScheme == .dark ? BrandIcon.sun.systemName : BrandIcon.moon.systemName)
+            }
+            Button {
+                copyLink()
+            } label: {
+                Label(tr(.readerCopyLink), systemImage: BrandIcon.copy.systemName)
             }
             Button {
                 model.openRandomArticle()
             } label: {
                 Label(tr(.homeQuickRandom), systemImage: BrandIcon.random.systemName)
             }
-            Divider()
-            if model.usesReaderStyle {
-                Button {
-                    stepTextSize(-1)
-                } label: {
-                    Label(tr(.readerTextSmaller), systemImage: BrandIcon.minus.systemName)
-                }
-                .disabled(app.store.settings.textScale <= (AppSettings.textScales.first ?? 1))
-                Button {
-                    stepTextSize(1)
-                } label: {
-                    Label(tr(.readerTextLarger), systemImage: BrandIcon.plus.systemName)
-                }
-                .disabled(app.store.settings.textScale >= (AppSettings.textScales.last ?? 1))
-            }
-            Button {
-                toggleTheme()
-            } label: {
-                Label(tr(.readerThemeToggle), systemImage: colorScheme == .dark ? BrandIcon.sun.systemName : BrandIcon.moon.systemName)
-            }
         } label: {
             BrandIconView(icon: .moreVert)
+                .frame(width: BrandSize.touch, height: BrandSize.touch)
         }
         .accessibilityLabel(tr(.actionMore))
     }
@@ -186,16 +213,18 @@ private struct ReaderContent: View {
 
     private func toggleSaved() {
         guard let saved = model.toggleSaved() else { return }
-        app.showToast(saved ? tr(.readerSavedToast) : tr(.readerRemovedToast))
-        UIAccessibility.post(notification: .announcement, argument: saved ? tr(.readerSavedToast) : tr(.readerRemovedToast))
+        let message = saved ? tr(.readerSavedToast) : tr(.readerRemovedToast)
+        app.showToast(message)
+        UIAccessibility.post(notification: .announcement, argument: message)
     }
 
-    private func stepTextSize(_ step: Int) {
-        app.updateSettings { $0.textScale = $0.steppedTextScale(step) }
-    }
-
-    private func toggleTheme() {
-        app.updateSettings { $0.theme = colorScheme == .dark ? .light : .dark }
+    /// Copies the article's address on Wikipedia (useful later, with internet).
+    private func copyLink() {
+        model.canonicalLink { link in
+            guard let link else { return }
+            UIPasteboard.general.string = link
+            app.showToast(tr(.readerLinkCopied))
+        }
     }
 
     private func applyAppearance() {
@@ -214,6 +243,32 @@ struct ReaderWebView: UIViewRepresentable {
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 }
 
+/// "Velikost písma" sheet: text size slider and light/dark (mockup `reader-text-size`).
+@MainActor
+private struct TextSizeSheet: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: BrandSpace.xl) {
+            Text(tr(.readerTextSize))
+                .brandText(.headline)
+                .foregroundStyle(Color.brandInk)
+                .accessibilityAddTraits(.isHeader)
+            TextScaleControl()
+            VStack(alignment: .leading, spacing: BrandSpace.s) {
+                Text(tr(.settingsTheme))
+                    .brandText(.label)
+                    .foregroundStyle(Color.brandInk2)
+                ThemePicker()
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, BrandSize.gutter)
+        .padding(.top, BrandSpace.xxl)
+        .background(Color.brandSurface.ignoresSafeArea())
+        .presentationDetents([.height(300), .medium])
+        .presentationDragIndicator(.visible)
+    }
+}
+
 /// "Obsah článku": headings of the page.
 private struct ContentsSheet: View {
     let headings: [ReaderHeading]
@@ -224,7 +279,7 @@ private struct ContentsSheet: View {
         NavigationStack {
             Group {
                 if headings.isEmpty {
-                    EmptyStateView(icon: .article, title: tr(.readerContents), message: tr(.readerLoading))
+                    EmptyStateView(icon: .toc, title: tr(.readerContents), message: tr(.readerLoading))
                 } else {
                     List(headings) { heading in
                         Button {

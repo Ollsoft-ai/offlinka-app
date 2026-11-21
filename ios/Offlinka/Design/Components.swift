@@ -58,7 +58,7 @@ struct CardModifier: ViewModifier {
                 RoundedRectangle(cornerRadius: BrandRadius.m, style: .continuous)
                     .strokeBorder(Color.brandOutline, lineWidth: BrandSize.outline)
             )
-            .brandShadow(shadow ? BrandElevation.card : BrandShadow(x: 0, y: 0, color: .clear))
+            .hardShadow(shadow ? BrandElevation.card : BrandShadow(x: 0, y: 0, color: .clear))
     }
 }
 
@@ -165,14 +165,15 @@ struct HeroBackground: View {
 /// The „offlinka“ wordmark in type (until the logo is an asset): orange peak, paper or ink text.
 struct Wordmark: View {
     var onDark = true
+    var size: CGFloat = 20
 
     var body: some View {
         HStack(spacing: BrandSpace.xs) {
             Triangle()
                 .fill(Color.brandPrimary)
-                .frame(width: 14, height: 12)
+                .frame(width: size * 0.6, height: size * 0.5)
             Text(verbatim: "offlinka")
-                .font(.custom("ArchivoExpanded-ExtraBold", size: 20, relativeTo: .headline))
+                .font(.custom("ArchivoExpanded-ExtraBold", size: size, relativeTo: .headline))
                 .foregroundStyle(onDark ? Color.brandOnHero : Color.brandInk)
         }
         .accessibilityElement(children: .ignore)
@@ -191,16 +192,43 @@ struct Triangle: Shape {
     }
 }
 
-/// Section title in the brand style (expanded, ink).
+/// Section title in the brand style: the orange peak, expanded ink title, optional count on the right.
 struct SectionTitle: View {
+    let text: String
+    var trailing: String?
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: BrandSpace.s) {
+            Triangle()
+                .fill(Color.brandPrimary)
+                .frame(width: 16, height: 14)
+                .accessibilityHidden(true)
+            Text(text)
+                .brandText(.headline)
+                .foregroundStyle(Color.brandInk)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: BrandSpace.s)
+            if let trailing {
+                Text(trailing)
+                    .brandText(.labelSmall)
+                    .foregroundStyle(Color.brandInk2)
+            }
+        }
+    }
+}
+
+/// Small outlined tag (`CZ`, `SK`, `EN` on the Wikipedia tiles).
+struct TagView: View {
     let text: String
 
     var body: some View {
-        Text(text)
-            .brandText(.title)
-            .foregroundStyle(Color.brandInk)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityAddTraits(.isHeader)
+        Text(verbatim: text)
+            .brandText(.labelSmall)
+            .foregroundStyle(Color.brandInk2)
+            .padding(.horizontal, BrandSpace.s)
+            .padding(.vertical, BrandSpace.xxs)
+            .background(RoundedRectangle(cornerRadius: BrandRadius.xs).fill(Color.brandBg))
+            .overlay(RoundedRectangle(cornerRadius: BrandRadius.xs).strokeBorder(Color.brandLine, lineWidth: 1))
     }
 }
 
@@ -229,23 +257,31 @@ struct EmptyStateView: View {
     }
 }
 
-/// Short message at the bottom of the screen.
+/// Short message at the bottom of the screen, with an optional action (design: toast spec).
 struct ToastView: View {
-    let message: String
+    let toast: Toast
+    let onAction: () -> Void
 
     var body: some View {
-        Text(message)
-            .brandText(.label)
-            .foregroundStyle(Color.brandOnHero)
-            .padding(.horizontal, BrandSpace.l)
-            .padding(.vertical, BrandSpace.m)
-            .background(
-                RoundedRectangle(cornerRadius: BrandRadius.s, style: .continuous)
-                    .fill(Color.brandHeroDeep)
-            )
-            .padding(.bottom, 72)
-            .padding(.horizontal, BrandSize.gutter)
-            .accessibilityAddTraits(.updatesFrequently)
+        HStack(spacing: BrandSpace.l) {
+            Text(toast.message)
+                .brandText(.label)
+                .foregroundStyle(Color.brandOnHero)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if let actionTitle = toast.actionTitle {
+                Button(actionTitle, action: onAction)
+                    .brandText(.subhead)
+                    .foregroundStyle(Color(hex: 0xFFB98C))
+                    .frame(minHeight: BrandSize.touch)
+            }
+        }
+        .padding(.horizontal, BrandSpace.l)
+        .frame(minHeight: 52)
+        .background(RoundedRectangle(cornerRadius: BrandRadius.m, style: .continuous).fill(Color.brandHeroDeep))
+        .hardShadow(BrandElevation.raised)
+        .padding(.horizontal, BrandSize.gutter)
+        .padding(.bottom, 104)
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -266,19 +302,5 @@ enum ThemeApplier {
                 window.overrideUserInterfaceStyle = style
             }
         }
-    }
-}
-
-/// Month and year of a ZIM date (`2026-09-29` → „září 2026“) in the UI language.
-enum ContentDate {
-    static func monthYear(_ zimDate: String) -> String {
-        let parser = DateFormatter()
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        parser.dateFormat = zimDate.count >= 10 ? "yyyy-MM-dd" : "yyyy-MM"
-        guard let date = parser.date(from: String(zimDate.prefix(10))) else { return zimDate }
-        let formatter = DateFormatter()
-        formatter.locale = L10n.locale
-        formatter.setLocalizedDateFormatFromTemplate("LLLLyyyy")
-        return formatter.string(from: date)
     }
 }

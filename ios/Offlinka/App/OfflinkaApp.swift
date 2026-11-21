@@ -26,9 +26,9 @@ struct RootView: View {
                 .environment(\.locale, L10n.locale)
 
             if let toast = app.toast {
-                ToastView(message: toast)
+                ToastView(toast: toast) { app.performToastAction() }
                     .transition(.opacity)
-                    .allowsHitTesting(false)
+                    .allowsHitTesting(toast.actionTitle != nil)
             }
         }
         .animation(.easeOut(duration: 0.2), value: app.toast)
@@ -76,25 +76,25 @@ struct MainTabsView: View {
             NavigationStack(path: $router.homePath) {
                 HomeView().withRoutes()
             }
-            .tabItem { Label(tr(.navHome), systemImage: BrandIcon.home.systemName) }
+            .tabItem { Label(tr(.navHome), image: BrandIcon.home.assetName) }
             .tag(AppTab.home)
 
             NavigationStack(path: $router.libraryPath) {
                 LibraryView().withRoutes()
             }
-            .tabItem { Label(tr(.navLibrary), systemImage: BrandIcon.library.systemName) }
+            .tabItem { Label(tr(.navLibrary), image: BrandIcon.library.assetName) }
             .tag(AppTab.library)
 
             NavigationStack(path: $router.savedPath) {
                 SavedView().withRoutes()
             }
-            .tabItem { Label(tr(.navSaved), systemImage: BrandIcon.bookmark.systemName) }
+            .tabItem { Label(tr(.navSaved), image: BrandIcon.bookmark.assetName) }
             .tag(AppTab.saved)
 
             NavigationStack(path: $router.settingsPath) {
                 SettingsView().withRoutes()
             }
-            .tabItem { Label(tr(.navSettings), systemImage: BrandIcon.settings.systemName) }
+            .tabItem { Label(tr(.navSettings), image: BrandIcon.settings.assetName) }
             .tag(AppTab.settings)
         }
     }

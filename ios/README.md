@@ -10,7 +10,7 @@ SwiftUI app (iOS 17+, iPhone 15+ and USB-C iPads) that reads the Offlinka flash 
 - `Offlinka/Drive`: `DriveScanner` (finds `Knihovna/*.zim`, `Telefon/*.zim`, `.offidx`; best edition per book), `DriveAccess` (security-scoped bookmark, scope lifetime, reachability).
 - `Offlinka/Reader`: `OfflinkaURL` (`offlinka://<bookId>/<path>`), `SchemeResponder` (pure: MIME, ranges, ZIM redirects, error pages, reader CSS hook), `OfflinkaSchemeHandler` (WKURLSchemeHandler), `ReaderEngine` (configuration, offline content rules), `ReaderModel` + `ReaderScreen`.
 - `Offlinka/Search`, `Offlinka/Screens`, `Offlinka/Library`, `Offlinka/Persistence` (JSON `UserStore`), `Offlinka/Localization` (`L10n`, generated `Str.swift`), `Offlinka/Design` (components; colours/type come from `design/out/ios/Brand.swift`).
-- `Offlinka/Generated/`: UniFFI Swift bindings, written by `scripts/gen-bindings.sh`.
+- `Offlinka/Generated/`: UniFFI Swift bindings, committed by the core and rewritten by `scripts/build-ios-core.sh` / `scripts/gen-bindings.sh`.
 - Used straight from `design/`: `Brand.swift`, `Localizable.xcstrings`, `fonts/*.ttf`, `Icons.xcassets`, `reader/offlinka-reader.css` + `reader/inject.js`. The app icon is copied by `tools/sync-design.sh` (an icon set must sit inside an asset catalog).
 - `tools/gen-str.py`: regenerates `Str.swift` from `design/strings/cs.json` after design adds a key.
 
@@ -35,5 +35,6 @@ SwiftUI app (iOS 17+, iPhone 15+ and USB-C iPads) that reads the Offlinka flash 
 
 ## Checked on Linux (Swift 6.4.3 toolchain, `~/opt/swift-6.4.3`)
 
-- Type-check of all Foundation-only files in Swift 5 and Swift 6 language modes; syntax parse of every file.
-- Unit tests of scanner, URL scheme, responder, search model, store, catalog, plus `CoreContentSourceTests` against the real core (Linux build of `libofflinka_core.so` + generated bindings) on the real guides and games ZIMs. The SwiftUI/UIKit/WebKit files were not compiled.
+- Every file parses; the whole app + generated bindings + Brand.swift type-check in Swift 5 and 6 modes against hand-written stand-ins for SwiftUI/UIKit/WebKit (consistency only, not Apple's real signatures).
+- Unit tests of scanner, URL scheme, responder, search model, store, catalog, and `CoreContentSourceTests` against the core built from `main` (Linux `libofflinka_core.so` + the committed bindings) on the real guides and games ZIMs.
+- Not compiled with the real SDKs, not run on a simulator or device: see `UNVERIFIED.md`.

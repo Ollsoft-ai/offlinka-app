@@ -215,19 +215,34 @@ enum BookCatalog {
         books.map { String($0.date.prefix(7)) }.filter { $0.count == 7 }.max()
     }
 
-    /// `9,3` for the `library_size` (`{size} GB`) string, in the UI locale.
-    static func gigabytes(_ bytes: Int64) -> String {
+    /// The number for the `library_size` (`{size} GB`) string in the UI locale, with
+    /// `significantDigits` digits and no trailing zeros: 9,96 · 3,5 · 17,1 · 0,54 (design mockups).
+    static func gigabytes(_ bytes: Int64, significantDigits: Int = 3) -> String {
         let formatter = NumberFormatter()
         formatter.locale = L10n.locale
         formatter.numberStyle = .decimal
+        formatter.usesSignificantDigits = true
+        formatter.minimumSignificantDigits = 1
+        formatter.maximumSignificantDigits = significantDigits
         let value = Double(bytes) / 1_000_000_000
-        formatter.minimumFractionDigits = value < 10 ? 1 : 0
-        formatter.maximumFractionDigits = value < 10 ? 1 : 0
-        if value < 0.1 {
-            formatter.maximumFractionDigits = 2
-            formatter.minimumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: value)) ?? String(format: "%.2f", value)
+    }
+
+    /// Tag on the Wikipedia tiles.
+    static func languageTag(of book: BookRecord) -> String? {
+        switch kind(of: book) {
+        case .wikipediaCs: return "CZ"
+        case .wikipediaSk: return "SK"
+        case .wikipediaEn: return "EN"
+        default: return nil
         }
-        return formatter.string(from: NSNumber(value: value)) ?? String(format: "%.1f", value)
+    }
+
+    /// "září 2026, čeština, 9,96 GB": the meta line of a library row.
+    static func metaLine(of book: BookRecord) -> String {
+        [ContentDate.monthYear(book.date), languageName(book.language), tr(.librarySize, gigabytes(book.sizeBytes))]
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
     }
 
     static func formattedCount(_ count: Int) -> String {
@@ -235,5 +250,19 @@ enum BookCatalog {
         formatter.locale = L10n.locale
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: count)) ?? String(count)
+    }
+}
+
+/// Month and year of a ZIM date (`2026-09-29` → „září 2026“) in the UI language.
+enum ContentDate {
+    static func monthYear(_ zimDate: String) -> String {
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.dateFormat = zimDate.count >= 10 ? "yyyy-MM-dd" : "yyyy-MM"
+        guard let date = parser.date(from: String(zimDate.prefix(10))) else { return zimDate }
+        let formatter = DateFormatter()
+        formatter.locale = L10n.locale
+        formatter.setLocalizedDateFormatFromTemplate("LLLLyyyy")
+        return formatter.string(from: date)
     }
 }
