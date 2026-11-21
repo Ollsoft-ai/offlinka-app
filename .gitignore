@@ -1,0 +1,16 @@
+target/
+**/build/
+.gradle/
+.kotlin/
+local.properties
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
+ios/*.xcodeproj/
+ios/DerivedData/
+ios/Frameworks/*.xcframework
+.DS_Store
+.idea/
+*.iml
+out/

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offline knihovna – začněte zde</title>
+<style>
+:root{--ink:#22282B;--ink2:#566067;--line:#DFE5E1;--mist:#F2F6F3;--green:#1FD15F;--green-d:#0B7A3B}
+*{box-sizing:border-box}body{margin:0;font:500 17px/1.5 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif;color:var(--ink);background:#fff}
+.wrap{max-width:1000px;margin:0 auto;padding:0 16px}header{border-bottom:1px solid var(--line);padding:14px 0;font-weight:900;font-size:22px}
+.hero{background:var(--mist);padding:40px 0;text-align:center}h1{margin:0 0 8px;font-size:38px}
+form{display:flex;max-width:640px;margin:18px auto 0;border:2px solid var(--ink);border-radius:99px;overflow:hidden;background:#fff}
+input{flex:1;border:0;padding:14px 18px;font:inherit;min-width:0}button{border:0;background:var(--green);font:inherit;font-weight:800;padding:0 22px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin:26px 0}
+.tiles a{display:block;border:2px solid var(--line);border-radius:18px;padding:18px;text-decoration:none;color:var(--ink)}.tiles a:hover{border-color:var(--ink)}
+.tiles b{display:block;font-size:22px}.tiles span{color:var(--ink2)}footer{color:var(--ink2);font-size:14px;padding:20px 0 40px}
+#off{display:none;background:#FFF3C9;padding:14px;text-align:center;font-weight:700}
+</style>
+</head>
+<body>
+<div id="off">Knihovna ještě neběží. Na počítači spusťte <b>2 SPUSTIT</b>, v mobilu aplikaci <b>Kiwix</b>. Návod: 1 ZAČNI ZDE.pdf</div>
+<header><div class="wrap">Offline knihovna</div></header>
+<section class="hero"><div class="wrap"><h1>Co chcete najít?</h1><div>Všechno se načítá z flashky. Internet nepotřebujete.</div>
+<form id="f"><input id="q" type="search" placeholder="Hledat ve Wikipedii" aria-label="Hledat"><button>Hledat</button></form></div></section>
+<div class="wrap"><nav class="tiles" id="t"></nav>
+<footer>Zavřením černého okna knihovnu vypnete. Obsah: Wikipedie (CC BY-SA 4.0), © přispěvatelé OpenStreetMap (ODbL), Kiwix (GPL-3.0) – podrobnosti ve složce Licence.</footer></div>
+<script>
+const REAL = %REAL%;
+const T = [['wiki','Wikipedie','česky, slovensky'],['mapy','Mapy','OpenStreetMap'],['pomoc','První pomoc','rychlé karty a příručky'],['knihovna','Knihovna','české klasické texty'],['hry','Hry','2048, Hextris'],['cestovani','Cestování','Wikivoyage']];
+document.getElementById('t').innerHTML = T.map(([k,t,d])=>`<a href="${k==='wiki'?REAL.wiki.cs:REAL[k]}"><b>${t}</b><span>${d}</span></a>`).join('');
+document.getElementById('f').onsubmit = e => { e.preventDefault(); const q=document.getElementById('q').value.trim(); if(q) location.href='/viewer#search?books.name='+encodeURIComponent(REAL.wiki.cs.replace('/viewer#',''))+'&pattern='+encodeURIComponent(q); };
+if (location.protocol === 'file:') document.getElementById('off').style.display = 'block';
+</script>
+</body>
+</html>
