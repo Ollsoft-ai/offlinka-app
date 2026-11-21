@@ -403,19 +403,54 @@ impl Library {
         let books = self.books();
         let mut order: Vec<usize> = (0..books.len()).collect();
         order.sort_by_key(|&i| (Self::priority(&books[i].info), i));
+        let limit = limit as usize;
+        let qn = normalize::normalize(&query);
+        // Ranked raw hits of every book: index records are only read for the hits that
+        // can still make it into the merged list.
+        enum Item {
+            Rec(u32),
+            Ready(search::Hit),
+        }
         let mut all = Vec::new();
+        let indexes: Vec<Option<Arc<SearchIndex>>> = books.iter().map(|b| b.search_index()).collect();
         for (rank, &i) in order.iter().enumerate() {
-            for (pos, c) in books[i].candidates(&query, limit as usize).into_iter().enumerate() {
-                all.push((c.class(), rank, pos, i, c));
+            match &indexes[i] {
+                Some(idx) if !qn.is_empty() && limit > 0 => {
+                    for (pos, (class, id)) in idx.search(&qn, limit).unwrap_or_default().into_iter().enumerate() {
+                        all.push((class, rank, pos, i, Item::Rec(id)));
+                    }
+                }
+                Some(_) => {}
+                None => {
+                    for (pos, c) in books[i].candidates(&query, limit).into_iter().enumerate() {
+                        if let search::Cand::Ready(h) = c {
+                            all.push((h.class, rank, pos, i, Item::Ready(h)));
+                        }
+                    }
+                }
             }
         }
         all.sort_by_key(|a| (a.0, a.1, a.2));
-        all.into_iter()
-            .filter_map(|(_, _, _, i, c)| {
-                let h = search::resolve(&books[i].archive, c).ok()?;
-                Some(LibrarySuggestion { book_id: books[i].info.id.clone(), title: h.title, path: h.path })
-            })
-            .take(limit as usize)
-            .collect()
+        let mut seen = std::collections::HashSet::new();
+        let mut out = Vec::with_capacity(limit);
+        for (class, _, _, i, item) in all {
+            if out.len() >= limit {
+                break;
+            }
+            let hit = match item {
+                Item::Ready(h) => Some(h),
+                Item::Rec(id) => {
+                    let Some(Ok((display, target))) = indexes[i].as_ref().map(|x| x.record(id)) else { continue };
+                    if !seen.insert((i, target)) {
+                        continue;
+                    }
+                    search::resolve(&books[i].archive, search::Cand::Rec { class, display, target }).ok()
+                }
+            };
+            if let Some(h) = hit {
+                out.push(LibrarySuggestion { book_id: books[i].info.id.clone(), title: h.title, path: h.path });
+            }
+        }
+        out
     }
 }

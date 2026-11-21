@@ -20,17 +20,13 @@ pub struct Hit {
 /// among the results actually shown.
 #[derive(Debug, Clone)]
 pub enum Cand {
-    Rec { class: u8, display: u32, target: u32 },
+    /// Directory-entry offsets of the shown entry and the target.
+    Rec {
+        class: u8,
+        display: u64,
+        target: u64,
+    },
     Ready(Hit),
-}
-
-impl Cand {
-    pub fn class(&self) -> u8 {
-        match self {
-            Cand::Rec { class, .. } => *class,
-            Cand::Ready(h) => h.class,
-        }
-    }
 }
 
 /// Indexed search: ranked, diacritics-insensitive, redirects deduped by target.
@@ -59,8 +55,8 @@ pub fn resolve(a: &Archive, c: Cand) -> Result<Hit> {
     match c {
         Cand::Ready(h) => Ok(h),
         Cand::Rec { class, display, target } => {
-            let d = a.dirent(display)?;
-            let t = if display == target { d.clone() } else { a.dirent(target)? };
+            let d = a.dirent_at(display)?;
+            let t = if display == target { d.clone() } else { a.dirent_at(target)? };
             let snippet = (display != target && t.title() != d.title()).then(|| t.title().to_string());
             Ok(Hit { class, title: d.title().to_string(), path: a.api_path(&t), snippet })
         }

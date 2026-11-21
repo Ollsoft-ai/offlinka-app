@@ -19,7 +19,7 @@
 //! File layout (little endian, sections 8-byte aligned):
 //! ```text
 //! 0   magic "OFFIDX\0\x01"      8
-//! 8   version u32 (3), flags u32
+//! 8   version u32 (4), flags u32
 //! 16  ZIM uuid                   16
 //! 32  ZIM entry count u32, record count u32
 //! 40  section count u32 (10), article record count A u32
@@ -30,8 +30,10 @@
 //!     6 title postings [u32]            7 word offsets [u32; keys+1]
 //!     8 word postings [u32]             9 heavy lists [u32]: n, ids…
 //! ```
-//! Records: ids < A are articles, `[u32 entry; A]`; the rest are redirects,
-//! `[u32 display, u32 target]` each. Word-suffix keys come from article titles only.
+//! Records hold ZIM directory-entry *offsets* (one read per title, no path pointer
+//! lookup): ids < A are articles, `[u64 dirent offset; A]`; the rest are redirects,
+//! `[u64 display offset, u64 target offset]` each. Word-suffix keys come from article
+//! titles only.
 //! Postings of a key are ascending record ids, one per target.
 
 use std::collections::HashMap;
@@ -46,7 +48,7 @@ use crate::reader::{FileSource, MemSource, ReadAt};
 use crate::zim::{Archive, Kind};
 
 pub const MAGIC: &[u8; 8] = b"OFFIDX\0\x01";
-pub const VERSION: u32 = 3;
+pub const VERSION: u32 = 4;
 const SECTIONS: usize = 10;
 const HEADER_LEN: usize = 48 + SECTIONS * 16;
 /// Index files up to this size are read into memory whole.
@@ -166,7 +168,7 @@ impl SearchIndex {
             src.read_exact_at(&mut v, s.off)?;
             fst::Map::new(v).map_err(|e| invalid(format!("search index: {e}")))
         };
-        let need = article_records as u64 * 4 + (record_count - article_records) as u64 * 8;
+        let need = article_records as u64 * 8 + (record_count - article_records) as u64 * 16;
         if secs[4].len < need {
             return Err(invalid("search index: records truncated"));
         }
@@ -205,18 +207,20 @@ impl SearchIndex {
         Ok(b.chunks_exact(4).map(|c| u32::from_le_bytes(c.try_into().unwrap())).collect())
     }
 
-    /// (display entry, target entry) of a record.
-    pub fn record(&self, id: u32) -> Result<(u32, u32)> {
-        if id < self.article_records {
-            let e = self.read_u32s(self.records, id as u64, 1)?[0];
-            Ok((e, e))
+    /// (display, target) directory-entry offsets of a record (equal for an article).
+    pub fn record(&self, id: u32) -> Result<(u64, u64)> {
+        let (pos, n) = if id < self.article_records {
+            (id as u64 * 8, 8)
         } else if id < self.record_count {
-            let k = self.article_records as u64 + (id - self.article_records) as u64 * 2;
-            let v = self.read_u32s(self.records, k, 2)?;
-            Ok((v[0], v[1]))
+            (self.article_records as u64 * 8 + (id - self.article_records) as u64 * 16, 16)
         } else {
-            Err(invalid("search index: record id out of range"))
-        }
+            return Err(invalid("search index: record id out of range"));
+        };
+        let mut b = [0u8; 16];
+        self.src.read_exact_at(&mut b[..n], self.records.off + pos)?;
+        let d = u64::from_le_bytes(b[..8].try_into().unwrap());
+        let t = if n == 16 { u64::from_le_bytes(b[8..].try_into().unwrap()) } else { d };
+        Ok((d, t))
     }
 
     /// Record ids of the keys with ordinals `lo..hi`.
@@ -422,11 +426,13 @@ pub fn build(a: &Archive, out: &mut dyn Write, progress: &mut dyn FnMut(&str)) -
     let mut is_content = vec![false; n];
     let mut arena = String::new();
     let mut spans: Vec<(u32, u32)> = Vec::with_capacity(n);
+    let mut dirent_offs: Vec<u64> = Vec::with_capacity(n);
     let mut sc = DirentScanner::new(a);
     let mut done = 0u64;
     pointers(a, range.clone(), &mut |i, off| {
         let d = sc.dirent_at(off)?;
         let k = (i - base) as usize;
+        dirent_offs.push(off);
         match d.kind {
             Kind::Content { .. } => {
                 is_content[k] = true;
@@ -535,11 +541,11 @@ pub fn build(a: &Archive, out: &mut dyn Write, progress: &mut dyn FnMut(&str)) -
     let w = build_map(&arena, &mut wkeys, &targets, &mut heavy_lists, &mut heavy_seen)?;
     drop(wkeys);
 
-    let mut records = Vec::with_capacity(displays.len() * 8);
+    let mut records = Vec::with_capacity(displays.len() * 16);
     for (id, (d, t)) in displays.iter().zip(&targets).enumerate() {
-        records.extend_from_slice(&d.to_le_bytes());
+        records.extend_from_slice(&dirent_offs[(d - base) as usize].to_le_bytes());
         if id as u64 >= st.articles {
-            records.extend_from_slice(&t.to_le_bytes());
+            records.extend_from_slice(&dirent_offs[(t - base) as usize].to_le_bytes());
         }
     }
     let to_bytes = |v: &[u32]| -> Vec<u8> { v.iter().flat_map(|x| x.to_le_bytes()).collect() };
