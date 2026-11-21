@@ -460,7 +460,13 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
 
 
 // Public interface members begin here.
-
+// Magic number for the Rust proxy to call using the same mechanism as every other method,
+// to free the callback once it's dropped by Rust.
+private let IDX_CALLBACK_FREE: Int32 = 0
+// Callback return codes
+private let UNIFFI_CALLBACK_SUCCESS: Int32 = 0
+private let UNIFFI_CALLBACK_ERROR: Int32 = 1
+private let UNIFFI_CALLBACK_UNEXPECTED_ERROR: Int32 = 2
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -507,6 +513,22 @@ fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
 
     public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
         writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterDouble: FfiConverterPrimitive {
+    typealias FfiType = Double
+    typealias SwiftType = Double
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Double {
+        return try lift(readDouble(&buf))
+    }
+
+    public static func write(_ value: Double, into buf: inout [UInt8]) {
+        writeDouble(&buf, lower(value))
     }
 }
 
@@ -603,6 +625,10 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
 
 /**
  * One ZIM file. Thread-safe; share it freely.
+ *
+ * Opening reads only the header and the MIME list; metadata, the main page and the
+ * title listing are looked up on first use (`info`, `suggest`, ...) with a handful of
+ * reads, independent of the book's size.
  */
 public protocol BookProtocol: AnyObject, Sendable {
     
@@ -615,6 +641,17 @@ public protocol BookProtocol: AnyObject, Sendable {
      * Attach a search index built by `offlinka-cli index`.
      */
     func attachIndexPath(path: String) throws 
+    
+    /**
+     * Close the ZIM file (and the attached index) now, e.g. when the drive is unplugged
+     * or the book is removed. The object stays valid and thread-safe: calls running in
+     * other threads finish, and every later call fails with `CoreError::Io` (`info()`
+     * keeps its cached value, `suggest` returns nothing). Prefer this over Kotlin's
+     * `close()`/`destroy()` while other threads may still use the book: after
+     * `destroy()` the generated Kotlin throws `IllegalStateException` before Rust is
+     * reached.
+     */
+    func closeFile() 
     
     /**
      * Size of an entry in bytes (redirects followed).
@@ -636,7 +673,18 @@ public protocol BookProtocol: AnyObject, Sendable {
      */
     func illustration(size: UInt32)  -> Data?
     
+    /**
+     * Book metadata. The first call reads it (a few small reads); later calls are free.
+     * Never fails: a closed or unreadable book gives a minimal record (title = file name).
+     */
     func info()  -> BookInfo
+    
+    /**
+     * Load the attached index into memory now. Attaching only reads the header; the
+     * in-memory part (cs maxi 16 MB, en top1m 76 MB) otherwise loads on the first
+     * `suggest`. Call it on a background thread right after attaching. No index: Ok.
+     */
+    func preloadIndex() throws 
     
     /**
      * Path of a random article, if the book has articles.
@@ -652,6 +700,10 @@ public protocol BookProtocol: AnyObject, Sendable {
 }
 /**
  * One ZIM file. Thread-safe; share it freely.
+ *
+ * Opening reads only the header and the MIME list; metadata, the main page and the
+ * title listing are looked up on first use (`info`, `suggest`, ...) with a handful of
+ * reads, independent of the book's size.
  */
 open class Book: BookProtocol, @unchecked Sendable {
     fileprivate let handle: UInt64
@@ -757,6 +809,23 @@ open func attachIndexPath(path: String)throws   {try rustCallWithError(FfiConver
 }
     
     /**
+     * Close the ZIM file (and the attached index) now, e.g. when the drive is unplugged
+     * or the book is removed. The object stays valid and thread-safe: calls running in
+     * other threads finish, and every later call fails with `CoreError::Io` (`info()`
+     * keeps its cached value, `suggest` returns nothing). Prefer this over Kotlin's
+     * `close()`/`destroy()` while other threads may still use the book: after
+     * `destroy()` the generated Kotlin throws `IllegalStateException` before Rust is
+     * reached.
+     */
+open func closeFile()  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_offlinka_core_fn_method_book_close_file(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
+}
+    
+    /**
      * Size of an entry in bytes (redirects followed).
      */
 open func contentLength(path: String)throws  -> UInt64  {
@@ -810,6 +879,10 @@ open func illustration(size: UInt32) -> Data?  {
 })
 }
     
+    /**
+     * Book metadata. The first call reads it (a few small reads); later calls are free.
+     * Never fails: a closed or unreadable book gives a minimal record (title = file name).
+     */
 open func info() -> BookInfo  {
     return try!  FfiConverterTypeBookInfo_lift(try! rustCall() {
         uniffiCallStatus in
@@ -817,6 +890,19 @@ open func info() -> BookInfo  {
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
+}
+    
+    /**
+     * Load the attached index into memory now. Attaching only reads the header; the
+     * in-memory part (cs maxi 16 MB, en top1m 76 MB) otherwise loads on the first
+     * `suggest`. Call it on a background thread right after attaching. No index: Ok.
+     */
+open func preloadIndex()throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
+        uniffiCallStatus in
+    uniffi_offlinka_core_fn_method_book_preload_index(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
 }
     
     /**
@@ -910,8 +996,9 @@ public protocol LibraryProtocol: AnyObject, Sendable {
     func books()  -> [Book]
     
     /**
-     * Suggestions from every book, merged: by match class (exact, prefix, word), then
-     * Czech Wikipedia first, then the order books were added, then rank inside the book.
+     * Suggestions from every book, merged by score (match tier + popularity, see
+     * `index.rs`); books other than the Czech Wikipedia get a small handicap so it comes
+     * first among equals, then the order books were added, then rank inside the book.
      */
     func suggestAll(query: String, limit: UInt32)  -> [LibrarySuggestion]
     
@@ -1003,8 +1090,9 @@ open func books() -> [Book]  {
 }
     
     /**
-     * Suggestions from every book, merged: by match class (exact, prefix, word), then
-     * Czech Wikipedia first, then the order books were added, then rank inside the book.
+     * Suggestions from every book, merged by score (match tier + popularity, see
+     * `index.rs`); books other than the Czech Wikipedia get a small handicap so it comes
+     * first among equals, then the order books were added, then rank inside the book.
      */
 open func suggestAll(query: String, limit: UInt32) -> [LibrarySuggestion]  {
     return try!  FfiConverterSequenceTypeLibrarySuggestion.lift(try! rustCall() {
@@ -1429,6 +1517,11 @@ enum CoreError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
      */
     case Unsupported(message: String)
     
+    /**
+     * The caller cancelled a long operation (`build_index`).
+     */
+    case Cancelled(message: String)
+    
 
     
 
@@ -1474,6 +1567,10 @@ public struct FfiConverterTypeCoreError: FfiConverterRustBuffer {
             message: try FfiConverterString.read(from: &buf)
         )
         
+        case 5: return .Cancelled(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -1493,6 +1590,8 @@ public struct FfiConverterTypeCoreError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(3))
         case .Unsupported(_ /* message is ignored*/):
             writeInt(&buf, Int32(4))
+        case .Cancelled(_ /* message is ignored*/):
+            writeInt(&buf, Int32(5))
 
         
         }
@@ -1512,6 +1611,175 @@ public func FfiConverterTypeCoreError_lift(_ buf: RustBuffer) throws -> CoreErro
 #endif
 public func FfiConverterTypeCoreError_lower(_ value: CoreError) -> RustBuffer {
     return FfiConverterTypeCoreError.lower(value)
+}
+
+
+
+
+/**
+ * Progress and cancellation for [`build_index`], implemented by the app.
+ */
+public protocol IndexBuildListener: AnyObject, Sendable {
+    
+    /**
+     * Overall fraction done, 0.0..=1.0, increasing (at most every 0.2 % or 250 ms).
+     */
+    func onProgress(fraction: Double) 
+    
+    /**
+     * Asked with every progress call; return true to stop. `build_index` then fails
+     * with `CoreError::Cancelled` and leaves no file behind.
+     */
+    func isCancelled()  -> Bool
+    
+}
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceIndexBuildListener {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceIndexBuildListener = UniffiVTableCallbackInterfaceIndexBuildListener(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterCallbackInterfaceIndexBuildListener.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface IndexBuildListener: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterCallbackInterfaceIndexBuildListener.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface IndexBuildListener: handle missing in uniffiClone")
+            }
+        },
+        onProgress: { (
+            uniffiHandle: UInt64,
+            fraction: Double,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceIndexBuildListener.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onProgress(
+                     fraction: try FfiConverterDouble.lift(fraction)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        isCancelled: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<Int8>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> Bool in
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceIndexBuildListener.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.isCancelled(
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterBool.lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    //
+    // `nonisolated(unsafe)` is needed under Swift 6 strict concurrency.
+    // This is safe because the pointee is initialized once during static init
+    // and never mutated by either side of the FFI.  Its fields are C function pointers.
+    nonisolated(unsafe) static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceIndexBuildListener> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceIndexBuildListener>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitIndexBuildListener() {
+    uniffi_offlinka_core_fn_init_callback_vtable_indexbuildlistener(UniffiCallbackInterfaceIndexBuildListener.vtablePtr)
+}
+
+// FfiConverter protocol for callback interfaces
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterCallbackInterfaceIndexBuildListener {
+    fileprivate static let handleMap = UniffiHandleMap<IndexBuildListener>()
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+extension FfiConverterCallbackInterfaceIndexBuildListener : FfiConverter {
+    typealias SwiftType = IndexBuildListener
+    typealias FfiType = UInt64
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lift(_ handle: UInt64) throws -> SwiftType {
+        try handleMap.get(handle: handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lower(_ v: SwiftType) -> UInt64 {
+        return handleMap.insert(obj: v)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func write(_ v: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(v))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterCallbackInterfaceIndexBuildListener_lift(_ handle: UInt64) throws -> IndexBuildListener {
+    return try FfiConverterCallbackInterfaceIndexBuildListener.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterCallbackInterfaceIndexBuildListener_lower(_ v: IndexBuildListener) -> UInt64 {
+    return FfiConverterCallbackInterfaceIndexBuildListener.lower(v)
 }
 
 #if swift(>=5.8)
@@ -1637,6 +1905,23 @@ fileprivate struct FfiConverterSequenceTypeSuggestion: FfiConverterRustBuffer {
     }
 }
 /**
+ * Build the search index of a book on the device and write it to `out_path` (app
+ * storage, never the drive). Byte-identical to `offlinka-cli index`. Blocking: run it
+ * on a background thread. Reads the ZIM sequentially (directory entries, then one zstd
+ * block per article cluster). Writes `<out_path>.part` and renames it when complete;
+ * on error or cancel nothing is left behind. Does not attach the index: call
+ * `attach_index_path(out_path)` afterwards.
+ */
+public func buildIndex(book: Book, outPath: String, listener: IndexBuildListener)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
+        uniffiCallStatus in
+    uniffi_offlinka_core_fn_func_build_index(
+        FfiConverterTypeBook_lower(book),
+        FfiConverterString.lower(outPath),
+        FfiConverterCallbackInterfaceIndexBuildListener_lower(listener),uniffiCallStatus
+    )
+}
+}
+/**
  * Version of the core library (crate version).
  */
 public func coreVersion() -> String  {
@@ -1645,6 +1930,28 @@ public func coreVersion() -> String  {
     uniffi_offlinka_core_fn_func_core_version(uniffiCallStatus
     )
 })
+}
+/**
+ * Budget in bytes of the decompressed-cluster cache shared by all open books
+ * (default 48 MB). Takes effect immediately.
+ */
+public func setClusterCacheBudget(bytes: UInt64)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_offlinka_core_fn_func_set_cluster_cache_budget(
+        FfiConverterUInt64.lower(bytes),uniffiCallStatus
+    )
+}
+}
+/**
+ * Free memory on demand (Android `onTrimMemory`, iOS memory warning): drops the
+ * decompressed clusters and directory entries cached for all books and unloads the
+ * in-memory part of every attached search index (it reloads on the next suggest).
+ */
+public func trimMemory()  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_offlinka_core_fn_func_trim_memory(uniffiCallStatus
+    )
+}
 }
 
 private enum InitializationResult {
@@ -1662,13 +1969,25 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
+    if (uniffi_offlinka_core_checksum_func_build_index() != 10649) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_offlinka_core_checksum_func_core_version() != 45769) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_offlinka_core_checksum_func_set_cluster_cache_budget() != 40381) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_offlinka_core_checksum_func_trim_memory() != 27031) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_offlinka_core_checksum_method_book_attach_index_fd() != 3754) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_offlinka_core_checksum_method_book_attach_index_path() != 5770) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_offlinka_core_checksum_method_book_close_file() != 9878) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_offlinka_core_checksum_method_book_content_length() != 7536) {
@@ -1683,7 +2002,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_offlinka_core_checksum_method_book_illustration() != 389) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_offlinka_core_checksum_method_book_info() != 36672) {
+    if (uniffi_offlinka_core_checksum_method_book_info() != 38335) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_offlinka_core_checksum_method_book_preload_index() != 27511) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_offlinka_core_checksum_method_book_random_article() != 45482) {
@@ -1698,7 +2020,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_offlinka_core_checksum_method_library_books() != 9727) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_offlinka_core_checksum_method_library_suggest_all() != 193) {
+    if (uniffi_offlinka_core_checksum_method_library_suggest_all() != 5658) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_offlinka_core_checksum_constructor_book_open_fd() != 49748) {
@@ -1710,7 +2032,14 @@ private let initializationResult: InitializationResult = {
     if (uniffi_offlinka_core_checksum_constructor_library_new() != 28494) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_offlinka_core_checksum_method_indexbuildlistener_on_progress() != 6432) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_offlinka_core_checksum_method_indexbuildlistener_is_cancelled() != 59437) {
+        return InitializationResult.apiChecksumMismatch
+    }
 
+    uniffiCallbackInitIndexBuildListener()
     return InitializationResult.ok
 }()
 

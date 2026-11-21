@@ -650,6 +650,34 @@ internal open class UniffiForeignFutureResultVoid(
 internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
     fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultVoid.UniffiByValue,)
 }
+internal interface UniffiCallbackInterfaceIndexBuildListenerMethod0 : com.sun.jna.Callback {
+    fun callback(`uniffiHandle`: Long,`fraction`: Double,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,)
+}
+internal interface UniffiCallbackInterfaceIndexBuildListenerMethod1 : com.sun.jna.Callback {
+    fun callback(`uniffiHandle`: Long,`uniffiOutReturn`: ByteByReference,uniffiCallStatus: UniffiRustCallStatus,)
+}
+@Structure.FieldOrder("uniffiFree", "uniffiClone", "onProgress", "isCancelled")
+internal open class UniffiVTableCallbackInterfaceIndexBuildListener(
+    @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+    @JvmField internal var `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+    @JvmField internal var `onProgress`: UniffiCallbackInterfaceIndexBuildListenerMethod0? = null,
+    @JvmField internal var `isCancelled`: UniffiCallbackInterfaceIndexBuildListenerMethod1? = null,
+) : Structure() {
+    class UniffiByValue(
+        `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+        `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+        `onProgress`: UniffiCallbackInterfaceIndexBuildListenerMethod0? = null,
+        `isCancelled`: UniffiCallbackInterfaceIndexBuildListenerMethod1? = null,
+    ): UniffiVTableCallbackInterfaceIndexBuildListener(`uniffiFree`,`uniffiClone`,`onProgress`,`isCancelled`,), Structure.ByValue
+
+   internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceIndexBuildListener) {
+        `uniffiFree` = other.`uniffiFree`
+        `uniffiClone` = other.`uniffiClone`
+        `onProgress` = other.`onProgress`
+        `isCancelled` = other.`isCancelled`
+    }
+
+}
 
 // A JNA Library to expose the extern-C FFI definitions.
 // This is an implementation detail which will be called internally by the public API.
@@ -675,11 +703,19 @@ internal object IntegrityCheckingUniffiLib {
     }
 
     internal fun ensureInitialized() = Unit
+    external fun uniffi_offlinka_core_checksum_func_build_index(
+    ): Int
     external fun uniffi_offlinka_core_checksum_func_core_version(
+    ): Int
+    external fun uniffi_offlinka_core_checksum_func_set_cluster_cache_budget(
+    ): Int
+    external fun uniffi_offlinka_core_checksum_func_trim_memory(
     ): Int
     external fun uniffi_offlinka_core_checksum_method_book_attach_index_fd(
     ): Int
     external fun uniffi_offlinka_core_checksum_method_book_attach_index_path(
+    ): Int
+    external fun uniffi_offlinka_core_checksum_method_book_close_file(
     ): Int
     external fun uniffi_offlinka_core_checksum_method_book_content_length(
     ): Int
@@ -690,6 +726,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_offlinka_core_checksum_method_book_illustration(
     ): Int
     external fun uniffi_offlinka_core_checksum_method_book_info(
+    ): Int
+    external fun uniffi_offlinka_core_checksum_method_book_preload_index(
     ): Int
     external fun uniffi_offlinka_core_checksum_method_book_random_article(
     ): Int
@@ -707,6 +745,10 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_offlinka_core_checksum_constructor_library_new(
     ): Int
+    external fun uniffi_offlinka_core_checksum_method_indexbuildlistener_on_progress(
+    ): Int
+    external fun uniffi_offlinka_core_checksum_method_indexbuildlistener_is_cancelled(
+    ): Int
     external fun ffi_offlinka_core_uniffi_contract_version(
     ): Int
 
@@ -723,6 +765,7 @@ internal object UniffiLib {
 
     init {
         Native.register(UniffiLib::class.java, findLibraryName(componentName = "offlinka_core"))
+        uniffiCallbackInterfaceIndexBuildListener.register(this)
         
     }
 
@@ -739,6 +782,8 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_offlinka_core_fn_method_book_attach_index_path(`ptr`: Long,`path`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    external fun uniffi_offlinka_core_fn_method_book_close_file(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     external fun uniffi_offlinka_core_fn_method_book_content_length(`ptr`: Long,`path`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
     external fun uniffi_offlinka_core_fn_method_book_get(`ptr`: Long,`path`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -749,6 +794,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_offlinka_core_fn_method_book_info(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_offlinka_core_fn_method_book_preload_index(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     external fun uniffi_offlinka_core_fn_method_book_random_article(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_offlinka_core_fn_method_book_suggest(`ptr`: Long,`query`: RustBuffer.ByValue,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
@@ -765,8 +812,16 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_offlinka_core_fn_method_library_suggest_all(`ptr`: Long,`query`: RustBuffer.ByValue,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_offlinka_core_fn_init_callback_vtable_indexbuildlistener(`vtable`: UniffiVTableCallbackInterfaceIndexBuildListener,
+    ): Unit
+    external fun uniffi_offlinka_core_fn_func_build_index(`book`: Long,`outPath`: RustBuffer.ByValue,`listener`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     external fun uniffi_offlinka_core_fn_func_core_version(uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_offlinka_core_fn_func_set_cluster_cache_budget(`bytes`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_offlinka_core_fn_func_trim_memory(uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     external fun ffi_offlinka_core_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun ffi_offlinka_core_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -886,13 +941,25 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
+    if ((lib.uniffi_offlinka_core_checksum_func_build_index() and 0xFFFF) != 10649) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_offlinka_core_checksum_func_core_version() and 0xFFFF) != 45769) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_offlinka_core_checksum_func_set_cluster_cache_budget() and 0xFFFF) != 40381) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_offlinka_core_checksum_func_trim_memory() and 0xFFFF) != 27031) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_offlinka_core_checksum_method_book_attach_index_fd() and 0xFFFF) != 3754) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_offlinka_core_checksum_method_book_attach_index_path() and 0xFFFF) != 5770) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_offlinka_core_checksum_method_book_close_file() and 0xFFFF) != 9878) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_offlinka_core_checksum_method_book_content_length() and 0xFFFF) != 7536) {
@@ -907,7 +974,10 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_offlinka_core_checksum_method_book_illustration() and 0xFFFF) != 389) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_offlinka_core_checksum_method_book_info() and 0xFFFF) != 36672) {
+    if ((lib.uniffi_offlinka_core_checksum_method_book_info() and 0xFFFF) != 38335) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_offlinka_core_checksum_method_book_preload_index() and 0xFFFF) != 27511) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_offlinka_core_checksum_method_book_random_article() and 0xFFFF) != 45482) {
@@ -922,7 +992,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_offlinka_core_checksum_method_library_books() and 0xFFFF) != 9727) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_offlinka_core_checksum_method_library_suggest_all() and 0xFFFF) != 193) {
+    if ((lib.uniffi_offlinka_core_checksum_method_library_suggest_all() and 0xFFFF) != 5658) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_offlinka_core_checksum_constructor_book_open_fd() and 0xFFFF) != 49748) {
@@ -932,6 +1002,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_offlinka_core_checksum_constructor_library_new() and 0xFFFF) != 28494) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_offlinka_core_checksum_method_indexbuildlistener_on_progress() and 0xFFFF) != 6432) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_offlinka_core_checksum_method_indexbuildlistener_is_cancelled() and 0xFFFF) != 59437) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
 }
@@ -1025,7 +1101,38 @@ object UniffiWithHandle
  *
  * @suppress
  * */
-object NoHandle
+object NoHandle// Magic number for the Rust proxy to call using the same mechanism as every other method,
+// to free the callback once it's dropped by Rust.
+internal const val IDX_CALLBACK_FREE = 0
+// Callback return codes
+internal const val UNIFFI_CALLBACK_SUCCESS = 0
+internal const val UNIFFI_CALLBACK_ERROR = 1
+internal const val UNIFFI_CALLBACK_UNEXPECTED_ERROR = 2
+
+/**
+ * @suppress
+ */
+public abstract class FfiConverterCallbackInterface<CallbackInterface: Any>: FfiConverter<CallbackInterface, Long> {
+    internal val handleMap = UniffiHandleMap<CallbackInterface>()
+
+    internal fun drop(handle: Long) {
+        handleMap.remove(handle)
+    }
+
+    override fun lift(value: Long): CallbackInterface {
+        return handleMap.get(value)
+    }
+
+    override fun read(buf: ByteBuffer) = lift(buf.getLong())
+
+    override fun lower(value: CallbackInterface) = handleMap.insert(value)
+
+    override fun allocationSize(value: CallbackInterface) = 8UL
+
+    override fun write(value: CallbackInterface, buf: ByteBuffer) {
+        buf.putLong(lower(value))
+    }
+}
 /**
  * The cleaner interface for Object finalization code to run.
  * This is the entry point to any implementation that we're using.
@@ -1157,6 +1264,29 @@ public object FfiConverterULong: FfiConverter<ULong, Long> {
 
     override fun write(value: ULong, buf: ByteBuffer) {
         buf.putLong(value.toLong())
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterDouble: FfiConverter<Double, Double> {
+    override fun lift(value: Double): Double {
+        return value
+    }
+
+    override fun read(buf: ByteBuffer): Double {
+        return buf.getDouble()
+    }
+
+    override fun lower(value: Double): Double {
+        return value
+    }
+
+    override fun allocationSize(value: Double) = 8UL
+
+    override fun write(value: Double, buf: ByteBuffer) {
+        buf.putDouble(value)
     }
 }
 
@@ -1357,6 +1487,10 @@ public object FfiConverterByteArray: FfiConverterRustBuffer<ByteArray> {
 
 /**
  * One ZIM file. Thread-safe; share it freely.
+ *
+ * Opening reads only the header and the MIME list; metadata, the main page and the
+ * title listing are looked up on first use (`info`, `suggest`, ...) with a handful of
+ * reads, independent of the book's size.
  */
 public interface BookInterface {
     
@@ -1369,6 +1503,17 @@ public interface BookInterface {
      * Attach a search index built by `offlinka-cli index`.
      */
     fun `attachIndexPath`(`path`: kotlin.String)
+    
+    /**
+     * Close the ZIM file (and the attached index) now, e.g. when the drive is unplugged
+     * or the book is removed. The object stays valid and thread-safe: calls running in
+     * other threads finish, and every later call fails with `CoreError::Io` (`info()`
+     * keeps its cached value, `suggest` returns nothing). Prefer this over Kotlin's
+     * `close()`/`destroy()` while other threads may still use the book: after
+     * `destroy()` the generated Kotlin throws `IllegalStateException` before Rust is
+     * reached.
+     */
+    fun `closeFile`()
     
     /**
      * Size of an entry in bytes (redirects followed).
@@ -1390,7 +1535,18 @@ public interface BookInterface {
      */
     fun `illustration`(`size`: kotlin.UInt): kotlin.ByteArray?
     
+    /**
+     * Book metadata. The first call reads it (a few small reads); later calls are free.
+     * Never fails: a closed or unreadable book gives a minimal record (title = file name).
+     */
     fun `info`(): BookInfo
+    
+    /**
+     * Load the attached index into memory now. Attaching only reads the header; the
+     * in-memory part (cs maxi 16 MB, en top1m 76 MB) otherwise loads on the first
+     * `suggest`. Call it on a background thread right after attaching. No index: Ok.
+     */
+    fun `preloadIndex`()
     
     /**
      * Path of a random article, if the book has articles.
@@ -1408,6 +1564,10 @@ public interface BookInterface {
 
 /**
  * One ZIM file. Thread-safe; share it freely.
+ *
+ * Opening reads only the header and the MIME list; metadata, the main page and the
+ * title listing are looked up on first use (`info`, `suggest`, ...) with a handful of
+ * reads, independent of the book's size.
  */
 open class Book: Disposable, AutoCloseable, BookInterface
 {
@@ -1546,6 +1706,27 @@ open class Book: Disposable, AutoCloseable, BookInterface
 
     
     /**
+     * Close the ZIM file (and the attached index) now, e.g. when the drive is unplugged
+     * or the book is removed. The object stays valid and thread-safe: calls running in
+     * other threads finish, and every later call fails with `CoreError::Io` (`info()`
+     * keeps its cached value, `suggest` returns nothing). Prefer this over Kotlin's
+     * `close()`/`destroy()` while other threads may still use the book: after
+     * `destroy()` the generated Kotlin throws `IllegalStateException` before Rust is
+     * reached.
+     */override fun `closeFile`()
+        = 
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_offlinka_core_fn_method_book_close_file(
+        it,
+        _status)
+}
+    }
+    
+    
+
+    
+    /**
      * Size of an entry in bytes (redirects followed).
      */
     @Throws(CoreException::class)override fun `contentLength`(`path`: kotlin.String): kotlin.ULong {
@@ -1617,7 +1798,11 @@ open class Book: Disposable, AutoCloseable, BookInterface
     }
     
 
-    override fun `info`(): BookInfo {
+    
+    /**
+     * Book metadata. The first call reads it (a few small reads); later calls are free.
+     * Never fails: a closed or unreadable book gives a minimal record (title = file name).
+     */override fun `info`(): BookInfo {
             return FfiConverterTypeBookInfo.lift(
     callWithHandle {
     uniffiRustCall() { _status ->
@@ -1628,6 +1813,24 @@ open class Book: Disposable, AutoCloseable, BookInterface
     }
     )
     }
+    
+
+    
+    /**
+     * Load the attached index into memory now. Attaching only reads the header; the
+     * in-memory part (cs maxi 16 MB, en top1m 76 MB) otherwise loads on the first
+     * `suggest`. Call it on a background thread right after attaching. No index: Ok.
+     */
+    @Throws(CoreException::class)override fun `preloadIndex`()
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.uniffi_offlinka_core_fn_method_book_preload_index(
+        it,
+        _status)
+}
+    }
+    
     
 
     
@@ -1834,7 +2037,7 @@ public object FfiConverterTypeBook: FfiConverter<Book, Long> {
 /**
  * A set of books searched together.
  */
-public interface LibraryInterface {
+public interface BookLibraryInterface {
     
     /**
      * Add a book. A book with the same id replaces the one already added only when it
@@ -1845,8 +2048,9 @@ public interface LibraryInterface {
     fun `books`(): List<Book>
     
     /**
-     * Suggestions from every book, merged: by match class (exact, prefix, word), then
-     * Czech Wikipedia first, then the order books were added, then rank inside the book.
+     * Suggestions from every book, merged by score (match tier + popularity, see
+     * `index.rs`); books other than the Czech Wikipedia get a small handicap so it comes
+     * first among equals, then the order books were added, then rank inside the book.
      */
     fun `suggestAll`(`query`: kotlin.String, `limit`: kotlin.UInt): List<LibrarySuggestion>
     
@@ -1856,7 +2060,7 @@ public interface LibraryInterface {
 /**
  * A set of books searched together.
  */
-open class Library: Disposable, AutoCloseable, LibraryInterface
+open class BookLibrary: Disposable, AutoCloseable, BookLibraryInterface
 {
 
     @Suppress("UNUSED_PARAMETER")
@@ -1997,8 +2201,9 @@ open class Library: Disposable, AutoCloseable, LibraryInterface
 
     
     /**
-     * Suggestions from every book, merged: by match class (exact, prefix, word), then
-     * Czech Wikipedia first, then the order books were added, then rank inside the book.
+     * Suggestions from every book, merged by score (match tier + popularity, see
+     * `index.rs`); books other than the Czech Wikipedia get a small handicap so it comes
+     * first among equals, then the order books were added, then rank inside the book.
      */override fun `suggestAll`(`query`: kotlin.String, `limit`: kotlin.UInt): List<LibrarySuggestion> {
             return FfiConverterSequenceTypeLibrarySuggestion.lift(
     callWithHandle {
@@ -2032,22 +2237,22 @@ open class Library: Disposable, AutoCloseable, LibraryInterface
 /**
  * @suppress
  */
-public object FfiConverterTypeLibrary: FfiConverter<Library, Long> {
-    override fun lower(value: Library): Long {
+public object FfiConverterTypeBookLibrary: FfiConverter<BookLibrary, Long> {
+    override fun lower(value: BookLibrary): Long {
         return value.uniffiCloneHandle()
     }
 
-    override fun lift(value: Long): Library {
-        return Library(UniffiWithHandle, value)
+    override fun lift(value: Long): BookLibrary {
+        return BookLibrary(UniffiWithHandle, value)
     }
 
-    override fun read(buf: ByteBuffer): Library {
+    override fun read(buf: ByteBuffer): BookLibrary {
         return lift(buf.getLong())
     }
 
-    override fun allocationSize(value: Library) = 8UL
+    override fun allocationSize(value: BookLibrary) = 8UL
 
-    override fun write(value: Library, buf: ByteBuffer) {
+    override fun write(value: BookLibrary, buf: ByteBuffer) {
         buf.putLong(lower(value))
     }
 }
@@ -2342,6 +2547,11 @@ sealed class CoreException(message: String): kotlin.Exception(message) {
      */
         class Unsupported(message: String) : CoreException(message)
         
+    /**
+     * The caller cancelled a long operation (`build_index`).
+     */
+        class Cancelled(message: String) : CoreException(message)
+        
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<CoreException> {
         override fun lift(error_buf: RustBuffer.ByValue): CoreException = FfiConverterTypeCoreError.lift(error_buf)
@@ -2359,6 +2569,7 @@ public object FfiConverterTypeCoreError : FfiConverterRustBuffer<CoreException> 
             2 -> CoreException.InvalidZim(FfiConverterString.read(buf))
             3 -> CoreException.NotFound(FfiConverterString.read(buf))
             4 -> CoreException.Unsupported(FfiConverterString.read(buf))
+            5 -> CoreException.Cancelled(FfiConverterString.read(buf))
             else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
         }
         
@@ -2386,10 +2597,98 @@ public object FfiConverterTypeCoreError : FfiConverterRustBuffer<CoreException> 
                 buf.putInt(4)
                 Unit
             }
+            is CoreException.Cancelled -> {
+                buf.putInt(5)
+                Unit
+            }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
     }
 
 }
+
+
+
+
+
+/**
+ * Progress and cancellation for [`build_index`], implemented by the app.
+ */
+public interface IndexBuildListener {
+    
+    /**
+     * Overall fraction done, 0.0..=1.0, increasing (at most every 0.2 % or 250 ms).
+     */
+    fun `onProgress`(`fraction`: kotlin.Double)
+    
+    /**
+     * Asked with every progress call; return true to stop. `build_index` then fails
+     * with `CoreError::Cancelled` and leaves no file behind.
+     */
+    fun `isCancelled`(): kotlin.Boolean
+    
+    companion object
+}
+
+
+
+// Put the implementation in an object so we don't pollute the top-level namespace
+internal object uniffiCallbackInterfaceIndexBuildListener {
+    internal object `onProgress`: UniffiCallbackInterfaceIndexBuildListenerMethod0 {
+        override fun callback(`uniffiHandle`: Long,`fraction`: Double,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,) {
+            val uniffiObj = FfiConverterTypeIndexBuildListener.handleMap.get(uniffiHandle)
+            val makeCall = { ->
+                uniffiObj.`onProgress`(
+                    FfiConverterDouble.lift(`fraction`),
+                )
+            }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+    internal object `isCancelled`: UniffiCallbackInterfaceIndexBuildListenerMethod1 {
+        override fun callback(`uniffiHandle`: Long,`uniffiOutReturn`: ByteByReference,uniffiCallStatus: UniffiRustCallStatus,) {
+            val uniffiObj = FfiConverterTypeIndexBuildListener.handleMap.get(uniffiHandle)
+            val makeCall = { ->
+                uniffiObj.`isCancelled`(
+                )
+            }
+            val writeReturn = { value: kotlin.Boolean -> uniffiOutReturn.setValue(FfiConverterBoolean.lower(value)) }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object uniffiFree: UniffiCallbackInterfaceFree {
+        override fun callback(handle: Long) {
+            FfiConverterTypeIndexBuildListener.handleMap.remove(handle)
+        }
+    }
+
+    internal object uniffiClone: UniffiCallbackInterfaceClone {
+        override fun callback(handle: Long): Long {
+            return FfiConverterTypeIndexBuildListener.handleMap.clone(handle)
+        }
+    }
+
+    internal var vtable = UniffiVTableCallbackInterfaceIndexBuildListener.UniffiByValue(
+        uniffiFree,
+        uniffiClone,
+        `onProgress`,
+        `isCancelled`,
+    )
+
+    // Registers the foreign callback with the Rust side.
+    // This method is generated for each callback interface.
+    internal fun register(lib: UniffiLib) {
+        lib.uniffi_offlinka_core_fn_init_callback_vtable_indexbuildlistener(vtable)
+    }
+}
+
+/**
+ * The ffiConverter which transforms the Callbacks in to handles to pass to Rust.
+ *
+ * @suppress
+ */
+public object FfiConverterTypeIndexBuildListener: FfiConverterCallbackInterface<IndexBuildListener>()
 
 
 
@@ -2539,6 +2838,27 @@ public object FfiConverterSequenceTypeSuggestion: FfiConverterRustBuffer<List<Su
     }
 }
         /**
+         * Build the search index of a book on the device and write it to `out_path` (app
+         * storage, never the drive). Byte-identical to `offlinka-cli index`. Blocking: run it
+         * on a background thread. Reads the ZIM sequentially (directory entries, then one zstd
+         * block per article cluster). Writes `<out_path>.part` and renames it when complete;
+         * on error or cancel nothing is left behind. Does not attach the index: call
+         * `attach_index_path(out_path)` afterwards.
+         */
+    @Throws(CoreException::class) fun `buildIndex`(`book`: Book, `outPath`: kotlin.String, `listener`: IndexBuildListener)
+        = 
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.uniffi_offlinka_core_fn_func_build_index(
+    
+        
+        FfiConverterTypeBook.lower(`book`),
+        FfiConverterString.lower(`outPath`),
+        FfiConverterTypeIndexBuildListener.lower(`listener`),_status)
+}
+    
+    
+
+        /**
          * Version of the core library (crate version).
          */ fun `coreVersion`(): kotlin.String {
             return FfiConverterString.lift(
@@ -2549,6 +2869,34 @@ public object FfiConverterSequenceTypeSuggestion: FfiConverterRustBuffer<List<Su
 }
     )
     }
+    
+
+        /**
+         * Budget in bytes of the decompressed-cluster cache shared by all open books
+         * (default 48 MB). Takes effect immediately.
+         */ fun `setClusterCacheBudget`(`bytes`: kotlin.ULong)
+        = 
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_offlinka_core_fn_func_set_cluster_cache_budget(
+    
+        
+        FfiConverterULong.lower(`bytes`),_status)
+}
+    
+    
+
+        /**
+         * Free memory on demand (Android `onTrimMemory`, iOS memory warning): drops the
+         * decompressed clusters and directory entries cached for all books and unloads the
+         * in-memory part of every attached search index (it reloads on the next suggest).
+         */ fun `trimMemory`()
+        = 
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_offlinka_core_fn_func_trim_memory(
+    
+        _status)
+}
+    
     
 
 

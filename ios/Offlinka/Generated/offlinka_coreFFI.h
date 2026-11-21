@@ -243,6 +243,30 @@ typedef void (*UniffiForeignFutureCompleteVoid)(uint64_t, UniffiForeignFutureRes
     );
 
 #endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_INDEX_BUILD_LISTENER_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_INDEX_BUILD_LISTENER_METHOD0
+typedef void (*UniffiCallbackInterfaceIndexBuildListenerMethod0)(uint64_t, double, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_INDEX_BUILD_LISTENER_METHOD1
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_INDEX_BUILD_LISTENER_METHOD1
+typedef void (*UniffiCallbackInterfaceIndexBuildListenerMethod1)(uint64_t, int8_t* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_INDEX_BUILD_LISTENER
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_INDEX_BUILD_LISTENER
+typedef struct UniffiVTableCallbackInterfaceIndexBuildListener {
+    UniffiCallbackInterfaceFree _Nonnull uniffiFree;
+    UniffiCallbackInterfaceClone _Nonnull uniffiClone;
+    UniffiCallbackInterfaceIndexBuildListenerMethod0 _Nonnull onProgress;
+    UniffiCallbackInterfaceIndexBuildListenerMethod1 _Nonnull isCancelled;
+} UniffiVTableCallbackInterfaceIndexBuildListener;
+
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_CLONE_BOOK
 #define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_CLONE_BOOK
 uint64_t uniffi_offlinka_core_fn_clone_book(uint64_t handle, RustCallStatus *_Nonnull out_status
@@ -273,6 +297,11 @@ void uniffi_offlinka_core_fn_method_book_attach_index_fd(uint64_t ptr, int32_t f
 void uniffi_offlinka_core_fn_method_book_attach_index_path(uint64_t ptr, RustBuffer path, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_METHOD_BOOK_CLOSE_FILE
+#define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_METHOD_BOOK_CLOSE_FILE
+void uniffi_offlinka_core_fn_method_book_close_file(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_METHOD_BOOK_CONTENT_LENGTH
 #define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_METHOD_BOOK_CONTENT_LENGTH
 uint64_t uniffi_offlinka_core_fn_method_book_content_length(uint64_t ptr, RustBuffer path, RustCallStatus *_Nonnull out_status
@@ -296,6 +325,11 @@ RustBuffer uniffi_offlinka_core_fn_method_book_illustration(uint64_t ptr, uint32
 #ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_METHOD_BOOK_INFO
 #define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_METHOD_BOOK_INFO
 RustBuffer uniffi_offlinka_core_fn_method_book_info(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_METHOD_BOOK_PRELOAD_INDEX
+#define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_METHOD_BOOK_PRELOAD_INDEX
+void uniffi_offlinka_core_fn_method_book_preload_index(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_METHOD_BOOK_RANDOM_ARTICLE
@@ -339,9 +373,30 @@ RustBuffer uniffi_offlinka_core_fn_method_library_books(uint64_t ptr, RustCallSt
 RustBuffer uniffi_offlinka_core_fn_method_library_suggest_all(uint64_t ptr, RustBuffer query, uint32_t limit, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_INIT_CALLBACK_VTABLE_INDEXBUILDLISTENER
+#define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_INIT_CALLBACK_VTABLE_INDEXBUILDLISTENER
+void uniffi_offlinka_core_fn_init_callback_vtable_indexbuildlistener(const UniffiVTableCallbackInterfaceIndexBuildListener* _Nonnull vtable
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_FUNC_BUILD_INDEX
+#define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_FUNC_BUILD_INDEX
+void uniffi_offlinka_core_fn_func_build_index(uint64_t book, RustBuffer out_path, uint64_t listener, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_FUNC_CORE_VERSION
 #define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_FUNC_CORE_VERSION
 RustBuffer uniffi_offlinka_core_fn_func_core_version(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_FUNC_SET_CLUSTER_CACHE_BUDGET
+#define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_FUNC_SET_CLUSTER_CACHE_BUDGET
+void uniffi_offlinka_core_fn_func_set_cluster_cache_budget(uint64_t bytes, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_FUNC_TRIM_MEMORY
+#define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_FN_FUNC_TRIM_MEMORY
+void uniffi_offlinka_core_fn_func_trim_memory(RustCallStatus *_Nonnull out_status
     
 );
 #endif
@@ -605,9 +660,27 @@ void ffi_offlinka_core_rust_future_free_void(uint64_t handle
 void ffi_offlinka_core_rust_future_complete_void(uint64_t handle, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_FUNC_BUILD_INDEX
+#define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_FUNC_BUILD_INDEX
+uint16_t uniffi_offlinka_core_checksum_func_build_index(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_FUNC_CORE_VERSION
 #define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_FUNC_CORE_VERSION
 uint16_t uniffi_offlinka_core_checksum_func_core_version(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_FUNC_SET_CLUSTER_CACHE_BUDGET
+#define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_FUNC_SET_CLUSTER_CACHE_BUDGET
+uint16_t uniffi_offlinka_core_checksum_func_set_cluster_cache_budget(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_FUNC_TRIM_MEMORY
+#define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_FUNC_TRIM_MEMORY
+uint16_t uniffi_offlinka_core_checksum_func_trim_memory(void
     
 );
 #endif
@@ -620,6 +693,12 @@ uint16_t uniffi_offlinka_core_checksum_method_book_attach_index_fd(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_METHOD_BOOK_ATTACH_INDEX_PATH
 #define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_METHOD_BOOK_ATTACH_INDEX_PATH
 uint16_t uniffi_offlinka_core_checksum_method_book_attach_index_path(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_METHOD_BOOK_CLOSE_FILE
+#define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_METHOD_BOOK_CLOSE_FILE
+uint16_t uniffi_offlinka_core_checksum_method_book_close_file(void
     
 );
 #endif
@@ -650,6 +729,12 @@ uint16_t uniffi_offlinka_core_checksum_method_book_illustration(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_METHOD_BOOK_INFO
 #define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_METHOD_BOOK_INFO
 uint16_t uniffi_offlinka_core_checksum_method_book_info(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_METHOD_BOOK_PRELOAD_INDEX
+#define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_METHOD_BOOK_PRELOAD_INDEX
+uint16_t uniffi_offlinka_core_checksum_method_book_preload_index(void
     
 );
 #endif
@@ -698,6 +783,18 @@ uint16_t uniffi_offlinka_core_checksum_constructor_book_open_path(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_CONSTRUCTOR_LIBRARY_NEW
 #define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_CONSTRUCTOR_LIBRARY_NEW
 uint16_t uniffi_offlinka_core_checksum_constructor_library_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_METHOD_INDEXBUILDLISTENER_ON_PROGRESS
+#define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_METHOD_INDEXBUILDLISTENER_ON_PROGRESS
+uint16_t uniffi_offlinka_core_checksum_method_indexbuildlistener_on_progress(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_METHOD_INDEXBUILDLISTENER_IS_CANCELLED
+#define UNIFFI_FFIDEF_UNIFFI_OFFLINKA_CORE_CHECKSUM_METHOD_INDEXBUILDLISTENER_IS_CANCELLED
+uint16_t uniffi_offlinka_core_checksum_method_indexbuildlistener_is_cancelled(void
     
 );
 #endif
