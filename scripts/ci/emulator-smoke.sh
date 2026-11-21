@@ -75,13 +75,27 @@ wait_for() {
   return 1
 }
 
-# tap <regex>: taps the centre of the first node whose text or content-desc fully matches.
+# tap <regex>: taps the centre of the first on-screen node whose text or content-desc fully matches.
 tap() {
   local xy
   dump || return 1
   xy="$(python3 "$UIPY" center "$UIX" "$1")" || return 1
   log "tap '$1' at $xy"
   adb shell input tap $xy
+}
+
+# scroll_tap <regex>: like tap, scrolling the screen up to 4 times to bring the node into view
+# (a node below the fold is in the dump with empty bounds).
+scroll_tap() {
+  local w h
+  for _ in 1 2 3 4 5; do
+    tap "$1" && return 0
+    read -r w h < <(adb shell wm size | tr -d '\r' | tail -1 | sed 's/.*: //; s/x/ /')
+    log "scrolling to find '$1'"
+    adb shell input swipe $((w / 2)) $((h * 3 / 4)) $((w / 2)) $((h / 3)) 400
+    sleep 1
+  done
+  return 1
 }
 
 snap() {  # snap [suffix]
@@ -266,18 +280,44 @@ virtual_drive() {
 
 PICKER_BUTTON="^(použít tuto složku|use this folder|vybrat|select)$"
 PICKER_ALLOW="^(povolit|allow)$"
+# The removable volume in the picker's roots: vold's virtual disk is an "SD card" ("SD karta Virtual").
+PICKER_ROOT="(sd karta|karta sd|sd card).*|.*virtual.*|.*usb.*"
+# Android 11+ refuses the root of an SD card (not of a USB drive) for a folder grant.
+PICKER_REFUSED="tuto složku nelze použít|can.t use this folder"
 
-# The system folder picker: "use this folder" on the volume root, then "allow". Returns 1 when it cannot
-# be driven (a DocumentsUI layout we do not know).
+picker_shown() { dump && python3 "$UIPY" packages "$UIX" | grep -q documentsui; }
+
+# The system folder picker (DocumentsUI): "use this folder" on the volume root, then "allow". API 29+ opens
+# on the volume (StorageVolume.createOpenDocumentTreeIntent); older ones open on Recent, so go to the SD
+# card through the roots drawer first. Returns 1 when it cannot be driven (a layout we do not know).
 pick_drive() {
-  wait_for "$PICKER_BUTTON|$PICKER_ALLOW" 30 || { log "picker: $(python3 "$UIPY" packages "$UIX")"; snap picker; return 1; }
+  local end=$((SECONDS + 30))
+  until picker_shown; do
+    [ "$SECONDS" -lt "$end" ] || { log "no picker; on screen: $(python3 "$UIPY" packages "$UIX")"; snap picker; return 1; }
+    sleep 1
+  done
+  sleep 2
   snap picker
   if ! python3 "$UIPY" center "$UIX" "$PICKER_BUTTON" >/dev/null; then
-    # API 26-28: the plain tree picker may open elsewhere; go to the SD card root through the drawer.
     tap "zobrazit kořeny|show roots" || return 1
     sleep 2
-    tap "(karta )?sd( karta| card)?|.*SD.*" || return 1
-    sleep 2
+    snap roots
+    tap "$PICKER_ROOT" || return 1
+    sleep 3
+    wait_for "$PICKER_BUTTON" 15 || return 1
+    snap volume
+  fi
+  if has "$PICKER_REFUSED"; then
+    # The virtual disk is an SD card, whose root Android 11+ refuses. The app's help covers this case
+    # ("some phones refuse the drive's root, then people pick Knihovna"): pick Knihovna/.
+    log "the volume root is refused: picking Knihovna"
+    scroll_tap "Knihovna" || return 1
+    local end2=$((SECONDS + 20))
+    until dump && has "$PICKER_BUTTON" && ! has "$PICKER_REFUSED"; do
+      [ "$SECONDS" -lt "$end2" ] || return 1
+      sleep 1
+    done
+    snap knihovna
   fi
   tap "$PICKER_BUTTON" || return 1
   sleep 2
@@ -302,10 +342,10 @@ has "Flashku vidím" || warn "the Connect screen does not report the plugged-in 
 end_step
 
 step pick-drive
-tap "$CONNECT|Vybrat znovu" || fail "no „$CONNECT“ button"
+scroll_tap "$CONNECT|Vybrat znovu" || fail "no „$CONNECT“ button"
 sleep 2
 # Without a visible volume the first tap only explains ("Flashku nevidím"); the second opens the picker.
-if wait_for "Vybrat znovu" 3 && ! has "$PICKER_BUTTON|$PICKER_ALLOW"; then tap "Vybrat znovu" || true; fi
+if ! picker_shown && has "Vybrat znovu"; then scroll_tap "Vybrat znovu" || true; fi
 if ! pick_drive; then
   warn "could not drive the system folder picker: Home and reader steps skipped"
   end_step
@@ -315,7 +355,7 @@ wait_for "$HOME_RE|První pomoc" 90 || fail "Home did not show after picking the
 end_step
 
 step first-aid
-tap "První pomoc" || fail "no „První pomoc“ quick link on Home"
+scroll_tap "První pomoc" || fail "no „První pomoc“ quick link on Home"
 # The guide is in the WebView: its text in the accessibility tree, or at least its title in the reader bar.
 wait_for "$GUIDE_RE" 45 || fail "the reader did not show the first-aid guide"
 end_step
