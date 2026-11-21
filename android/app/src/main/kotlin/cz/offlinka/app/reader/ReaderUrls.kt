@@ -41,7 +41,7 @@ object ReaderUrls {
 
     /** Percent-decodes a path; unlike form decoding, `+` stays `+`. */
     fun decode(s: String): String =
-        if ('%' !in s) s else URLDecoder.decode(s.replace("+", "%2B"), StandardCharsets.UTF_8)
+        if ('%' !in s) s else URLDecoder.decode(s.replace("+", "%2B"), "UTF-8")
 
     /** Encodes each segment of a ZIM path for a URL; `/` stays a separator. */
     fun encodePath(path: String): String = path.split('/').joinToString("/") { segment ->

@@ -37,7 +37,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.os.ConfigurationCompat
 import cz.offlinka.ui.R
 import cz.offlinka.ui.components.BarIconButton
 import cz.offlinka.ui.components.BookBadge
@@ -73,8 +72,7 @@ data class LibraryState(
 )
 
 @Composable
-internal fun currentLocale(): Locale =
-    ConfigurationCompat.getLocales(LocalConfiguration.current)[0] ?: Locale.getDefault()
+internal fun currentLocale(): Locale = LocalConfiguration.current.locales[0]
 
 private enum class Group(val title: Int) {
     WIKI(R.string.library_group_wiki),

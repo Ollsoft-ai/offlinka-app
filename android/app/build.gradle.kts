@@ -29,6 +29,9 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Only the ABIs the Rust core is built for (scripts/build-android-core.sh). JNA would otherwise add
+        // armeabi/mips/x86 copies of its dispatcher and such a phone would install an app without the core.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
     }
 
     androidResources {

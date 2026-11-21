@@ -16,6 +16,8 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.core.content.FileProvider
+import androidx.webkit.ServiceWorkerClientCompat
+import androidx.webkit.ServiceWorkerControllerCompat
 import androidx.webkit.WebResourceErrorCompat
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewClientCompat
@@ -221,9 +223,26 @@ class ReaderController(
                 }
             }
         }
+        interceptServiceWorkers()
         pendingState?.let { w.restoreState(it) }
         pendingState = null
         return w
+    }
+
+    /** Pages that start a service worker (some map viewers) get its fetches answered from the drive too. */
+    private fun interceptServiceWorkers() {
+        runCatching {
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_BASIC_USAGE) &&
+                WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_SHOULD_INTERCEPT_REQUEST)
+            ) {
+                ServiceWorkerControllerCompat.getInstance().setServiceWorkerClient(object : ServiceWorkerClientCompat() {
+                    override fun shouldInterceptRequest(request: WebResourceRequest): WebResourceResponse {
+                        val s = server.serve(request.url.toString(), request.method, request.requestHeaders ?: emptyMap(), false)
+                        return WebResourceResponse(s.mime, s.charset, s.status, s.reason, s.headers, s.body)
+                    }
+                })
+            }
+        }
     }
 
     /** Our pages bring their own dark styles; never let the WebView invert maps or games. */

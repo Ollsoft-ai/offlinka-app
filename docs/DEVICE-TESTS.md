@@ -47,7 +47,8 @@ Install: `adb install -r offlinka-<version>-universal.apk` (or from the drive's 
 ## 5. Reading
 
 - [ ] Česká Wikipedie main page opens in **under 2 s** (SPEC quality bar): ____ s.
-- [ ] Scroll a long article (e.g. "Praha", "Česko"): smooth, images load, no white flashes.
+- [ ] Scroll a long article (e.g. "Praha", "Česko"): smooth, images load, no white flashes; once the article heading scrolls away the top bar shows the article title instead of the book.
+- [ ] Mini edition (Telefon, when there is no maxi): missing pictures are hidden with their captions, no empty boxes.
 - [ ] Links between articles work; back/forward buttons and the system back gesture go through the article history, then leave the reader.
 - [ ] Article tables (infobox) fit the screen or scroll sideways; no horizontal page scroll.
 - [ ] Text size (Aa): 80–200 % changes the article text live; the value is kept after restart.
@@ -64,7 +65,7 @@ Install: `adb install -r offlinka-<version>-universal.apk` (or from the drive's 
 
 ## 6. Maps and games (JavaScript + their own assets)
 
-- [ ] Mapa Česka opens, the map renders, pinch-zoom down to street level works, panning is smooth, labels readable.
+- [ ] Mapa Česka opens, the map renders, pinch-zoom down to street level works, panning is smooth, labels readable. (If tiles stay grey, the viewer loads them from a web worker that the WebView does not route through the app: report it, it needs a service-worker/worker fallback.)
 - [ ] Mapa Slovenska the same.
 - [ ] Map search / place list inside the map viewer (if the viewer has one) works offline.
 - [ ] Hry: each game starts, plays with touch, score is kept after leaving and reopening (local storage).
