@@ -1,14 +1,15 @@
 # Third-party licences of offlinka-core
 
-**No GPL/LGPL code.** Everything compiled into `libofflinka_core` is MIT, Apache-2.0, Unlicense, Zlib or Unicode-3.0, except the UniFFI runtime (**MPL-2.0**, file-level copyleft: fine in App Store and Play apps; we do not modify its files; name it with a link to its source in About → licences).
+**No GPL/LGPL code.** Everything compiled into `libofflinka_core` is MIT, Apache-2.0, BSD, Unlicense, Zlib or Unicode-3.0, except the UniFFI runtime (**MPL-2.0**, file-level copyleft: fine in App Store and Play apps; we do not modify its files; name it with a link to its source in About → licences).
 
-Regenerate after a dependency change: `cargo tree -p offlinka-core -e normal,no-proc-macro --target aarch64-linux-android --prefix none -f "{p}|{l}|{r}" | sort -u`.
+Regenerate after a dependency change (build-time `cc`, `jobserver`, `shlex` compile libzstd and are not shipped): `cargo tree -p offlinka-core -e normal,no-proc-macro --target aarch64-linux-android --prefix none -f "{p}|{l}|{r}" | sort -u`.
 
 ## Compiled into the app library
 
 - `fst` 0.4.7 — Unlicense OR MIT — https://github.com/BurntSushi/fst (search index maps)
-- `ruzstd` 0.9.1 — MIT — https://github.com/KillingSpark/zstd-rs (zstd clusters, pure Rust)
-- `twox-hash` 2.1.5 — MIT — https://github.com/shepmaster/twox-hash (via ruzstd)
+- **libzstd 1.5.7** (C, Meta) — **BSD-3-Clause** (dual-licensed BSD-3-Clause OR GPL-2.0-only; we use it under BSD-3-Clause) — https://github.com/facebook/zstd — vendored and compiled by `zstd-sys`; zstd clusters (default feature `zstd-c`). Notice text: keep the zstd LICENSE (BSD) in About → licences.
+- `zstd` 0.14.4, `zstd-safe` 8.3.0 — BSD-3-Clause; `zstd-sys` 2.1.3 — BSD-3-Clause AND BSD-2-Clause — https://github.com/gyscos/zstd-rs
+- `ruzstd` 0.9.1 — MIT — https://github.com/KillingSpark/zstd-rs — only with feature `zstd-pure` (pure-Rust zstd, 3–20x slower on our clusters) and in tests to write fixtures
 - `lzma-rs` 0.3.0 — MIT — https://github.com/gendx/lzma-rs (xz clusters, pure Rust)
 - `crc` 3.4.0, `crc-catalog` 2.5.0 — MIT OR Apache-2.0 — https://github.com/mrhooray/crc-rs (via lzma-rs)
 - `byteorder` 1.5.0 — Unlicense OR MIT — https://github.com/BurntSushi/byteorder

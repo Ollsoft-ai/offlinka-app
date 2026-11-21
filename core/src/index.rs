@@ -59,6 +59,8 @@ pub const HEAVY_TOP: usize = 64;
 const MAX_WORD_KEYS: usize = 8;
 /// Safety cap for reading a (non-heavy) prefix range.
 const RANGE_CAP: u64 = 65_536;
+/// Read a range's postings in one go up to this many ids; beyond, per key, best first.
+const MAX_POSTINGS_READ: u64 = 16_384;
 
 /// Match class, best first.
 pub const CLASS_EXACT: u8 = 0;
@@ -218,23 +220,34 @@ impl SearchIndex {
     }
 
     /// Record ids of the keys with ordinals `lo..hi`.
-    fn postings(&self, m: &KeyMap, lo: u64, hi: u64) -> Result<Vec<u32>> {
+    fn postings(&self, m: &KeyMap, lo: u64, hi: u64, keep: usize) -> Result<Vec<u32>> {
         if lo >= hi {
             return Ok(Vec::new());
         }
-        let offs = self.read_u32s(m.offsets, lo, 2)?;
-        let end = self.read_u32s(m.offsets, hi, 1)?[0];
-        let start = offs[0] as u64;
-        if (end as u64) < start {
+        let offs = self.read_u32s(m.offsets, lo, hi - lo + 1)?;
+        if offs.windows(2).any(|w| w[1] < w[0]) {
             return Err(invalid("search index: bad offsets"));
         }
-        self.read_u32s(m.postings, start, end as u64 - start)
+        let (start, end) = (offs[0] as u64, *offs.last().unwrap() as u64);
+        let keep = keep as u64;
+        if end - start <= MAX_POSTINGS_READ.max(keep) {
+            return self.read_u32s(m.postings, start, end - start);
+        }
+        // Keys with huge posting lists (e.g. the word "rozcestnik"): postings of a key
+        // ascend, so its first `keep` ids are its best.
+        let mut ids = Vec::new();
+        for w in offs.windows(2) {
+            let n = (w[1] - w[0]) as u64;
+            ids.extend(self.read_u32s(m.postings, w[0] as u64, n.min(keep))?);
+        }
+        Ok(ids)
     }
 
     /// Exact key ids and the best `want` prefix ids of one key map.
     fn lookup(&self, m: &KeyMap, q: &str, want: usize) -> Result<(Vec<u32>, Vec<u32>)> {
+        let keep = want.max(1) * 4;
         let exact = match m.fst.get(q) {
-            Some(o) => self.postings(m, o, o + 1)?,
+            Some(o) => self.postings(m, o, o + 1, keep)?,
             None => Vec::new(),
         };
         let prefix = if let Some(off) = m.heavy.get(q) {
@@ -245,8 +258,7 @@ impl SearchIndex {
             let mut upper = q.as_bytes().to_vec();
             upper.push(0xff); // never inside UTF-8: above every key starting with q
             let hi = first_ordinal_ge(&m.fst, &upper).min(lo + RANGE_CAP);
-            let mut ids = self.postings(m, lo, hi)?;
-            let keep = want.max(1) * 4;
+            let mut ids = self.postings(m, lo, hi, keep)?;
             if ids.len() > keep {
                 ids.select_nth_unstable(keep);
                 ids.truncate(keep);
@@ -254,6 +266,8 @@ impl SearchIndex {
             ids.sort_unstable();
             ids
         };
+        let mut exact = exact;
+        exact.truncate(keep);
         Ok((exact, prefix))
     }
 

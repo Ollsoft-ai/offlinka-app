@@ -402,3 +402,88 @@ fn index_read_through_pread_matches_memory() {
         assert!(SearchIndex::from_vec(bytes[..cut].to_vec()).is_err(), "cut {cut}");
     }
 }
+
+#[test]
+fn unsupported_things() {
+    let mut z = ZimBuilder::new();
+    let c = z.cluster(Comp::Zlib, false);
+    let ok = z.cluster(Comp::None, false);
+    z.article("Old", "Old", "zlib", c).article("New", "New", "fine", ok);
+    let b = open(z.build());
+    assert!(matches!(b.get("Old".into()), Err(CoreError::Unsupported(_))));
+    assert_eq!(b.get("New".into()).unwrap().data, b"fine");
+    // Unknown major version.
+    let mut bytes = sample().build();
+    bytes[4] = 9;
+    assert!(matches!(Book::open_source(Box::new(MemSource(bytes)), "v9.zim"), Err(CoreError::Unsupported(_))));
+}
+
+#[test]
+fn library_edge_cases() {
+    let lib = Library::new();
+    assert!(lib.suggest_all("praha".into(), 10).is_empty(), "empty library");
+    lib.add(indexed_book());
+    let mut other = sample();
+    other.uuid = *b"fallback-book-01";
+    other.entries.retain(|e| e.ns != b'M' || e.path != "Name");
+    other.meta("Name", b"wikiquote_cs", 5);
+    lib.add(open(other.build())); // no index: fallback listing
+    let s = lib.suggest_all("cesky krumlov".into(), 10);
+    assert_eq!(s[0].book_id, "wikipedia_cs_test");
+    assert_eq!(s[0].title, "Český Krumlov");
+    let s = lib.suggest_all("Praha".into(), 10);
+    let books: Vec<&str> = s.iter().map(|x| x.book_id.as_str()).collect();
+    assert!(books.contains(&"wikiquote_cs"), "fallback book merged: {books:?}");
+    assert!(lib.suggest_all("".into(), 10).is_empty());
+    assert!(lib.suggest_all("praha".into(), 0).is_empty());
+}
+
+#[test]
+fn reattaching_an_index_replaces_it() {
+    let b = indexed_book();
+    let zim = write_sample("re.zim");
+    let a =
+        offlinka_core::zim::Archive::open(Box::new(offlinka_core::reader::FileSource::open(&zim).unwrap())).unwrap();
+    let idx = tmp_path("re.offidx");
+    offlinka_core::index::build(&a, &mut std::fs::File::create(&idx).unwrap(), &mut |_| {}).unwrap();
+    b.attach_index_path(idx).unwrap();
+    assert!(b.info().has_index);
+    assert_eq!(b.suggest("brno".into(), 3)[0].title, "Brno");
+}
+
+#[test]
+fn heavy_prefixes_rank_like_a_full_scan() {
+    // > HEAVY_THRESHOLD keys under "test", so short prefixes use precomputed top lists.
+    let mut z = ZimBuilder::new();
+    let c = z.cluster(Comp::Zstd, false);
+    for i in 0..3000 {
+        let t = format!("Test {i:04}");
+        z.article(&t.replace(' ', "_"), &t, "<p>x</p>", c);
+        let w = format!("Okres Test {i:04} Sever");
+        z.article(&w.replace(' ', "_"), &w, "<p>x</p>", c);
+    }
+    z.article("Te", "Te", "<p>x</p>", c).article("Tešín", "Tešín", "<p>x</p>", c);
+    z.redirect(b'C', "Tes", "Tes", b'C', "Test_0007");
+    z.uuid = *b"heavy-prefix-zim";
+    let zim = tmp_path("heavy.zim");
+    std::fs::write(&zim, z.build()).unwrap();
+    let b = Book::open_path(zim.clone()).unwrap();
+    let a =
+        offlinka_core::zim::Archive::open(Box::new(offlinka_core::reader::FileSource::open(&zim).unwrap())).unwrap();
+    let idx = tmp_path("heavy.offidx");
+    let st = offlinka_core::index::build(&a, &mut std::fs::File::create(&idx).unwrap(), &mut |_| {}).unwrap();
+    assert!(st.heavy_prefixes > 0, "{st:?}");
+    b.attach_index_path(idx).unwrap();
+    let titles = |q: &str, n: u32| b.suggest(q.into(), n).into_iter().map(|s| s.title).collect::<Vec<_>>();
+    assert_eq!(titles("t", 4), ["Te", "Tešín", "Test 0000", "Test 0001"], "articles first, shorter first");
+    assert_eq!(titles("te", 3), ["Te", "Tešín", "Test 0000"]);
+    assert_eq!(titles("tes", 3), ["Tes", "Tešín", "Test 0000"], "exact redirect first");
+    assert_eq!(b.suggest("tes".into(), 1)[0].path, "Test_0007");
+    assert_eq!(titles("test 1", 2), ["Test 1000", "Test 1001"]);
+    assert_eq!(titles("test 2999", 5), ["Test 2999", "Okres Test 2999 Sever"]);
+    // word-suffix prefixes are heavy too ("test …" inside "Okres Test …")
+    let s = titles("test 129", 20);
+    assert_eq!(s[..10], (1290..1300).map(|i| format!("Test {i}")).collect::<Vec<_>>()[..]);
+    assert_eq!(s[10..], (1290..1300).map(|i| format!("Okres Test {i} Sever")).collect::<Vec<_>>()[..]);
+    assert_eq!(titles("sever", 1), ["Okres Test 0000 Sever"]);
+}

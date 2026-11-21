@@ -288,6 +288,8 @@ pub struct Archive {
     clusters_end: u64,
     cluster_cache: Mutex<ByteLru<u32, Arc<Cluster>>>,
     dirent_cache: Mutex<lru::LruCache<u32, Arc<Dirent>>>,
+    /// Striped locks so parallel requests for one cluster inflate it once.
+    loading: [Mutex<()>; 16],
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -334,6 +336,7 @@ impl Archive {
             clusters_end,
             cluster_cache: Mutex::new(ByteLru::new(cache_bytes)),
             dirent_cache: Mutex::new(lru::LruCache::new(std::num::NonZeroUsize::new(DIRENT_CACHE_ENTRIES).unwrap())),
+            loading: Default::default(),
         })
     }
 
@@ -481,6 +484,10 @@ impl Archive {
     pub fn cluster(&self, cluster: u32, loc: &ClusterLoc) -> Result<Arc<Cluster>> {
         if let Some(c) = lock(&self.cluster_cache).get(&cluster) {
             return Ok(c);
+        }
+        let _loading = lock(&self.loading[cluster as usize % 16]);
+        if let Some(c) = lock(&self.cluster_cache).get(&cluster) {
+            return Ok(c); // another thread just inflated it
         }
         let raw_len = loc.end - loc.start - 1;
         if raw_len > MAX_CLUSTER_BYTES {
@@ -709,13 +716,7 @@ fn decompress(c: Compression, raw: Vec<u8>) -> Result<Vec<u8>> {
     match c {
         Compression::None => Ok(raw),
         Compression::Zstd => {
-            let mut dec =
-                ruzstd::decoding::StreamingDecoder::new(&raw[..]).map_err(|e| invalid(format!("zstd cluster: {e}")))?;
-            let mut out = Vec::with_capacity(raw.len() * 4);
-            (&mut dec)
-                .take(MAX_CLUSTER_BYTES + 1)
-                .read_to_end(&mut out)
-                .map_err(|e| invalid(format!("zstd cluster: {e}")))?;
+            let out = zstd_decode(&raw)?;
             check_inflated(&out)?;
             Ok(out)
         }
@@ -731,6 +732,25 @@ fn decompress(c: Compression, raw: Vec<u8>) -> Result<Vec<u8>> {
         Compression::Unknown(c) => Err(invalid(format!("unknown cluster compression {c}"))),
     }
 }
+
+#[cfg(feature = "zstd-c")]
+fn zstd_decode(raw: &[u8]) -> Result<Vec<u8>> {
+    let dec = zstd::stream::read::Decoder::with_buffer(raw).map_err(|e| invalid(format!("zstd cluster: {e}")))?;
+    let mut out = Vec::with_capacity(raw.len() * 6);
+    dec.take(MAX_CLUSTER_BYTES + 1).read_to_end(&mut out).map_err(|e| invalid(format!("zstd cluster: {e}")))?;
+    Ok(out)
+}
+
+#[cfg(all(feature = "zstd-pure", not(feature = "zstd-c")))]
+fn zstd_decode(raw: &[u8]) -> Result<Vec<u8>> {
+    let mut dec = ruzstd::decoding::StreamingDecoder::new(raw).map_err(|e| invalid(format!("zstd cluster: {e}")))?;
+    let mut out = Vec::with_capacity(raw.len() * 6);
+    (&mut dec).take(MAX_CLUSTER_BYTES + 1).read_to_end(&mut out).map_err(|e| invalid(format!("zstd cluster: {e}")))?;
+    Ok(out)
+}
+
+#[cfg(not(any(feature = "zstd-c", feature = "zstd-pure")))]
+compile_error!("enable feature zstd-c (default) or zstd-pure");
 
 /// A `Vec` writer that refuses to grow past the cluster limit (xz bombs).
 struct Limited(Vec<u8>);

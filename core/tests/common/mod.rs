@@ -9,6 +9,8 @@ pub enum Comp {
     None,
     Xz,
     Zstd,
+    /// Deprecated zlib: written as an info byte + raw bytes (the reader refuses it).
+    Zlib,
 }
 
 #[derive(Clone, Debug)]
@@ -201,6 +203,10 @@ impl ZimBuilder {
                         &body[..],
                         ruzstd::encoding::CompressionLevel::Fastest,
                     ));
+                }
+                Comp::Zlib => {
+                    out.push(2 | ext_bit);
+                    out.extend_from_slice(&body);
                 }
                 Comp::Xz => {
                     out.push(4 | ext_bit);

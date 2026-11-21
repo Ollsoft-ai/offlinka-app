@@ -3,6 +3,7 @@
 #
 #   scripts/build-android-core.sh              # release (LTO, opt-level 3, stripped)
 #   PROFILE=release-s scripts/build-android-core.sh   # size-optimised variant
+#   OUT=/some/dir scripts/build-android-core.sh       # other output folder
 #
 # Output: android/app/src/main/jniLibs/{arm64-v8a,armeabi-v7a,x86_64}/libofflinka_core.so
 # Needs: ANDROID_NDK_HOME, cargo-ndk, rustup targets aarch64-linux-android,
@@ -16,7 +17,7 @@ run() {
   if [ -n "${OFFLINKA_NO_LOCK:-}" ] || ! command -v flock >/dev/null; then "$@"
   else mkdir -p "$(dirname "$LOCK")"; flock "$LOCK" nice -n 10 timeout 3600 "$@"; fi
 }
-OUT="$ROOT/android/app/src/main/jniLibs"
+OUT="${OUT:-$ROOT/android/app/src/main/jniLibs}"
 mkdir -p "$OUT"
 cd "$ROOT/core"
 # minSdk 26 (Android 8)

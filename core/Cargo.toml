@@ -19,16 +19,26 @@ crate-type = ["lib", "cdylib"]
 name = "offlinka-cli"
 path = "src/bin/offlinka-cli.rs"
 
+[features]
+default = ["zstd-c"]
+# zstd clusters through libzstd (C, BSD-3-Clause, vendored and built by zstd-sys):
+# 5-20x faster than the pure-Rust decoder on our Wikipedia clusters.
+zstd-c = ["dep:zstd"]
+# Pure-Rust zstd decoder instead (build with --no-default-features --features zstd-pure).
+zstd-pure = ["dep:ruzstd"]
+
 [dependencies]
 uniffi = { version = "0.32", default-features = false }
 thiserror = "2"
-ruzstd = "0.9"
+zstd = { version = "0.14", default-features = false, optional = true }
+ruzstd = { version = "0.9", optional = true }
 lzma-rs = "0.3"
 fst = "0.4"
 lru = { version = "0.19", default-features = false }
 unicode-normalization = "0.1"
 
 [dev-dependencies]
+ruzstd = "0.9" # encodes the zstd test fixtures
 
 [profile.release]
 lto = true

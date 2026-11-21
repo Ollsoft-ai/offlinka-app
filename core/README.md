@@ -36,7 +36,7 @@ Shared Rust engine of the Offlinka apps: **our own ZIM reader** (no libzim, no K
 
 ## ZIM support
 
-Header (magic, v5/v6), MIME list, path pointer list, classic title pointer list and `X/listing/titleOrdered/v0|v1`, content/redirect/link-target/deleted dirents, clusters uncompressed / xz (lzma-rs) / zstd (ruzstd) with normal and extended (64-bit) offsets, metadata `M/*`, `W/mainPage`, old (`A`/`I`/`-`) and new (`C`/`M`/`W`/`X`) namespaces. Not supported: zlib/bzip2 clusters (deprecated, `Unsupported`), checksum verification (optional in the spec). Corrupt input gives errors, never panics (fuzzed in tests); a single cluster may not inflate beyond 512 MB.
+Header (magic, v5/v6), MIME list, path pointer list, classic title pointer list and `X/listing/titleOrdered/v0|v1`, content/redirect/link-target/deleted dirents, clusters uncompressed / xz (lzma-rs, pure Rust) / zstd (libzstd via the `zstd` crate, default feature `zstd-c`; `--no-default-features --features zstd-pure` switches to the pure-Rust ruzstd) with normal and extended (64-bit) offsets, metadata `M/*`, `W/mainPage`, old (`A`/`I`/`-`) and new (`C`/`M`/`W`/`X`) namespaces. Not supported: zlib/bzip2 clusters (deprecated, `Unsupported`), checksum verification (optional in the spec). Corrupt input gives errors, never panics (fuzzed in tests); a single cluster may not inflate beyond 256 MB, `get()` refuses entries over 256 MB (use `get_range`). Parallel requests for one cluster inflate it once.
 
 ## Search index (`.offidx`)
 
@@ -51,11 +51,48 @@ Header (magic, v5/v6), MIME list, path pointer list, classic title pointer list 
 
 ## offlinka-cli
 
-`info`, `ls`, `get`, `suggest` (one ZIM, or several = library merge), `index`, `bench` (open + main page time, per-keystroke suggest latency p50/p95/p99/max), `verify` (inflate every cluster, resolve every entry). It auto-attaches `<zim stem>.offidx` when it sits next to the ZIM (`--index none` to disable).
+`info`, `ls`, `get`, `suggest` (one ZIM, or several = library merge), `index`, `bench` (open + main page time, per-keystroke suggest latency p50/p95/p99/max), `bench-lib` (same for `Library.suggest_all` over several ZIMs), `verify` (inflate every cluster, resolve every entry), `inflate` (cluster decompression speed). It attaches `<zim stem>.offidx` from `--index-dir D` or next to the ZIM (`--index F` explicit, `--index none` off).
+
+**Drive build, all books at once:** `scripts/build-drive-indexes.sh <edition>/files [out-dir]` (skips up-to-date indexes, `FORCE=1` rebuilds).
 
 ## Performance
 
-Filled in from `offlinka-cli bench` / `index` runs on the drive edition 2026-11.3 (this box, release build).
+Drive edition 2026-11.3, this box (x86_64, shared, load ~8), release build, warm page cache. Phones are slower and the USB drive adds ~0.5–1 ms per cold read; the budget is 100 ms per keystroke.
+
+**Why libzstd:** inflating one ~2 MB Wikipedia cluster takes 3.3 ms (cs mini) / 3.7 ms (cs maxi) with libzstd vs 12.7 / 52.7 ms with ruzstd (`offlinka-cli inflate`). Opening an article = one cluster.
+
+**Suggest per keystroke** (`offlinka-cli bench --queries bench/queries-cs.txt`, 353 keystrokes, limit 20):
+
+| book | index | p50 | p95 | p99 | max |
+|---|---|---|---|---|---|
+| cs maxi | yes | 0.15 ms | 0.47 ms | 0.88 ms | 15.8 ms |
+| cs mini | yes | 0.10 ms | 0.19 ms | 0.21 ms | 3.9 ms |
+| sk maxi | yes | 0.09 ms | 0.47 ms | 1.3 ms | 2.5 ms |
+| en top1m | yes | 0.08 ms | 1.5 ms | 16.6 ms | 81 ms (cold dirent reads) |
+| cs mini | no (fallback listing) | 0.24 ms | 3.4 ms | 7.1 ms | 100 ms |
+
+**Open + main page:** cs maxi 69 ms + 12 ms (incl. loading the 16 MB of index fst), en top1m 620 ms (76 MB of fst: attach big indexes off the UI thread or lazily).
+
+**Index per book** (`offlinka-cli index`; "RAM" = fst maps kept in memory, the rest is read with `pread`):
+
+| book | records | .offidx | RAM | build |
+|---|---|---|---|---|
+| wikipedia_cs_all_maxi | 975,172 | 34.7 MB | 16.0 MB | 19 s |
+| wikipedia_cs_all_mini | 963,395 | 34.2 MB | 15.8 MB | 16 s |
+| wikipedia_sk_all_maxi | 439,233 | 17.6 MB | 8.0 MB | 11 s |
+| wikipedia_sk_all_mini | 438,360 | 17.6 MB | 8.0 MB | 6 s |
+| wikipedia_en_top1m_nopic | 5,904,211 | 178.4 MB | 76.2 MB | 147 s (520 MB RSS) |
+| wikipedia_en_medicine_nopic | 371,233 | 11.3 MB | 5.0 MB | 6 s |
+| wikisource_cs | 65,396 | 5.8 MB | 3.3 MB | 2 s |
+| wiktionary_cs | 164,473 | 3.5 MB | read whole (≤ 4 MB) | 1 s |
+| wikiquote_cs | 16,833 | 0.66 MB | read whole | 1 s |
+| wikiversity_cs | 6,611 | 0.55 MB | read whole | <1 s |
+| wikivoyage_en_europe | 18,322 | 0.47 MB | read whole | <1 s |
+| wikibooks_cs | 3,403 | 0.32 MB | read whole | <1 s |
+| maps_en_czech-republic / slovakia | 8,632 / 4,091 | 0.22 / 0.10 MB | read whole | <1 s |
+| offlinka_cs_prirucky / mul_hry | 6 / 11 | 1 KB | read whole | <1 s |
+
+All indexes of the edition: ~305 MB on the drive (178 MB of it English).
 
 ## Licences
 
