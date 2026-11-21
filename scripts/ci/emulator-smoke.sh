@@ -311,12 +311,13 @@ pick_drive() {
     # The virtual disk is an SD card, whose root Android 11+ refuses. The app's help covers this case
     # ("some phones refuse the drive's root, then people pick Knihovna"): pick Knihovna/.
     log "the volume root is refused: picking Knihovna"
-    scroll_tap "Knihovna" || return 1
-    local end2=$((SECONDS + 20))
-    until dump && has "$PICKER_BUTTON" && ! has "$PICKER_REFUSED"; do
-      [ "$SECONDS" -lt "$end2" ] || return 1
-      sleep 1
+    local opened=""
+    for _ in 1 2 3; do
+      # DocumentsUI sometimes drops the first tap while it settles (API 30): tap again until it opens.
+      scroll_tap "Knihovna" || return 1
+      if wait_for "offlinka_cs_prirucky" 8 && ! has "$PICKER_REFUSED"; then opened=1; break; fi
     done
+    [ -n "$opened" ] || return 1
     snap knihovna
   fi
   tap "$PICKER_BUTTON" || return 1
