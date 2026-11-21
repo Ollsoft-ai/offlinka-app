@@ -12,7 +12,7 @@ SwiftUI app (iOS 17+, iPhone 15+ and USB-C iPads) that reads the Offlinka flash 
 - `Offlinka/Search`, `Offlinka/Screens`, `Offlinka/Library`, `Offlinka/Persistence` (JSON `UserStore`), `Offlinka/Localization` (`L10n`, generated `Str.swift`), `Offlinka/Design` (components; colours/type come from `design/out/ios/Brand.swift`).
 - `Offlinka/Generated/`: UniFFI Swift bindings, committed by the core and rewritten by `scripts/build-ios-core.sh` / `scripts/gen-bindings.sh`.
 - Used straight from `design/`: `Brand.swift`, `Localizable.xcstrings`, `fonts/*.ttf`, `Icons.xcassets`, `reader/offlinka-reader.css` + `reader/inject.js`. The app icon is copied by `tools/sync-design.sh` (an icon set must sit inside an asset catalog).
-- `tools/gen-str.py`: regenerates `Str.swift` from `design/strings/cs.json` after design adds a key.
+- `tools/gen-str.py`: regenerates `Str.swift` from `design/strings/cs.json` after design adds a key. `tools/linux-check/`: type-check against SDK stand-ins + unit tests on Linux.
 
 ## Build on macOS (first time)
 
@@ -34,6 +34,8 @@ SwiftUI app (iOS 17+, iPhone 15+ and USB-C iPads) that reads the Offlinka flash 
 - Store texts in `fastlane/metadata/{cs,sk,en-US}` are a first draft; `store/` is the shared source for listings.
 
 ## Checked on Linux (Swift 6.4.3 toolchain, `~/opt/swift-6.4.3`)
+
+Re-run after changes: `flock /tmp/claude-1000/offlinka-app-build.lock nice -n 10 ios/tools/linux-check/check.sh` (needs `core/target/host/libofflinka_core.so` from `scripts/gen-bindings.sh`).
 
 - Every file parses; the whole app + generated bindings + Brand.swift type-check in Swift 5 and 6 modes against hand-written stand-ins for SwiftUI/UIKit/WebKit (consistency only, not Apple's real signatures).
 - Unit tests of scanner, URL scheme, responder, search model, store, catalog, and `CoreContentSourceTests` against the core built from `main` (Linux `libofflinka_core.so` + the committed bindings) on the real guides and games ZIMs.
