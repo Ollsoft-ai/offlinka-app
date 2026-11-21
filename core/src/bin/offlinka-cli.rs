@@ -113,8 +113,9 @@ fn run(args: &[String]) -> R {
             }
             if let Some(ix) = b.search_index() {
                 println!(
-                    "index: {} bytes, {} records, {} title keys, {} word keys, {} heavy prefixes",
+                    "index: {} bytes ({} in memory), {} records, {} title keys, {} word keys, {} heavy prefixes",
                     ix.byte_len,
+                    ix.memory_bytes(),
                     ix.record_count,
                     ix.title_keys(),
                     ix.word_keys(),

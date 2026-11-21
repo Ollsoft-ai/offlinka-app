@@ -26,7 +26,7 @@ Shared Rust engine of the Offlinka apps: **our own ZIM reader** (no libzim, no K
 - `get_range(path, offset, len)` (clamped to the end, empty past it) and `content_length(path)` for media: uncompressed clusters (images, video) are read straight from the file, never loaded whole.
 - `suggest(query, limit)` → `Suggestion { title, path, snippet }`: `title` = the matched title (a redirect shows its own title), `path` = the target to open, `snippet` = for a redirect the target article's title (e.g. "Prag" → "Praha"), else `None`.
 - `random_article()` → path of a random HTML article.
-- `attach_index_path(path)` / `attach_index_fd(fd)` [`attachIndexPath`/`attachIndexFd`]: maps the `.offidx`; the fd is closed right after mapping. An index of another ZIM is refused (`InvalidZim`).
+- `attach_index_path(path)` / `attach_index_fd(fd)` [`attachIndexPath`/`attachIndexFd`]: the core owns the fd (closed with the book, or right away for indexes ≤ 4 MB, which are read whole). An index of another ZIM is refused (`InvalidZim`). No `mmap`: a pulled drive gives `Io` errors, never a SIGBUS crash.
 - `Library.new()`, `add(book)`, `books()`, `suggest_all(query, limit)` → `LibrarySuggestion { book_id, title, path }`. `add` with an id already present keeps the book with more articles (maxi wins over mini; the same file added twice is kept once).
 - `CoreError` [`CoreException`]: `Io` (unplugged drive, bad fd), `InvalidZim` (not a ZIM, truncated, corrupt, wrong index), `NotFound`, `Unsupported` (zlib/bzip2 clusters, unknown index version). Non-throwing calls (`info`, `illustration`, `suggest`, `random_article`, `suggest_all`) return empty/`None` on I/O errors.
 
@@ -44,9 +44,10 @@ Header (magic, v5/v6), MIME list, path pointer list, classic title pointer list 
 
 - **Normalisation** (`normalize.rs`): NFD, combining marks removed, lowercase, `ł ø đ ß æ œ þ ı` folded by hand, apostrophes dropped, other punctuation → one space. Czech/Slovak letters (`ěščřžýáíéůúňťďľĺŕôä`) all decompose, so `cesky krumlov` = `Český Krumlov`.
 - **Records**: every article (front-article listing, else HTML in `C/`) and every redirect whose chain ends at one, as `(shown entry, target entry)`. Record ids are assigned in rank order — articles before redirects, then shorter normalised title, then alphabetical — so "best" = smallest id.
-- **Maps** (`fst`): normalised title → records; every word suffix of the title (`okres cesky krumlov` → `cesky krumlov`, `krumlov`, max 8 per title) → records. Prefixes with more than 1024 keys get a precomputed top-64 list (`fst` heavy maps), so even a one-letter query never streams a big range.
+- **Maps** (`fst`, key → ordinal): normalised title, and every word suffix of an article title (`okres cesky krumlov` → `cesky krumlov`, `krumlov`, max 8 per title). An ordinal points into a CSR posting table, so a prefix is one contiguous ordinal range: two `fst` lookups + two reads. Prefixes with more than 1024 keys get a precomputed top-64 list, so a one-letter query never reads a big range.
+- **Memory**: only the `fst` maps stay in RAM; records, postings and top lists are read with `pread` (files ≤ 4 MB are read whole).
 - **Ranking**: exact title > title prefix > exact word suffix > word-suffix prefix; inside a class by record id; deduped by target (a redirect never shows next to its own article). `Library.suggest_all`: by class, then Czech Wikipedia first, then the order books were added, then in-book rank.
-- **Format**: see the header comment in `src/index.rs` (magic `OFFIDX\0\x01`, version 1, ZIM UUID + entry count, 7 sections).
+- **Format**: see the header comment in `src/index.rs` (magic `OFFIDX\0\x01`, version 3, ZIM UUID + entry count, 10 sections).
 
 ## offlinka-cli
 

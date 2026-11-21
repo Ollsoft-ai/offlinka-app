@@ -13,7 +13,6 @@ Regenerate after a dependency change: `cargo tree -p offlinka-core -e normal,no-
 - `crc` 3.4.0, `crc-catalog` 2.5.0 — MIT OR Apache-2.0 — https://github.com/mrhooray/crc-rs (via lzma-rs)
 - `byteorder` 1.5.0 — Unlicense OR MIT — https://github.com/BurntSushi/byteorder
 - `lru` 0.19.1 — MIT — https://github.com/jeromefroe/lru-rs (cluster and dirent caches)
-- `memmap2` 0.9.12 — MIT OR Apache-2.0 — https://github.com/RazrFalcon/memmap2-rs (index mapping)
 - `libc` 0.2.191 — MIT OR Apache-2.0 — https://github.com/rust-lang/libc
 - `unicode-normalization` 0.1.26 — (MIT OR Apache-2.0) AND Unicode-3.0 — https://github.com/unicode-rs/unicode-normalization
 - `tinyvec` 1.13.3 — Zlib OR Apache-2.0 OR MIT — https://github.com/Lokathor/tinyvec

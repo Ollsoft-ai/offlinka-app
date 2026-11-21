@@ -373,7 +373,32 @@ fn fd_ownership() {
     offlinka_core::index::build(&a, &mut std::fs::File::create(&idx).unwrap(), &mut |_| {}).unwrap();
     let ifd = std::fs::File::open(&idx).unwrap().into_raw_fd();
     b.attach_index_fd(ifd).unwrap();
-    assert!(!fd_on(ifd, &idx), "index fd is mapped and closed right away");
+    assert!(!fd_on(ifd, &idx), "a small index is read whole and its fd closed right away");
     assert!(b.info().has_index);
     assert_eq!(b.suggest("cesky".into(), 3)[0].title, "Český Krumlov");
+}
+
+#[test]
+fn index_read_through_pread_matches_memory() {
+    use offlinka_core::index::SearchIndex;
+    use offlinka_core::reader::FileSource;
+    let zim = write_sample("pread.zim");
+    let a = offlinka_core::zim::Archive::open(Box::new(FileSource::open(&zim).unwrap())).unwrap();
+    let idx = tmp_path("pread.offidx");
+    offlinka_core::index::build(&a, &mut std::fs::File::create(&idx).unwrap(), &mut |_| {}).unwrap();
+    let mem = SearchIndex::from_vec(std::fs::read(&idx).unwrap()).unwrap();
+    let file = SearchIndex::open_with_limit(FileSource::open(&idx).unwrap(), 0).unwrap();
+    assert!(file.memory_bytes() < file.byte_len);
+    for q in ["cesky", "cesky krumlov", "krumlov", "pra", "p", "k", "kun", "zzz", "hlavni mesto praha"] {
+        assert_eq!(mem.search(q, 10).unwrap(), file.search(q, 10).unwrap(), "{q}");
+    }
+    for id in 0..mem.record_count {
+        assert_eq!(mem.record(id).unwrap(), file.record(id).unwrap());
+    }
+    assert!(file.record(mem.record_count).is_err());
+    // A truncated index is refused, not read past its end.
+    let bytes = std::fs::read(&idx).unwrap();
+    for cut in [10, 100, bytes.len() / 2, bytes.len() - 1] {
+        assert!(SearchIndex::from_vec(bytes[..cut].to_vec()).is_err(), "cut {cut}");
+    }
 }

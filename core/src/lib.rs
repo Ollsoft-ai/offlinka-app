@@ -230,7 +230,7 @@ impl Book {
     /// Ranked candidates with their match class (titles not read yet for indexed books).
     pub(crate) fn candidates(&self, query: &str, limit: usize) -> Vec<search::Cand> {
         match self.search_index() {
-            Some(idx) => search::indexed(&idx, query, limit),
+            Some(idx) => search::indexed(&idx, query, limit).unwrap_or_default(),
             None => match &self.titles {
                 Some(l) => search::fallback(&self.archive, l, self.titles_front_only, query, limit)
                     .map(|v| v.into_iter().map(search::Cand::Ready).collect())

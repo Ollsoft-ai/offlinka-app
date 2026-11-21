@@ -26,7 +26,6 @@ ruzstd = "0.9"
 lzma-rs = "0.3"
 fst = "0.4"
 lru = { version = "0.19", default-features = false }
-memmap2 = "0.9"
 unicode-normalization = "0.1"
 
 [dev-dependencies]

@@ -34,15 +34,15 @@ impl Cand {
 }
 
 /// Indexed search: ranked, diacritics-insensitive, redirects deduped by target.
-pub fn indexed(idx: &SearchIndex, query: &str, limit: usize) -> Vec<Cand> {
+pub fn indexed(idx: &SearchIndex, query: &str, limit: usize) -> Result<Vec<Cand>> {
     let q = normalize(query);
     if q.is_empty() || limit == 0 {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     let mut seen = HashSet::new();
     let mut out = Vec::with_capacity(limit);
-    for (class, id) in idx.search(&q, limit) {
-        let Some((display, target)) = idx.record(id) else { continue };
+    for (class, id) in idx.search(&q, limit)? {
+        let (display, target) = idx.record(id)?;
         if !seen.insert(target) {
             continue;
         }
@@ -51,7 +51,7 @@ pub fn indexed(idx: &SearchIndex, query: &str, limit: usize) -> Vec<Cand> {
             break;
         }
     }
-    out
+    Ok(out)
 }
 
 /// Read the titles and the target path of a candidate.

@@ -1,55 +1,64 @@
 //! The `.offidx` title search index: built once per book by `offlinka-cli index`,
-//! shipped next to the ZIM, memory-mapped by the apps.
+//! shipped next to the ZIM, read by the apps.
 //!
 //! Records are (display entry, target entry) pairs, one per article and one per
 //! redirect that ends at an article. Record ids are assigned in rank order
 //! (articles before redirects, shorter normalised titles first, then alphabetical), so
 //! "best" always means "smallest id" and top-k is a min-selection.
 //!
-//! Two `fst` maps point normalised keys at records: the full title, and every word
-//! suffix of the title ("okres cesky krumlov" → "cesky krumlov", "krumlov"). A third
-//! and fourth `fst` hold precomputed top lists for "heavy" prefixes (more than
-//! [`HEAVY_THRESHOLD`] keys), so a one-letter query never streams a huge range.
+//! Two `fst` maps take normalised keys to their ordinal: the full title, and every word
+//! suffix of an article title ("okres cesky krumlov" → "cesky krumlov", "krumlov").
+//! Ordinals index a CSR posting table (`offsets[o]..offsets[o+1]` in `postings`), so a
+//! prefix is one contiguous ordinal range: two `fst` lookups and two reads. Prefixes
+//! with more than [`HEAVY_THRESHOLD`] keys have a precomputed top list instead.
+//!
+//! Unplug safety: only the `fst` maps live in memory; records, postings and top lists
+//! are read with `pread`, so a pulled drive gives an I/O error, never a SIGBUS from a
+//! memory map. Index files up to 4 MB are read into memory whole.
 //!
 //! File layout (little endian, sections 8-byte aligned):
 //! ```text
 //! 0   magic "OFFIDX\0\x01"      8
-//! 8   version u32, flags u32
+//! 8   version u32 (3), flags u32
 //! 16  ZIM uuid                   16
 //! 32  ZIM entry count u32, record count u32
-//! 40  section count u32 (7), article record count A u32
-//! 48  7 x (offset u64, len u64): title fst, word fst, title heavy fst, word heavy fst,
-//!     records, postings [u32], heavy lists [u32]
+//! 40  section count u32 (10), article record count A u32
+//! 48  10 x (offset u64, len u64):
+//!     0 title fst (key → ordinal)       1 word fst (key → ordinal)
+//!     2 title heavy fst (prefix → off)  3 word heavy fst (prefix → off)
+//!     4 records                         5 title offsets [u32; keys+1]
+//!     6 title postings [u32]            7 word offsets [u32; keys+1]
+//!     8 word postings [u32]             9 heavy lists [u32]: n, ids…
 //! ```
-//! Records: ids < A are articles, stored as `[u32 entry; A]`; the rest are redirects,
+//! Records: ids < A are articles, `[u32 entry; A]`; the rest are redirects,
 //! `[u32 display, u32 target]` each. Word-suffix keys come from article titles only.
-//!
-//! fst values: `id << 1` for a single record, `(offset << 1) | 1` for a posting list
-//! `postings[offset] = n, ids...`. Heavy fst values: offset into heavy lists, `n, ids...`.
+//! Postings of a key are ascending record ids, one per target.
 
 use std::collections::HashMap;
 use std::io::Write;
 use std::ops::Range;
-use std::sync::Arc;
 
-use fst::{Automaton, IntoStreamer, Streamer};
+use fst::{IntoStreamer, Streamer};
 
 use crate::error::{invalid, CoreError, Result};
 use crate::normalize::{normalize, word_starts};
-use crate::reader::FileSource;
+use crate::reader::{FileSource, MemSource, ReadAt};
 use crate::zim::{Archive, Kind};
 
 pub const MAGIC: &[u8; 8] = b"OFFIDX\0\x01";
-pub const VERSION: u32 = 2;
-const HEADER_LEN: usize = 48 + 7 * 16;
+pub const VERSION: u32 = 3;
+const SECTIONS: usize = 10;
+const HEADER_LEN: usize = 48 + SECTIONS * 16;
+/// Index files up to this size are read into memory whole.
+const SMALL_INDEX: u64 = 4 << 20;
 /// A prefix with more keys than this gets a precomputed top list.
 pub const HEAVY_THRESHOLD: usize = 1024;
 /// Length of each precomputed top list.
 pub const HEAVY_TOP: usize = 64;
 /// At most this many word-suffix keys per title.
 const MAX_WORD_KEYS: usize = 8;
-/// Safety cap for streaming a (non-heavy) prefix range.
-const STREAM_CAP: usize = 50_000;
+/// Safety cap for reading a (non-heavy) prefix range.
+const RANGE_CAP: u64 = 65_536;
 
 /// Match class, best first.
 pub const CLASS_EXACT: u8 = 0;
@@ -57,215 +66,235 @@ pub const CLASS_PREFIX: u8 = 1;
 pub const CLASS_WORD_EXACT: u8 = 2;
 pub const CLASS_WORD_PREFIX: u8 = 3;
 
-enum Bytes {
-    Mmap(memmap2::Mmap),
-    Vec(Vec<u8>),
+#[derive(Debug, Clone, Copy, Default)]
+struct Sec {
+    off: u64,
+    len: u64,
 }
 
-impl AsRef<[u8]> for Bytes {
-    fn as_ref(&self) -> &[u8] {
-        match self {
-            Bytes::Mmap(m) => m,
-            Bytes::Vec(v) => v,
-        }
-    }
-}
-
-/// A section of the shared index bytes (lets `fst::Map` own its data).
-#[derive(Clone)]
-pub struct Section {
-    data: Arc<Bytes>,
-    range: Range<usize>,
-}
-
-impl AsRef<[u8]> for Section {
-    fn as_ref(&self) -> &[u8] {
-        &self.data.as_ref().as_ref()[self.range.clone()]
-    }
+/// One of the two key maps with its posting table and top lists.
+struct KeyMap {
+    fst: fst::Map<Vec<u8>>,
+    heavy: fst::Map<Vec<u8>>,
+    offsets: Sec,
+    postings: Sec,
 }
 
 pub struct SearchIndex {
+    src: Box<dyn ReadAt>,
+    in_memory: bool,
     pub uuid: [u8; 16],
     pub entry_count: u32,
     pub record_count: u32,
     pub article_records: u32,
     pub byte_len: u64,
-    title: fst::Map<Section>,
-    word: fst::Map<Section>,
-    title_heavy: fst::Map<Section>,
-    word_heavy: fst::Map<Section>,
-    records: Section,
-    postings: Section,
-    heavy: Section,
+    title: KeyMap,
+    word: KeyMap,
+    records: Sec,
+    heavy: Sec,
 }
 
-fn u32_at(b: &[u8], i: usize) -> Option<u32> {
-    b.get(i * 4..i * 4 + 4).map(|s| u32::from_le_bytes(s.try_into().unwrap()))
+fn u32_at(b: &[u8], i: usize) -> u32 {
+    u32::from_le_bytes(b[i * 4..i * 4 + 4].try_into().unwrap())
+}
+
+fn first_ordinal_ge(map: &fst::Map<Vec<u8>>, key: &[u8]) -> u64 {
+    map.range().ge(key).into_stream().next().map(|(_, v)| v).unwrap_or(map.len() as u64)
 }
 
 impl SearchIndex {
-    /// Open an index file (memory-mapped when possible).
+    /// Open an index file. Small files are read whole; big ones keep the file open
+    /// and only their `fst` maps in memory.
     pub fn open(src: FileSource) -> Result<SearchIndex> {
-        // SAFETY: the index files are read-only edition data; nobody truncates them while mapped.
-        let bytes = match unsafe { memmap2::Mmap::map(src.file()) } {
-            Ok(m) => Bytes::Mmap(m),
-            Err(_) => {
-                use crate::reader::ReadAt;
-                let mut v = vec![0u8; src.size() as usize];
-                src.read_exact_at(&mut v, 0)?;
-                Bytes::Vec(v)
-            }
+        Self::open_with_limit(src, SMALL_INDEX)
+    }
+
+    /// Like [`SearchIndex::open`], reading the file whole only up to `read_whole` bytes.
+    pub fn open_with_limit(src: FileSource, read_whole: u64) -> Result<SearchIndex> {
+        let size = src.size();
+        let in_memory = size <= read_whole;
+        let src: Box<dyn ReadAt> = if in_memory {
+            let mut v = vec![0u8; size as usize];
+            src.read_exact_at(&mut v, 0)?;
+            Box::new(MemSource(v))
+        } else {
+            Box::new(src)
         };
-        Self::from_bytes(bytes)
+        Self::from_source(src, in_memory)
     }
 
     pub fn from_vec(v: Vec<u8>) -> Result<SearchIndex> {
-        Self::from_bytes(Bytes::Vec(v))
+        Self::from_source(Box::new(MemSource(v)), true)
     }
 
-    fn from_bytes(bytes: Bytes) -> Result<SearchIndex> {
-        let data = Arc::new(bytes);
-        let b: &[u8] = data.as_ref().as_ref();
-        if b.len() < HEADER_LEN || &b[0..8] != MAGIC {
+    fn from_source(src: Box<dyn ReadAt>, in_memory: bool) -> Result<SearchIndex> {
+        let size = src.size();
+        if size < HEADER_LEN as u64 {
             return Err(invalid("not an Offlinka search index (.offidx)"));
         }
-        let version = u32_at(b, 2).unwrap();
+        let mut b = vec![0u8; HEADER_LEN];
+        src.read_exact_at(&mut b, 0)?;
+        if &b[0..8] != MAGIC {
+            return Err(invalid("not an Offlinka search index (.offidx)"));
+        }
+        let version = u32_at(&b, 2);
         if version != VERSION {
-            return Err(CoreError::Unsupported(format!("search index version {version}")));
+            return Err(CoreError::Unsupported(format!("search index version {version} (expected {VERSION})")));
         }
         let mut uuid = [0u8; 16];
         uuid.copy_from_slice(&b[16..32]);
-        let entry_count = u32_at(b, 8).unwrap();
-        let record_count = u32_at(b, 9).unwrap();
-        let article_records = u32_at(b, 11).unwrap();
-        if article_records > record_count {
-            return Err(invalid("search index: bad record counts"));
+        let entry_count = u32_at(&b, 8);
+        let record_count = u32_at(&b, 9);
+        let article_records = u32_at(&b, 11);
+        if article_records > record_count || u32_at(&b, 10) as usize != SECTIONS {
+            return Err(invalid("search index: bad header"));
         }
-        if u32_at(b, 10).unwrap() != 7 {
-            return Err(invalid("search index: bad section table"));
-        }
-        let mut secs = Vec::with_capacity(7);
-        for i in 0..7 {
+        let mut secs = [Sec::default(); SECTIONS];
+        for (i, sec) in secs.iter_mut().enumerate() {
             let o = 48 + i * 16;
             let off = u64::from_le_bytes(b[o..o + 8].try_into().unwrap());
             let len = u64::from_le_bytes(b[o + 8..o + 16].try_into().unwrap());
-            let end = off
-                .checked_add(len)
-                .filter(|&e| e <= b.len() as u64)
-                .ok_or_else(|| invalid("search index truncated"))?;
-            secs.push(Section { data: data.clone(), range: off as usize..end as usize });
+            if off.checked_add(len).is_none_or(|e| e > size) {
+                return Err(invalid("search index truncated"));
+            }
+            *sec = Sec { off, len };
         }
-        let map = |s: &Section| fst::Map::new(s.clone()).map_err(|e| invalid(format!("search index: {e}")));
-        let idx = SearchIndex {
+        let load = |s: Sec| -> Result<fst::Map<Vec<u8>>> {
+            let mut v = vec![0u8; s.len as usize];
+            src.read_exact_at(&mut v, s.off)?;
+            fst::Map::new(v).map_err(|e| invalid(format!("search index: {e}")))
+        };
+        let need = article_records as u64 * 4 + (record_count - article_records) as u64 * 8;
+        if secs[4].len < need {
+            return Err(invalid("search index: records truncated"));
+        }
+        let title = KeyMap { fst: load(secs[0])?, heavy: load(secs[2])?, offsets: secs[5], postings: secs[6] };
+        let word = KeyMap { fst: load(secs[1])?, heavy: load(secs[3])?, offsets: secs[7], postings: secs[8] };
+        for m in [&title, &word] {
+            if m.offsets.len < (m.fst.len() as u64 + 1) * 4 {
+                return Err(invalid("search index: offsets truncated"));
+            }
+        }
+        Ok(SearchIndex {
+            src,
+            in_memory,
             uuid,
             entry_count,
             record_count,
             article_records,
-            byte_len: b.len() as u64,
-            title: map(&secs[0])?,
-            word: map(&secs[1])?,
-            title_heavy: map(&secs[2])?,
-            word_heavy: map(&secs[3])?,
-            records: secs[4].clone(),
-            postings: secs[5].clone(),
-            heavy: secs[6].clone(),
-        };
-        let need = idx.article_records as u64 * 4 + (idx.record_count - idx.article_records) as u64 * 8;
-        if (idx.records.as_ref().len() as u64) < need {
-            return Err(invalid("search index: records truncated"));
+            byte_len: size,
+            title,
+            word,
+            records: secs[4],
+            heavy: secs[9],
+        })
+    }
+
+    /// `n` u32 values starting at u32 position `start` of a section.
+    fn read_u32s(&self, s: Sec, start: u64, n: u64) -> Result<Vec<u32>> {
+        if n == 0 {
+            return Ok(Vec::new());
         }
-        Ok(idx)
+        if (start + n) * 4 > s.len {
+            return Err(invalid("search index: read outside a section"));
+        }
+        let mut b = vec![0u8; (n * 4) as usize];
+        self.src.read_exact_at(&mut b, s.off + start * 4)?;
+        Ok(b.chunks_exact(4).map(|c| u32::from_le_bytes(c.try_into().unwrap())).collect())
     }
 
     /// (display entry, target entry) of a record.
-    pub fn record(&self, id: u32) -> Option<(u32, u32)> {
-        let r = self.records.as_ref();
+    pub fn record(&self, id: u32) -> Result<(u32, u32)> {
         if id < self.article_records {
-            let e = u32_at(r, id as usize)?;
-            Some((e, e))
+            let e = self.read_u32s(self.records, id as u64, 1)?[0];
+            Ok((e, e))
         } else if id < self.record_count {
-            let k = self.article_records as usize + (id - self.article_records) as usize * 2;
-            Some((u32_at(r, k)?, u32_at(r, k + 1)?))
+            let k = self.article_records as u64 + (id - self.article_records) as u64 * 2;
+            let v = self.read_u32s(self.records, k, 2)?;
+            Ok((v[0], v[1]))
         } else {
-            None
+            Err(invalid("search index: record id out of range"))
         }
     }
 
-    fn push_value(&self, v: u64, out: &mut Vec<u32>) {
-        if v & 1 == 0 {
-            out.push((v >> 1) as u32);
-        } else {
-            let p = self.postings.as_ref();
-            let off = (v >> 1) as usize;
-            let n = u32_at(p, off).unwrap_or(0) as usize;
-            out.extend((0..n).filter_map(|i| u32_at(p, off + 1 + i)));
+    /// Record ids of the keys with ordinals `lo..hi`.
+    fn postings(&self, m: &KeyMap, lo: u64, hi: u64) -> Result<Vec<u32>> {
+        if lo >= hi {
+            return Ok(Vec::new());
         }
+        let offs = self.read_u32s(m.offsets, lo, 2)?;
+        let end = self.read_u32s(m.offsets, hi, 1)?[0];
+        let start = offs[0] as u64;
+        if (end as u64) < start {
+            return Err(invalid("search index: bad offsets"));
+        }
+        self.read_u32s(m.postings, start, end as u64 - start)
     }
 
-    fn heavy_list(&self, v: u64, out: &mut Vec<u32>) {
-        let h = self.heavy.as_ref();
-        let off = v as usize;
-        let n = u32_at(h, off).unwrap_or(0) as usize;
-        out.extend((0..n).filter_map(|i| u32_at(h, off + 1 + i)));
-    }
-
-    /// Exact key ids and the best `want` prefix ids for one map.
-    fn lookup(&self, map: &fst::Map<Section>, heavy: &fst::Map<Section>, q: &str, want: usize) -> (Vec<u32>, Vec<u32>) {
-        let mut exact = Vec::new();
-        if let Some(v) = map.get(q) {
-            self.push_value(v, &mut exact);
-        }
-        let mut prefix = Vec::new();
-        if let Some(v) = heavy.get(q) {
-            self.heavy_list(v, &mut prefix);
+    /// Exact key ids and the best `want` prefix ids of one key map.
+    fn lookup(&self, m: &KeyMap, q: &str, want: usize) -> Result<(Vec<u32>, Vec<u32>)> {
+        let exact = match m.fst.get(q) {
+            Some(o) => self.postings(m, o, o + 1)?,
+            None => Vec::new(),
+        };
+        let prefix = if let Some(off) = m.heavy.get(q) {
+            let n = self.read_u32s(self.heavy, off, 1)?[0];
+            self.read_u32s(self.heavy, off + 1, n as u64)?
         } else {
-            let aut = fst::automaton::Str::new(q).starts_with();
-            let mut s = map.search(aut).into_stream();
-            let mut n = 0;
-            while let Some((_, v)) = s.next() {
-                self.push_value(v, &mut prefix);
-                n += 1;
-                if n >= STREAM_CAP {
-                    break;
-                }
-            }
+            let lo = first_ordinal_ge(&m.fst, q.as_bytes());
+            let mut upper = q.as_bytes().to_vec();
+            upper.push(0xff); // never inside UTF-8: above every key starting with q
+            let hi = first_ordinal_ge(&m.fst, &upper).min(lo + RANGE_CAP);
+            let mut ids = self.postings(m, lo, hi)?;
             let keep = want.max(1) * 4;
-            if prefix.len() > keep {
-                prefix.select_nth_unstable(keep);
-                prefix.truncate(keep);
+            if ids.len() > keep {
+                ids.select_nth_unstable(keep);
+                ids.truncate(keep);
             }
-            prefix.sort_unstable();
-        }
-        (exact, prefix)
+            ids.sort_unstable();
+            ids
+        };
+        Ok((exact, prefix))
     }
 
     /// Ranked (class, record id) hits for a normalised query; may contain duplicates
     /// and several records with the same target (the caller dedupes in order).
-    pub fn search(&self, q: &str, want: usize) -> Vec<(u8, u32)> {
+    pub fn search(&self, q: &str, want: usize) -> Result<Vec<(u8, u32)>> {
         if q.is_empty() {
-            return Vec::new();
+            return Ok(Vec::new());
         }
         let mut hits = Vec::new();
-        let (e, p) = self.lookup(&self.title, &self.title_heavy, q, want);
+        let (e, p) = self.lookup(&self.title, q, want)?;
         hits.extend(e.into_iter().map(|id| (CLASS_EXACT, id)));
         hits.extend(p.into_iter().map(|id| (CLASS_PREFIX, id)));
-        let (e, p) = self.lookup(&self.word, &self.word_heavy, q, want);
+        let (e, p) = self.lookup(&self.word, q, want)?;
         hits.extend(e.into_iter().map(|id| (CLASS_WORD_EXACT, id)));
         hits.extend(p.into_iter().map(|id| (CLASS_WORD_PREFIX, id)));
         hits.sort_unstable();
-        hits
+        Ok(hits)
     }
 
     pub fn title_keys(&self) -> usize {
-        self.title.len()
+        self.title.fst.len()
     }
 
     pub fn word_keys(&self) -> usize {
-        self.word.len()
+        self.word.fst.len()
     }
 
     pub fn heavy_prefixes(&self) -> usize {
-        self.title_heavy.len() + self.word_heavy.len()
+        self.title.heavy.len() + self.word.heavy.len()
+    }
+
+    /// Bytes this index keeps in memory (its `fst` maps, or the whole file when small).
+    pub fn memory_bytes(&self) -> u64 {
+        if self.in_memory {
+            return self.byte_len;
+        }
+        [&self.title, &self.word]
+            .iter()
+            .map(|m| (m.fst.as_fst().as_bytes().len() + m.heavy.as_fst().as_bytes().len()) as u64)
+            .sum()
     }
 }
 
@@ -285,6 +314,8 @@ pub struct BuildStats {
     pub heavy_bytes: u64,
     pub records_bytes: u64,
     pub postings_bytes: u64,
+    /// What a phone keeps in RAM for this index (the fst maps).
+    pub memory_bytes: u64,
     pub total_bytes: u64,
 }
 
@@ -481,14 +512,13 @@ pub fn build(a: &Archive, out: &mut dyn Write, progress: &mut dyn FnMut(&str)) -
     }
     drop(spans);
 
-    let mut postings: Vec<u32> = Vec::new();
     let mut heavy_lists: Vec<u32> = Vec::new();
     let mut heavy_seen: HashMap<Vec<u32>, u32> = HashMap::new();
     progress(&format!("building title map ({} keys)", tkeys.len()));
-    let t = build_map(&arena, &mut tkeys, &targets, &mut postings, &mut heavy_lists, &mut heavy_seen)?;
+    let t = build_map(&arena, &mut tkeys, &targets, &mut heavy_lists, &mut heavy_seen)?;
     drop(tkeys);
     progress(&format!("building word map ({} keys)", wkeys.len()));
-    let w = build_map(&arena, &mut wkeys, &targets, &mut postings, &mut heavy_lists, &mut heavy_seen)?;
+    let w = build_map(&arena, &mut wkeys, &targets, &mut heavy_lists, &mut heavy_seen)?;
     drop(wkeys);
 
     let mut records = Vec::with_capacity(displays.len() * 8);
@@ -499,9 +529,11 @@ pub fn build(a: &Archive, out: &mut dyn Write, progress: &mut dyn FnMut(&str)) -
         }
     }
     let to_bytes = |v: &[u32]| -> Vec<u8> { v.iter().flat_map(|x| x.to_le_bytes()).collect() };
-    let postings_b = to_bytes(&postings);
+    let (t_offs, t_post, w_offs, w_post) =
+        (to_bytes(&t.offsets), to_bytes(&t.postings), to_bytes(&w.offsets), to_bytes(&w.postings));
     let heavy_b = to_bytes(&heavy_lists);
-    let sections: [&[u8]; 7] = [&t.fst, &w.fst, &t.heavy_fst, &w.heavy_fst, &records, &postings_b, &heavy_b];
+    let sections: [&[u8]; SECTIONS] =
+        [&t.fst, &w.fst, &t.heavy_fst, &w.heavy_fst, &records, &t_offs, &t_post, &w_offs, &w_post, &heavy_b];
 
     let mut header = Vec::with_capacity(HEADER_LEN);
     header.extend_from_slice(MAGIC);
@@ -510,7 +542,7 @@ pub fn build(a: &Archive, out: &mut dyn Write, progress: &mut dyn FnMut(&str)) -
     header.extend_from_slice(&a.header.uuid);
     header.extend_from_slice(&a.header.entry_count.to_le_bytes());
     header.extend_from_slice(&(displays.len() as u32).to_le_bytes());
-    header.extend_from_slice(&7u32.to_le_bytes());
+    header.extend_from_slice(&(SECTIONS as u32).to_le_bytes());
     header.extend_from_slice(&(st.articles as u32).to_le_bytes());
     let mut pos = HEADER_LEN as u64;
     for s in &sections {
@@ -536,7 +568,8 @@ pub fn build(a: &Archive, out: &mut dyn Write, progress: &mut dyn FnMut(&str)) -
     st.word_fst_bytes = w.fst.len() as u64;
     st.heavy_bytes = (t.heavy_fst.len() + w.heavy_fst.len() + heavy_b.len()) as u64;
     st.records_bytes = records.len() as u64;
-    st.postings_bytes = postings_b.len() as u64;
+    st.postings_bytes = (t_offs.len() + t_post.len() + w_offs.len() + w_post.len()) as u64;
+    st.memory_bytes = (t.fst.len() + w.fst.len() + t.heavy_fst.len() + w.heavy_fst.len()) as u64;
     st.total_bytes = written;
     Ok(st)
 }
@@ -544,6 +577,8 @@ pub fn build(a: &Archive, out: &mut dyn Write, progress: &mut dyn FnMut(&str)) -
 struct BuiltMap {
     fst: Vec<u8>,
     heavy_fst: Vec<u8>,
+    offsets: Vec<u32>,
+    postings: Vec<u32>,
     keys: u64,
     heavy: u64,
 }
@@ -552,7 +587,6 @@ fn build_map(
     arena: &str,
     keys: &mut [(u32, u32, u32)],
     targets: &[u32],
-    postings: &mut Vec<u32>,
     heavy_lists: &mut Vec<u32>,
     heavy_seen: &mut HashMap<Vec<u32>, u32>,
 ) -> Result<BuiltMap> {
@@ -584,19 +618,16 @@ fn build_map(
     let ukey = |u: usize| sub(arena, uniq[u].0, uniq[u].1);
     let list = |u: usize| &ids[lists[u].0 as usize..(lists[u].0 + lists[u].1) as usize];
 
+    // key → ordinal; ordinal → offsets[o]..offsets[o+1] in postings
     let mut b = fst::MapBuilder::memory();
+    let mut offsets = Vec::with_capacity(uniq.len() + 1);
+    let mut postings = Vec::with_capacity(ids.len());
     for u in 0..uniq.len() {
-        let l = list(u);
-        let v = if l.len() == 1 {
-            (l[0] as u64) << 1
-        } else {
-            let off = postings.len() as u64;
-            postings.push(l.len() as u32);
-            postings.extend_from_slice(l);
-            (off << 1) | 1
-        };
-        b.insert(ukey(u), v).map_err(|e| invalid(format!("fst: {e}")))?;
+        offsets.push(postings.len() as u32);
+        postings.extend_from_slice(list(u));
+        b.insert(ukey(u), u as u64).map_err(|e| invalid(format!("fst: {e}")))?;
     }
+    offsets.push(postings.len() as u32);
     let fst_bytes = b.into_inner().map_err(|e| invalid(format!("fst: {e}")))?;
 
     // Heavy prefixes: groups of consecutive keys sharing a char-boundary prefix.
@@ -665,6 +696,8 @@ fn build_map(
     }
     Ok(BuiltMap {
         fst: fst_bytes,
+        offsets,
+        postings,
         heavy_fst: hb.into_inner().map_err(|e| invalid(format!("fst: {e}")))?,
         keys: uniq.len() as u64,
         heavy: hentries.len() as u64,
