@@ -285,24 +285,33 @@ PICKER_ROOT="(sd karta|karta sd|sd card).*|.*virtual.*|.*usb.*"
 # Android 11+ refuses the root of an SD card (not of a USB drive) for a folder grant.
 PICKER_REFUSED="tuto složku nelze použít|can.t use this folder"
 
-# keyboard_open <name>: open a DocumentsUI list item with DPAD focus, type-to-focus and Enter.
+# keyboard_open <name>: open a DocumentsUI folder with the keyboard: DPAD into the list, type-to-focus the
+# name, else walk the grid with DPAD down / right; Enter on the folder.
 keyboard_open() {
-  local f
-  for _ in $(seq 1 12); do
+  local f prev="" typed="" key=KEYCODE_DPAD_DOWN
+  for _ in $(seq 1 24); do
     dump || return 1
     f="$(python3 "$UIPY" focus "$UIX")"
     log "focus: ${f:0:80}"
     case "$f" in
-      "list $1"*)
+      "item $1"*)
         adb shell input keyevent KEYCODE_ENTER
         return 0 ;;
-      list*)
-        adb shell input text "$1"
-        sleep 1 ;;
+      item*)
+        if [ -z "$typed" ]; then
+          typed=1
+          adb shell input text "$1"
+        else
+          # At the bottom of a column the focus stops moving: try the next column.
+          [ "$f" = "$prev" ] && key=KEYCODE_DPAD_RIGHT
+          adb shell input keyevent "$key"
+          [ "$key" = KEYCODE_DPAD_RIGHT ] && key=KEYCODE_DPAD_DOWN
+        fi ;;
       *)
-        adb shell input keyevent KEYCODE_DPAD_DOWN
-        sleep 0.5 ;;
+        adb shell input keyevent KEYCODE_DPAD_DOWN ;;
     esac
+    prev="$f"
+    sleep 0.5
   done
   return 1
 }
