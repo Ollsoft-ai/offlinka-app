@@ -19,9 +19,9 @@ For the session with the founders. Work top to bottom and tick the boxes. Rules 
 - [ ] **Fixes that reviewers would hit:** the first four items of "Rejection risks" below.
 - [ ] **Privacy pages published** from `store/privacy/` at https://offlinka.cz/aplikace/soukromi, https://offlinka.sk/aplikacia/sukromie and https://offlinka.cz/en/app/privacy (Kryštof).
 - [ ] **Review sample** published: a zip with one folder `OFFLINKA/Telefon/` holding `wikipedia_cs_all_mini-…zim` (870 MB), `offlinka_cs_prirucky.zim` and `offlinka_mul_hry.zim`. Put its URL into `ios/fastlane/metadata/review_information/notes.txt` and the Play "App access" text.
-- [ ] **Demo video** (1–2 min, iPhone 15 screen recording with the real drive): plug in, choose the drive, search „cesky krumlov“, open an article, the map, unplug and plug back. The same video on a phone with Android for Play (unlisted YouTube link is fine).
+- [ ] **Demo video** (made by us, not the founders; founders 2026-11-21) (1–2 min, iPhone 15 screen recording with the real drive): plug in, choose the drive, search „cesky krumlov“, open an article, the map, unplug and plug back. The same video on a phone with Android for Play (unlisted YouTube link is fine).
 - [ ] **Screenshots:** re-record Paparazzi (`:ui:recordPaparazziDebug`), then `store/screenshots/build.sh --fastlane`. Look at `store/screenshots/out/index.html`. The build lists missing app states; the iPhone and iPad sets must come from the iOS simulator before the App Store submission (step 3).
-- [ ] **Public phone number** decided (both stores publish one, see open questions).
+- [x] **Public phone number:** **+420 728 374 741**, the same as on offlinka.cz (founders, 2026-11-21). Used as the developer phone on both stores; it confirms by a one-time code.
 
 ## 1. Google Play account (once, for all Ollsoft apps)
 

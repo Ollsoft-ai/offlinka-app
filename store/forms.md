@@ -7,7 +7,7 @@ Answers for Google Play Console and App Store Connect, checked against the app o
 ### Store settings
 
 - **App category:** Books & Reference (Knihy a reference).
-- **Store listing contact:** email **info@offlinka.cz**, website **https://offlinka.cz**, phone: leave empty.
+- **Store listing contact:** email **info@offlinka.cz**, website **https://offlinka.cz**, phone **+420 728 374 741** (the offlinka.cz number).
 - **Developer page** (account level, shared with Olingo Sken): website https://ollsoft.ai, email info@ollsoft.ai.
 - **Listing languages:** cs-CZ (default), sk, en-US. Texts: `android/fastlane/metadata/android/<locale>/`. Images: `store/screenshots/build.sh --fastlane`.
 - **Countries:** Czechia and Slovakia (the drive ships only there). Adding the rest of the EU later is one click.
