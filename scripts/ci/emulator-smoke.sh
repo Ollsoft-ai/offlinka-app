@@ -287,24 +287,28 @@ PICKER_REFUSED="tuto složku nelze použít|can.t use this folder"
 
 picker_shown() { dump && python3 "$UIPY" packages "$UIX" | grep -q documentsui; }
 
-# The system folder picker (DocumentsUI): "use this folder" on the volume root, then "allow". API 29+ opens
-# on the volume (StorageVolume.createOpenDocumentTreeIntent); older ones open on Recent, so go to the SD
-# card through the roots drawer first. Returns 1 when it cannot be driven (a layout we do not know).
+# The system folder picker (DocumentsUI): "use this folder" on the volume, then "allow". API 29+ opens on
+# the volume (StorageVolume.createOpenDocumentTreeIntent); older ones open on Recent, so go to the SD card
+# through the roots drawer first. Returns 1 when it cannot be driven (a layout we do not know).
 pick_drive() {
   local end=$((SECONDS + 30))
   until picker_shown; do
     [ "$SECONDS" -lt "$end" ] || { log "no picker; on screen: $(python3 "$UIPY" packages "$UIX")"; snap picker; return 1; }
     sleep 1
   done
-  sleep 2
+  # Let the folder view load (its bottom bar comes last).
+  wait_for "$PICKER_BUTTON|$PICKER_REFUSED|^(nedávné|recent)$" 15 || true
+  sleep 1
   snap picker
-  if ! python3 "$UIPY" center "$UIX" "$PICKER_BUTTON" >/dev/null; then
+  if ! has "$PICKER_ROOT"; then
+    # Not on the volume (API 26-28 open on Recent): roots drawer → the SD card.
     tap "zobrazit kořeny|show roots" || return 1
-    sleep 2
+    wait_for "$PICKER_ROOT" 10 || return 1
+    sleep 1
     snap roots
     tap "$PICKER_ROOT" || return 1
-    sleep 3
-    wait_for "$PICKER_BUTTON" 15 || return 1
+    wait_for "$PICKER_BUTTON|$PICKER_REFUSED" 15 || return 1
+    sleep 1
     snap volume
   fi
   if has "$PICKER_REFUSED"; then
@@ -313,13 +317,14 @@ pick_drive() {
     log "the volume root is refused: picking Knihovna"
     local opened=""
     for _ in 1 2 3; do
-      # DocumentsUI sometimes drops the first tap while it settles (API 30): tap again until it opens.
+      # DocumentsUI sometimes drops a tap while it settles: tap again until the folder opens.
       scroll_tap "Knihovna" || return 1
       if wait_for "offlinka_cs_prirucky" 8 && ! has "$PICKER_REFUSED"; then opened=1; break; fi
     done
     [ -n "$opened" ] || return 1
     snap knihovna
   fi
+  wait_for "$PICKER_BUTTON" 10 || return 1
   tap "$PICKER_BUTTON" || return 1
   sleep 2
   if wait_for "$PICKER_ALLOW" 10; then
@@ -330,7 +335,8 @@ pick_drive() {
 }
 
 HOME_RE="Hledat v Offlince"
-GUIDE_RE="záchranná služba|První pomoc – rychlé karty|Deset situací"
+# Text of the guide page itself (WebView content in the accessibility tree), not the reader's title bar.
+GUIDE_RE="Deset situací|záchranná služba|tísňové volání"
 step drive-plugged
 if ! virtual_drive; then
   warn "no virtual SD disk on this emulator: drive, Home and reader steps skipped"
