@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=393">
+<title>Offlinka mockup: Reader</title>
+<link rel="stylesheet" href="../out/web/tokens.css"><link rel="stylesheet" href="assets/mock.css">
+<script src="assets/icons.js"></script><script src="assets/strings.js"></script><script src="assets/mock.js" defer></script>
+</head>
+<body>
+<!-- Reader. The article area is a real screenshot of the cs maxi "Sněžka" with design/reader/offlinka-reader.css.
+     Top bar: Home, title + book, Save, More (history, light/dark, copy link). Bottom toolbar: back, forward,
+     find in article, text size, the book's main page.
+     States: default, find, textsize (sheet), external (tapped a link to the internet). -->
+<div class="phone">
+  <div class="status"><span>9:41</span><span class="si"><span class="sig"><i></i><i></i><i></i><i></i></span><span class="bat"></span></span></div>
+
+  <div class="bar line" data-hide="find">
+    <a class="b48" data-s-aria="nav_home"><i class="ic" data-i="home"></i></a>
+    <!-- at the top of the article the bar names the book (the article's own h1 is right below);
+         once the h1 scrolls under the bar, the article title fades in here in subhead 17/700 -->
+    <div class="tt" style="display:flex;align-items:center;gap:8px"><span class="bk xs t-wiki"><i class="ic" data-i="book_wikipedia"></i></span><b style="font:600 15px/20px var(--font-text);color:var(--c-ink2)" data-s="book_wikipedia_cs"></b></div>
+    <a class="b48" data-s-aria="reader_save"><i class="ic" data-i="bookmark"></i></a>
+    <a class="b48" data-s-aria="action_more"><i class="ic" data-i="more_vert"></i></a>
+  </div>
+  <div class="findbar" data-show="find">
+    <a class="b48" data-s-aria="action_close"><i class="ic" data-i="close"></i></a>
+    <div class="ff"><span>lanov<span class="caret" style="display:inline-block;width:2px;height:20px;background:var(--c-primary);vertical-align:-4px;margin-left:1px"></span></span>
+      <em data-s="reader_find_count" data-p='{"current":"3","total":"15"}'></em></div>
+    <a class="b48" data-s-aria="reader_find_prev"><i class="ic" data-i="chevron_up"></i></a>
+    <a class="b48" data-s-aria="reader_find_next"><i class="ic" data-i="chevron_down"></i></a>
+  </div>
+
+  <div class="webview">
+    <div data-hide="find">
+      <img class="only-light" src="assets/article-reader-light.png" alt="">
+      <img class="only-dark" src="assets/article-reader-dark.png" alt="">
+    </div>
+    <div data-show="find">
+      <img class="only-light" src="assets/article-reader-find-light.png" alt="">
+      <img class="only-dark" src="assets/article-reader-find-dark.png" alt="">
+    </div>
+  </div>
+
+  <nav class="tbar">
+    <a data-s-aria="action_back"><i class="ic" data-i="arrow_back"></i></a>
+    <a class="off" data-s-aria="action_forward"><i class="ic" data-i="arrow_forward"></i></a>
+    <a data-s-aria="reader_find"><i class="ic" data-i="find_in_page"></i></a>
+    <a data-s-aria="reader_text_size"><i class="ic" data-i="text_size"></i></a>
+    <a data-s-aria="reader_main_page"><i class="ic" data-i="book_wikipedia"></i></a>
+  </nav>
+
+  <!-- text size + light/dark sheet -->
+  <div class="scrim soft" data-show="textsize"></div>
+  <div class="sheet" data-show="textsize">
+    <div class="grab"></div>
+    <h2 data-s="reader_text_size"></h2>
+    <div style="display:flex;align-items:center;gap:6px;margin:16px 0 4px">
+      <a class="b48" style="width:48px;height:48px;display:grid;place-items:center;font:600 15px/1 var(--font-text)" data-s-aria="reader_text_smaller">A</a>
+      <div class="slider" style="flex:1"><div class="tr"></div><div class="fi" style="width:50%"></div>
+        <i class="tk" style="left:0"></i><i class="tk" style="left:25%"></i><i class="tk" style="left:50%"></i><i class="tk" style="left:75%"></i><i class="tk" style="left:100%"></i>
+        <div class="kn" style="left:50%"></div></div>
+      <a class="b48" style="width:48px;height:48px;display:grid;place-items:center;font:700 24px/1 var(--font-text)" data-s-aria="reader_text_larger">A</a>
+    </div>
+    <p style="text-align:center;font:600 15px/20px var(--font-text);color:var(--c-ink2);margin-bottom:20px" data-s="settings_text_size_value" data-p='{"n":"115"}'></p>
+    <p style="font:700 15px/20px var(--font-text);color:var(--c-ink2);margin-bottom:8px" data-s="settings_theme"></p>
+    <div class="seg"><b data-s="settings_theme_system"></b><b class="on" data-s="settings_theme_light"></b><b data-s="settings_theme_dark"></b></div>
+  </div>
+
+  <!-- tapped a link to the internet -->
+  <div class="scrim" data-show="external"></div>
+  <div class="dialog" data-show="external">
+    <i class="ic s26" data-i="no_internet" style="color:var(--c-warn-ink)"></i>
+    <h2 data-s="reader_external_title"></h2>
+    <p data-s="reader_external_body"></p>
+    <code>https://www.krnap.cz/snezka</code>
+    <div class="acts"><a class="btn secondary"><i class="ic s20" data-i="copy"></i><span data-s="reader_copy_link"></span></a>
+      <a class="btn" style="width:auto;padding:0 18px;color:var(--c-ink);font:700 15.5px/1 var(--font-text)"><span data-s="action_close"></span></a></div>
+  </div>
+  <div class="homeind"></div>
+</div>
+</body>
+</html>

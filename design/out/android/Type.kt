@@ -33,7 +33,7 @@ object OfflinkaType {
     val display = TextStyle(fontFamily = ArchivoExpandedFamily, fontWeight = FontWeight.ExtraBold, fontSize = 30.sp, lineHeight = 34.sp, letterSpacing = (-0.015).em, platformStyle = NoPadding, lineHeightStyle = Centered)
     val headline = TextStyle(fontFamily = ArchivoExpandedFamily, fontWeight = FontWeight.ExtraBold, fontSize = 24.sp, lineHeight = 29.sp, letterSpacing = (-0.01).em, platformStyle = NoPadding, lineHeightStyle = Centered)
     val title = TextStyle(fontFamily = ArchivoExpandedFamily, fontWeight = FontWeight.ExtraBold, fontSize = 19.sp, lineHeight = 24.sp, letterSpacing = (-0.01).em, platformStyle = NoPadding, lineHeightStyle = Centered)
-    val titleSmall = TextStyle(fontFamily = ArchivoExpandedFamily, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, lineHeight = 21.sp, letterSpacing = (-0.005).em, platformStyle = NoPadding, lineHeightStyle = Centered)
+    val titleSmall = TextStyle(fontFamily = ArchivoExpandedFamily, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, lineHeight = 22.sp, letterSpacing = (-0.005).em, platformStyle = NoPadding, lineHeightStyle = Centered)
     val button = TextStyle(fontFamily = ArchivoExpandedFamily, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, lineHeight = 22.sp, letterSpacing = (-0.005).em, platformStyle = NoPadding, lineHeightStyle = Centered)
     val subhead = TextStyle(fontFamily = ArchivoFamily, fontWeight = FontWeight.Bold, fontSize = 17.sp, lineHeight = 23.sp, letterSpacing = (0).em, platformStyle = NoPadding, lineHeightStyle = Centered)
     val body = TextStyle(fontFamily = ArchivoFamily, fontWeight = FontWeight.Normal, fontSize = 17.sp, lineHeight = 25.sp, letterSpacing = (0).em, platformStyle = NoPadding, lineHeightStyle = Centered)

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=393">
+<title>Offlinka mockup: Home</title>
+<link rel="stylesheet" href="../out/web/tokens.css"><link rel="stylesheet" href="assets/mock.css">
+<script src="assets/icons.js"></script><script src="assets/strings.js"></script><script src="assets/mock.js" defer></script>
+</head>
+<body>
+<!-- Home (start page). Hero = forest + contour texture + ridge, same as the drive's start page.
+     Tiles: one wide tile for the Wikipedia in the UI language, then a 2-column grid. Order: see README. -->
+<div class="phone">
+  <div class="status on-hero"><span>9:41</span><span class="si"><span class="sig"><i></i><i></i><i></i><i></i></span><span class="bat"></span></span></div>
+  <div class="scroll">
+    <section class="hero">
+      <div class="herotop">
+        <img class="logo" src="../brand/logo.svg" alt="Offlinka">
+        <span class="badge"><i></i><span data-s="status_offline"></span></span>
+      </div>
+      <h1 data-s="home_title"></h1>
+      <div class="search"><i class="ic" data-i="search"></i><span class="ph" data-s="home_search_placeholder"></span></div>
+      <div class="quick">
+        <a class="qchip"><i class="ic s20" data-i="first_aid"></i><span data-s="home_quick_first_aid"></span></a>
+        <a class="qchip"><i class="ic s20" data-i="checklist"></i><span data-s="home_quick_prepare"></span></a>
+        <a class="qchip"><i class="ic s20" data-i="random"></i><span data-s="home_quick_random"></span></a>
+      </div>
+    </section>
+
+    <a class="cont">
+      <span class="bk sm t-wiki"><i class="ic" data-i="book_wikipedia"></i></span>
+      <span class="tx"><small data-s="home_continue"></small><b>Sněžka</b></span>
+      <i class="ic" data-i="chevron_right"></i>
+    </a>
+
+    <div class="sec"><h2 class="peak" data-s="home_books_title"></h2><span data-s="library_books_count" data-n="14"></span></div>
+    <div class="tiles">
+      <a class="tile wide t-wiki"><span class="bk"><i class="ic" data-i="book_wikipedia"></i></span>
+        <span><h3 data-s="book_wikipedia_cs"></h3><p data-s="book_wikipedia_full_desc"></p></span><span class="lang">CZ</span></a>
+      <a class="tile t-maps"><span class="bk"><i class="ic" data-i="book_maps"></i></span><h3 data-s="book_maps_cz"></h3><p data-s="book_maps_desc"></p></a>
+      <a class="tile t-aid"><span class="bk"><i class="ic" data-i="book_guides"></i></span><h3 data-s="book_guides"></h3><p data-s="book_guides_desc"></p></a>
+      <a class="tile t-wiki"><span class="bk"><i class="ic" data-i="book_wikipedia"></i></span><span class="lang">SK</span><h3 data-s="book_wikipedia_sk"></h3><p data-s="book_wikipedia_full_desc"></p></a>
+      <a class="tile t-wiki"><span class="bk"><i class="ic" data-i="book_wikipedia_en"></i></span><span class="lang">EN</span><h3 data-s="book_wikipedia_en"></h3><p data-s="book_wikipedia_en_desc"></p></a>
+      <a class="tile t-aid"><span class="bk"><i class="ic" data-i="book_medicine"></i></span><span class="lang">EN</span><h3 data-s="book_medicine"></h3><p data-s="book_medicine_desc"></p></a>
+      <a class="tile t-maps"><span class="bk"><i class="ic" data-i="book_maps"></i></span><h3 data-s="book_maps_sk"></h3><p data-s="book_maps_desc"></p></a>
+      <a class="tile t-games"><span class="bk"><i class="ic" data-i="book_games"></i></span><h3 data-s="book_games"></h3><p data-s="book_games_desc"></p></a>
+      <a class="tile t-travel"><span class="bk"><i class="ic" data-i="book_wikivoyage"></i></span><span class="lang">EN</span><h3 data-s="book_wikivoyage"></h3><p data-s="book_wikivoyage_desc"></p></a>
+      <a class="tile t-books"><span class="bk"><i class="ic" data-i="book_wikibooks"></i></span><h3 data-s="book_wikibooks"></h3><p data-s="book_wikibooks_desc"></p></a>
+      <a class="tile t-books"><span class="bk"><i class="ic" data-i="book_wikisource"></i></span><h3 data-s="book_wikisource"></h3><p data-s="book_wikisource_desc"></p></a>
+      <a class="tile t-books"><span class="bk"><i class="ic" data-i="book_wikiquote"></i></span><h3 data-s="book_wikiquote"></h3><p data-s="book_wikiquote_desc"></p></a>
+      <a class="tile t-books"><span class="bk"><i class="ic" data-i="book_wiktionary"></i></span><h3 data-s="book_wiktionary"></h3><p data-s="book_wiktionary_desc"></p></a>
+      <a class="tile t-books"><span class="bk"><i class="ic" data-i="book_wikiversity"></i></span><h3 data-s="book_wikiversity"></h3><p data-s="book_wikiversity_desc"></p></a>
+    </div>
+    <div style="height:112px"></div>
+  </div>
+  <nav class="nav">
+    <a class="on"><i class="ic" data-i="home"></i><span data-s="nav_home"></span></a>
+    <a><i class="ic" data-i="library"></i><span data-s="nav_library"></span></a>
+    <a><i class="ic" data-i="bookmark"></i><span data-s="nav_saved"></span></a>
+    <a><i class="ic" data-i="settings"></i><span data-s="nav_settings"></span></a>
+  </nav>
+  <div class="homeind"></div>
+</div>
+<script>
+  // Rule: the Wikipedia in the UI language gets the wide tile (sk UI: Slovak first, Czech second).
+  // (runs before the deferred mock.js fills the strings)
+  if (new URLSearchParams(location.search).get('lang') === 'sk') {
+    const wide = document.querySelector('.tile.wide h3'), sk = document.querySelector('[data-s="book_wikipedia_sk"]');
+    wide.dataset.s = 'book_wikipedia_sk'; sk.dataset.s = 'book_wikipedia_cs';
+    document.querySelector('.tile.wide .lang').textContent = 'SK'; sk.parentElement.querySelector('.lang').textContent = 'CZ';
+  }
+</script>
+</body>
+</html>

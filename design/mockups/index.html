@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offlinka screens</title>
+<link rel="stylesheet" href="../out/web/tokens.css">
+<style>
+  @font-face { font-family: "Archivo"; font-weight: 400; src: url("../fonts/archivo_regular.ttf"); }
+  @font-face { font-family: "Archivo"; font-weight: 700; src: url("../fonts/archivo_bold.ttf"); }
+  @font-face { font-family: "Archivo Expanded"; font-weight: 800; src: url("../fonts/archivo_expanded_extrabold.ttf"); }
+  body { margin: 0; background: var(--c-bg); color: var(--c-ink); font: 400 16px/1.5 var(--font-text); }
+  header { background: var(--c-hero) url("../brand/topo-d.svg") center / 900px; color: var(--c-on-hero); padding: 28px 24px; }
+  header img { height: 28px; display: block; margin-bottom: 12px; }
+  header p { color: var(--c-on-hero2); max-width: 60ch; margin: 0; }
+  main { padding: 8px 24px 48px; }
+  h2 { font: 800 20px/1.2 var(--font-display); margin: 32px 0 4px; }
+  h2 a { color: inherit; }
+  main > p { color: var(--c-ink2); margin: 0 0 12px; }
+  .g { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 8px; }
+  figure { margin: 0; flex: none; }
+  figure img { width: 240px; display: block; border: 1.5px solid var(--c-outline); border-radius: 12px; box-shadow: var(--shadow-card); }
+  figcaption { font: 700 13px/1.3 var(--font-text); color: var(--c-ink2); margin-top: 8px; }
+</style>
+</head>
+<body>
+<header><img src="../brand/logo.svg" alt="Offlinka"><p>Screens of the Offlinka apps, light and dark, 393 × 852 at 2×. Measurements and component specs: design/README.md.</p></header>
+<main id="m"></main>
+<script>
+const S = [
+  ['01-connect.html', 'Zapojte flashku', ['connect', 'connect-wrong-folder', 'connect-help', 'unplugged']],
+  ['02-home.html', 'Domů', ['home', 'home-full:l', 'home-sk:l', 'home-en:l']],
+  ['03-search.html', 'Hledání', ['search', 'search-recent']],
+  ['04-reader.html', 'Čtečka', ['reader', 'reader-find', 'reader-text-size', 'reader-offline-link']],
+  ['05-library.html', 'Knihovna', ['library', 'library-details', 'library-full:l']],
+  ['06-saved.html', 'Uložené a historie', ['saved', 'history']],
+  ['07-settings.html', 'Nastavení', ['settings']],
+  ['08-about.html', 'O aplikaci', ['about']],
+];
+document.getElementById('m').innerHTML = S.map(([f, t, shots]) => `<h2><a href="${f}">${t}</a></h2><p>${f}</p><div class="g">` +
+  shots.flatMap(s => { const [n, only] = s.split(':'); return (only ? ['light'] : ['light', 'dark']).map(m =>
+    `<figure><a href="png/${n}-${m}.png"><img src="png/${n}-${m}.png" alt="${n} ${m}" loading="lazy"></a><figcaption>${n}, ${m}</figcaption></figure>`); }).join('') + '</div>').join('');
+</script>
+</body>
+</html>

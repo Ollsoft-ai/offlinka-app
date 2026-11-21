@@ -1,12 +1,10 @@
 {
   "_note": "UI strings, English. Same keys as cs.json.",
   "app_name": "Offlinka",
-
   "nav_home": "Home",
   "nav_library": "Library",
   "nav_saved": "Saved",
   "nav_settings": "Settings",
-
   "action_back": "Back",
   "action_forward": "Forward",
   "action_close": "Close",
@@ -18,10 +16,8 @@
   "action_retry": "Try again",
   "action_undo": "Undo",
   "action_copy": "Copy",
-
   "status_offline": "No internet needed",
   "status_drive_connected": "Drive connected",
-
   "connect_title": "Plug in your Offlinka drive",
   "connect_body": "The app reads Wikipedia, maps and guides straight from the drive. Nothing is copied and you need no internet.",
   "connect_step_plug": "Plug the drive into the USB-C port.",
@@ -38,19 +34,16 @@
   "connect_err_noaccess_title": "No access",
   "connect_err_noaccess_body": "Allow the app to access the drive. Without it, the app can't read it.",
   "connect_pick_again": "Choose again",
-
   "help_title": "If the drive doesn't show up",
   "help_1": "Push the drive all the way in. USB-C fits either way up.",
   "help_2": "Unplug it, wait a few seconds and plug it back in.",
   "help_3_android": "Some phones have an OTG switch in settings. Turn it on.",
   "help_4_ios": "iPhone 14 and older have a Lightning port. The drive doesn't fit it.",
   "help_5": "A thick phone case can stop the plug going in. Try without it.",
-
   "unplugged_title": "The drive is unplugged",
   "unplugged_body": "Plug it back in to continue where you left off.",
   "unplugged_waiting": "Waiting for the drive…",
   "unplugged_pick_other": "Choose another drive",
-
   "home_title": "What are you looking for?",
   "home_search_placeholder": "Search Offlinka",
   "home_quick_first_aid": "First aid",
@@ -58,7 +51,6 @@
   "home_quick_random": "Random article",
   "home_continue": "Continue reading",
   "home_books_title": "On the drive",
-
   "book_wikipedia_cs": "Czech Wikipedia",
   "book_wikipedia_sk": "Slovak Wikipedia",
   "book_wikipedia_en": "English Wikipedia",
@@ -87,12 +79,10 @@
   "book_wiktionary_desc": "Meaning, pronunciation, grammar (in Czech)",
   "book_wikivoyage_desc": "Travel guide to Europe",
   "book_other_desc": "A book from the drive",
-
   "lang_cs": "Czech",
   "lang_sk": "Slovak",
   "lang_en": "English",
   "lang_mul": "several languages",
-
   "search_placeholder": "Search Offlinka",
   "search_recent_title": "Recent searches",
   "search_tip": "Accents are optional: “cesky krumlov” finds Český Krumlov.",
@@ -102,7 +92,6 @@
   "search_fill": "Use this search",
   "search_clear_query": "Clear text",
   "search_remove_recent": "Remove from recent",
-
   "reader_find": "Find in article",
   "reader_find_placeholder": "Find in text",
   "reader_find_count": "{current} of {total}",
@@ -127,7 +116,6 @@
   "reader_external_body": "Offlinka works without internet, so it won't open it.",
   "reader_copy_link": "Copy link",
   "reader_link_copied": "Link copied",
-
   "library_title": "Library",
   "library_subtitle": "Everything on the drive",
   "library_drive_edition": "Edition {edition}",
@@ -139,6 +127,7 @@
   "library_group_phone": "Smaller phone editions",
   "library_group_phone_note": "Used only when the full edition is missing.",
   "library_size": "{size} GB",
+  "library_size_mb": "{size} MB",
   "library_details": "Details",
   "library_detail_articles": "Articles",
   "library_detail_media": "Pictures and files",
@@ -154,9 +143,14 @@
   "library_replaced": "Replaced by the full edition",
   "library_open_main": "Open main page",
   "library_change_drive": "Choose another drive",
-  "library_books_count": { "one": "{n} book", "other": "{n} books" },
-  "library_articles_count": { "one": "{n} article", "other": "{n} articles" },
-
+  "library_books_count": {
+    "one": "{n} book",
+    "other": "{n} books"
+  },
+  "library_articles_count": {
+    "one": "{n} article",
+    "other": "{n} articles"
+  },
   "saved_title": "Saved",
   "saved_tab_saved": "Saved",
   "saved_tab_history": "History",
@@ -172,7 +166,6 @@
   "history_clear": "Clear history",
   "history_clear_confirm_title": "Clear all history?",
   "history_clear_confirm_body": "Saved articles stay.",
-
   "settings_title": "Settings",
   "settings_section_display": "Appearance",
   "settings_language": "Language",
@@ -199,7 +192,6 @@
   "settings_clear_searches": "Clear recent searches",
   "settings_privacy_note": "Everything stays on this phone. The app never uses the internet.",
   "settings_about": "About",
-
   "about_title": "About",
   "about_tagline": "Wikipedia, maps and guides from the drive. No internet.",
   "about_version": "Version {version}",
@@ -218,11 +210,9 @@
   "about_trademark": "Wikipedia is a trademark of the Wikimedia Foundation. We are not affiliated with it.",
   "about_contact": "Contact us",
   "about_made_by": "Made by Ollcee s.r.o., Prague",
-
   "error_title": "This couldn't be opened",
   "error_body": "The file on the drive may be damaged. Try unplugging the drive and plugging it back in.",
   "error_unsupported": "The app can't open this type of file.",
-
   "cd_logo": "Offlinka",
   "cd_search": "Search",
   "cd_drive_illustration": "A phone with the drive in its USB-C port",

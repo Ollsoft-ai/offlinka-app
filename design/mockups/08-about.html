@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=393">
+<title>Offlinka mockup: About</title>
+<link rel="stylesheet" href="../out/web/tokens.css"><link rel="stylesheet" href="assets/mock.css">
+<script src="assets/icons.js"></script><script src="assets/strings.js"></script><script src="assets/mock.js" defer></script>
+<style>
+  .ahead { position: relative; background: var(--c-hero) url("../../brand/topo-d.svg") -380px -300px / 900px 900px; color: var(--c-on-hero); padding: 6px 20px 50px; }
+  .ahead > * { position: relative; z-index: 1; }
+  .ahead .logo { height: 30px; margin: 18px 0 12px; }
+  .ahead p { font: 400 16px/23px var(--font-text); color: var(--c-on-hero2); }
+  .ahead .ver { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .ahead .ver span { font: 600 13px/1 var(--font-text); color: var(--c-on-hero2); border: 1px solid var(--c-hero-line); border-radius: 4px; padding: 7px 9px; }
+  .priv { margin: 4px 16px 0; }
+  .lic .row { align-items: flex-start; }
+  .lic .row .tx b { font: 400 15px/21px var(--font-text); }
+  .lic .row > .ic { margin-top: 0; }
+  .foot { padding: 18px 20px 0; font: 400 13px/19px var(--font-text); color: var(--c-ink3); }
+</style>
+</head>
+<body>
+<!-- About: edition and version, privacy, licences (the only place "Kiwix" may appear), contact. -->
+<div class="phone">
+  <div class="status on-hero"><span>9:41</span><span class="si"><span class="sig"><i></i><i></i><i></i><i></i></span><span class="bat"></span></span></div>
+  <div class="scroll">
+    <section class="ahead hero" style="padding:6px 20px 52px">
+      <div class="herotop" style="height:40px"><a style="margin-left:-12px;width:48px;height:48px;display:grid;place-items:center" data-s-aria="action_back"><i class="ic" data-i="arrow_back"></i></a></div>
+      <img class="logo" src="../brand/logo.svg" alt="Offlinka">
+      <p data-s="about_tagline"></p>
+      <div class="ver"><span data-s="about_version" data-p='{"version":"1.0.0"}'></span><span data-s="about_edition" data-p='{"edition":"listopad 2026"}'></span></div>
+    </section>
+
+    <div class="note priv"><i class="ic" data-i="lock"></i><span><b data-s="about_privacy_title"></b><span data-s="about_privacy_body"></span></span></div>
+
+    <div class="gh"><span data-s="about_licences_title"></span></div>
+    <div class="group lic">
+      <div class="row"><i class="ic" data-i="book_wikipedia"></i><span class="tx"><b data-s="about_lic_wikipedia"></b></span></div>
+      <div class="row"><i class="ic" data-i="book_maps"></i><span class="tx"><b data-s="about_lic_osm"></b></span></div>
+      <div class="row"><i class="ic" data-i="article"></i><span class="tx"><b data-s="about_lic_zim"></b></span></div>
+      <div class="row"><i class="ic" data-i="book_games"></i><span class="tx"><b data-s="about_lic_games"></b></span></div>
+      <div class="row"><i class="ic" data-i="text_size"></i><span class="tx"><b data-s="about_lic_fonts"></b></span></div>
+      <a class="row" style="align-items:center"><i class="ic" data-i="toc"></i><span class="tx"><b style="font-weight:600" data-s="about_notices"></b><span data-s="about_notices_body"></span></span><i class="ic ch" data-i="chevron_right"></i></a>
+    </div>
+    <div class="group" style="margin-top:16px">
+      <div class="row"><i class="ic" data-i="mail"></i><span class="tx"><b data-s="about_contact"></b><span>info@offlinka.cz</span></span><i class="ic ch" data-i="copy"></i></div>
+    </div>
+    <p class="foot"><span data-s="about_lic_app"></span> <span data-s="about_trademark"></span></p>
+    <div style="height:40px"></div>
+  </div>
+  <div class="homeind"></div>
+</div>
+</body>
+</html>

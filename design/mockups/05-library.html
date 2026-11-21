@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=393">
+<title>Offlinka mockup: Library</title>
+<link rel="stylesheet" href="../out/web/tokens.css"><link rel="stylesheet" href="assets/mock.css">
+<script src="assets/icons.js"></script><script src="assets/strings.js"></script><script src="assets/mock.js" defer></script>
+<style>
+  .drive { margin: 16px 16px 0; position: relative; display: flex; align-items: center; gap: 14px; padding: 14px 14px 14px 16px; border-radius: 8px;
+    background: var(--c-hero) url("../../brand/topo-d.svg") -300px -420px / 900px 900px; color: var(--c-on-hero);
+    border: 1.5px solid var(--c-outline); box-shadow: var(--shadow-card); }
+  .drive .dic { width: 44px; height: 44px; border-radius: 6px; border: 1px solid var(--c-hero-line); display: grid; place-items: center; color: var(--c-on-hero); flex: none; }
+  .drive b { display: block; font: 800 17px/22px var(--font-display); letter-spacing: -0.005em; }
+  .drive span { display: block; font: 400 14px/19px var(--font-text); color: var(--c-on-hero2); }
+  .drive .ok { margin-left: auto; align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; font: 600 12.5px/1 var(--font-text); color: var(--c-on-hero2);
+    border: 1px solid var(--c-hero-line); border-radius: 4px; padding: 6px 8px; white-space: nowrap; }
+  .drive .ok i { width: 7px; height: 7px; border-radius: 50%; background: var(--c-ok); }
+  .row .inf { width: 44px; height: 44px; margin: -8px -6px -8px 0; display: grid; place-items: center; color: var(--c-ink3); flex: none; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 0 16px; margin: 16px 0 20px; font: 400 15px/21px var(--font-text); }
+  .kv dt { color: var(--c-ink2); padding: 8px 0; border-top: 1px solid var(--c-line-soft); }
+  .kv dd { margin: 0; padding: 8px 0; border-top: 1px solid var(--c-line-soft); text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .shead { display: flex; gap: 14px; align-items: center; }
+  .shead b { display: block; font: 800 19px/24px var(--font-display); letter-spacing: -0.01em; }
+  .shead span { display: block; font: 400 15px/21px var(--font-text); color: var(--c-ink2); }
+</style>
+</head>
+<body>
+<!-- Library: every book on the drive, grouped like the drive's "Celá knihovna". Tap a row = open the book's main page,
+     (i) = details sheet. Phone editions (Telefon/*mini*) are listed last and dimmed while a full edition replaces them.
+     Numbers are the real ones from edition 2026-11.3. States: default, details. -->
+<div class="phone">
+  <div class="status"><span>9:41</span><span class="si"><span class="sig"><i></i><i></i><i></i><i></i></span><span class="bat"></span></span></div>
+  <div class="scroll">
+    <div class="ltitle" style="padding-top:14px"><h1 data-s="library_title"></h1><p data-s="library_subtitle"></p></div>
+    <div class="drive">
+      <span class="dic"><i class="ic" data-i="drive"></i></span>
+      <span><b>OFFLINKA</b><span data-s="library_drive_edition" data-p='{"edition":"listopad 2026"}'></span><span><span data-s="library_books_count" data-n="14" style="display:inline"></span>, 32 GB</span></span>
+    </div>
+
+    <div class="gh"><span data-s="library_group_wiki"></span></div>
+    <div class="group">
+      <a class="row"><span class="bk sm t-wiki"><i class="ic" data-i="book_wikipedia"></i></span><span class="tx"><b class="d" data-s="book_wikipedia_cs"></b><span data-s="book_wikipedia_full_desc"></span><small>září 2026, čeština, 9,96 GB</small></span><span class="inf"><i class="ic s20" data-i="info"></i></span></a>
+      <a class="row"><span class="bk sm t-wiki"><i class="ic" data-i="book_wikipedia"></i></span><span class="tx"><b class="d" data-s="book_wikipedia_sk"></b><span data-s="book_wikipedia_full_desc"></span><small>srpen 2026, slovenština, 3,5 GB</small></span><span class="inf"><i class="ic s20" data-i="info"></i></span></a>
+      <a class="row"><span class="bk sm t-wiki"><i class="ic" data-i="book_wikipedia_en"></i></span><span class="tx"><b class="d" data-s="book_wikipedia_en"></b><span data-s="book_wikipedia_en_desc"></span><small>duben 2026, angličtina, 17,1 GB</small></span><span class="inf"><i class="ic s20" data-i="info"></i></span></a>
+    </div>
+    <div class="gh"><span data-s="library_group_maps"></span></div>
+    <div class="group">
+      <a class="row"><span class="bk sm t-maps"><i class="ic" data-i="book_maps"></i></span><span class="tx"><b class="d" data-s="book_maps_cz"></b><span data-s="book_maps_desc"></span><small>červen 2026, 1,07 GB</small></span><span class="inf"><i class="ic s20" data-i="info"></i></span></a>
+      <a class="row"><span class="bk sm t-maps"><i class="ic" data-i="book_maps"></i></span><span class="tx"><b class="d" data-s="book_maps_sk"></b><span data-s="book_maps_desc"></span><small>červen 2026, 0,54 GB</small></span><span class="inf"><i class="ic s20" data-i="info"></i></span></a>
+    </div>
+    <div class="gh"><span data-s="library_group_aid"></span></div>
+    <div class="group">
+      <a class="row"><span class="bk sm t-aid"><i class="ic" data-i="book_guides"></i></span><span class="tx"><b class="d" data-s="book_guides"></b><span data-s="book_guides_desc"></span><small>listopad 2026, čeština, 0,4 MB</small></span><span class="inf"><i class="ic s20" data-i="info"></i></span></a>
+      <a class="row"><span class="bk sm t-aid"><i class="ic" data-i="book_medicine"></i></span><span class="tx"><b class="d" data-s="book_medicine"></b><span data-s="book_medicine_desc"></span><small>říjen 2026, angličtina, 1,05 GB</small></span><span class="inf"><i class="ic s20" data-i="info"></i></span></a>
+    </div>
+    <div class="gh"><span data-s="library_group_books"></span></div>
+    <div class="group">
+      <a class="row"><span class="bk sm t-books"><i class="ic" data-i="book_wikisource"></i></span><span class="tx"><b class="d" data-s="book_wikisource"></b><span data-s="book_wikisource_desc"></span><small>říjen 2026, 314 MB</small></span><span class="inf"><i class="ic s20" data-i="info"></i></span></a>
+      <a class="row"><span class="bk sm t-books"><i class="ic" data-i="book_wiktionary"></i></span><span class="tx"><b class="d" data-s="book_wiktionary"></b><span data-s="book_wiktionary_desc"></span><small>říjen 2026, 170 MB</small></span><span class="inf"><i class="ic s20" data-i="info"></i></span></a>
+      <a class="row"><span class="bk sm t-books"><i class="ic" data-i="book_wikiquote"></i></span><span class="tx"><b class="d" data-s="book_wikiquote"></b><span data-s="book_wikiquote_desc"></span><small>červenec 2026, 92 MB</small></span><span class="inf"><i class="ic s20" data-i="info"></i></span></a>
+      <a class="row"><span class="bk sm t-books"><i class="ic" data-i="book_wikiversity"></i></span><span class="tx"><b class="d" data-s="book_wikiversity"></b><span data-s="book_wikiversity_desc"></span><small>říjen 2026, 48 MB</small></span><span class="inf"><i class="ic s20" data-i="info"></i></span></a>
+      <a class="row"><span class="bk sm t-books"><i class="ic" data-i="book_wikibooks"></i></span><span class="tx"><b class="d" data-s="book_wikibooks"></b><span data-s="book_wikibooks_desc"></span><small>říjen 2026, 45 MB</small></span><span class="inf"><i class="ic s20" data-i="info"></i></span></a>
+    </div>
+    <div class="gh"><span data-s="library_group_other"></span></div>
+    <div class="group">
+      <a class="row"><span class="bk sm t-travel"><i class="ic" data-i="book_wikivoyage"></i></span><span class="tx"><b class="d" data-s="book_wikivoyage"></b><span data-s="book_wikivoyage_desc"></span><small>září 2026, angličtina, 384 MB</small></span><span class="inf"><i class="ic s20" data-i="info"></i></span></a>
+      <a class="row"><span class="bk sm t-games"><i class="ic" data-i="book_games"></i></span><span class="tx"><b class="d" data-s="book_games"></b><span data-s="book_games_desc"></span><small>listopad 2026, 1 MB</small></span><span class="inf"><i class="ic s20" data-i="info"></i></span></a>
+    </div>
+    <div class="gh"><span data-s="library_group_phone"></span><small data-s="library_group_phone_note"></small></div>
+    <div class="group">
+      <a class="row dim"><span class="bk sm t-wiki"><i class="ic" data-i="book_wikipedia"></i></span><span class="tx"><b class="d" data-s="book_wikipedia_cs"></b><span data-s="book_wikipedia_mini_desc"></span><small><span data-s="library_replaced"></span>, 0,91 GB</small></span><span class="inf"><i class="ic s20" data-i="info"></i></span></a>
+      <a class="row dim"><span class="bk sm t-wiki"><i class="ic" data-i="book_wikipedia"></i></span><span class="tx"><b class="d" data-s="book_wikipedia_sk"></b><span data-s="book_wikipedia_mini_desc"></span><small><span data-s="library_replaced"></span>, 0,58 GB</small></span><span class="inf"><i class="ic s20" data-i="info"></i></span></a>
+    </div>
+    <div style="text-align:center;padding:22px 0 0"><a class="lnk" data-s="library_change_drive"></a></div>
+    <div style="height:112px"></div>
+  </div>
+  <nav class="nav">
+    <a><i class="ic" data-i="home"></i><span data-s="nav_home"></span></a>
+    <a class="on"><i class="ic" data-i="library"></i><span data-s="nav_library"></span></a>
+    <a><i class="ic" data-i="bookmark"></i><span data-s="nav_saved"></span></a>
+    <a><i class="ic" data-i="settings"></i><span data-s="nav_settings"></span></a>
+  </nav>
+
+  <div class="scrim" data-show="details"></div>
+  <div class="sheet" data-show="details">
+    <div class="grab"></div>
+    <div class="shead"><span class="bk t-wiki"><i class="ic" data-i="book_wikipedia"></i></span>
+      <span><b data-s="book_wikipedia_cs"></b><span data-s="book_wikipedia_full_desc"></span></span></div>
+    <dl class="kv">
+      <dt data-s="library_detail_articles"></dt><dd>975 525</dd>
+      <dt data-s="library_detail_media"></dt><dd>1 072 582</dd>
+      <dt data-s="library_detail_size"></dt><dd>9,96 GB</dd>
+      <dt data-s="library_detail_date"></dt><dd>29. září 2026</dd>
+      <dt data-s="library_detail_language"></dt><dd data-s="lang_cs"></dd>
+      <dt data-s="library_detail_search"></dt><dd data-s="library_search_indexed"></dd>
+      <dt data-s="library_detail_folder"></dt><dd>Knihovna</dd>
+      <dt data-s="library_detail_file"></dt><dd style="font-weight:400;font-size:13.5px">wikipedia_cs_all_maxi-offlinka_2026-09.zim</dd>
+    </dl>
+    <a class="btn primary"><span data-s="library_open_main"></span></a>
+  </div>
+  <div class="homeind"></div>
+</div>
+</body>
+</html>

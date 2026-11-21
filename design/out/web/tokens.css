@@ -7,7 +7,7 @@
   --c-surface-muted: #E9DFC8;
   --c-ink: #17231C;
   --c-ink2: #5F5B4B;
-  --c-ink3: #7D7663;
+  --c-ink3: #736C59;
   --c-line: #CDBF9F;
   --c-line-soft: #E2D6B8;
   --c-outline: #17231C;
@@ -100,7 +100,7 @@
     --c-surface-muted: #1E2F25;
     --c-ink: #EEE8D8;
     --c-ink2: #BDB6A2;
-    --c-ink3: #8E8873;
+    --c-ink3: #99937D;
     --c-line: #2E4236;
     --c-line-soft: #22342A;
     --c-outline: #4B6B59;
@@ -154,7 +154,7 @@
   --c-surface-muted: #1E2F25;
   --c-ink: #EEE8D8;
   --c-ink2: #BDB6A2;
-  --c-ink3: #8E8873;
+  --c-ink3: #99937D;
   --c-line: #2E4236;
   --c-line-soft: #22342A;
   --c-outline: #4B6B59;
@@ -204,7 +204,7 @@
 .t-display { font: 800 30px/34px var(--font-display); letter-spacing: -0.015em; }
 .t-headline { font: 800 24px/29px var(--font-display); letter-spacing: -0.01em; }
 .t-title { font: 800 19px/24px var(--font-display); letter-spacing: -0.01em; }
-.t-title-small { font: 800 16px/21px var(--font-display); letter-spacing: -0.005em; }
+.t-title-small { font: 800 17px/22px var(--font-display); letter-spacing: -0.005em; }
 .t-button { font: 800 17px/22px var(--font-display); letter-spacing: -0.005em; }
 .t-subhead { font: 700 17px/23px var(--font-text); letter-spacing: 0em; }
 .t-body { font: 400 17px/25px var(--font-text); letter-spacing: 0em; }

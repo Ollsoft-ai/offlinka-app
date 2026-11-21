@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=393">
+<title>Offlinka mockup: Saved and history</title>
+<link rel="stylesheet" href="../out/web/tokens.css"><link rel="stylesheet" href="assets/mock.css">
+<script src="assets/icons.js"></script><script src="assets/strings.js"></script><script src="assets/mock.js" defer></script>
+<style>
+  .tabs { margin: 16px 16px 4px; }
+  .day { padding: 20px 16px 8px; font: 700 15px/20px var(--font-text); color: var(--c-ink2); display: flex; justify-content: space-between; align-items: baseline; }
+  .day a { font: 700 15px/20px var(--font-text); color: var(--c-link); }
+  .row .time { font: 600 13px/1 var(--font-text); color: var(--c-ink3); font-variant-numeric: tabular-nums; }
+  .row .sv { width: 44px; height: 44px; margin: -8px -6px -8px 0; display: grid; place-items: center; color: var(--c-accent); flex: none; }
+  .row .bkline { display: flex !important; align-items: center; gap: 6px; }
+</style>
+</head>
+<body>
+<!-- Saved and history: one tab of the bottom bar with a two-way switch. Saved = bookmarks (filled icon toggles off,
+     a toast offers Undo). History grouped by day, newest first. States: default (saved), history. -->
+<div class="phone">
+  <div class="status"><span>9:41</span><span class="si"><span class="sig"><i></i><i></i><i></i><i></i></span><span class="bat"></span></span></div>
+  <div class="scroll">
+    <div class="ltitle" style="padding-top:14px"><h1 data-s="saved_title"></h1></div>
+    <div class="seg tabs" data-hide="history"><b class="on" data-s="saved_tab_saved"></b><b data-s="saved_tab_history"></b></div>
+    <div class="seg tabs" data-show="history"><b data-s="saved_tab_saved"></b><b class="on" data-s="saved_tab_history"></b></div>
+
+    <div data-hide="history">
+      <div class="group" style="margin-top:18px">
+        <a class="row"><span class="tx"><b>První pomoc – rychlé karty</b><span class="bkline"><span class="bk xs t-aid"><i class="ic" data-i="book_guides"></i></span><span data-s="book_guides"></span></span></span><span class="sv"><i class="ic" data-i="bookmark_filled"></i></span></a>
+        <a class="row"><span class="tx"><b>Sněžka</b><span class="bkline"><span class="bk xs t-wiki"><i class="ic" data-i="book_wikipedia"></i></span><span data-s="book_wikipedia_cs"></span></span></span><span class="sv"><i class="ic" data-i="bookmark_filled"></i></span></a>
+        <a class="row"><span class="tx"><b>Výpadek proudu – co připravit</b><span class="bkline"><span class="bk xs t-aid"><i class="ic" data-i="book_guides"></i></span><span data-s="book_guides"></span></span></span><span class="sv"><i class="ic" data-i="bookmark_filled"></i></span></a>
+        <a class="row"><span class="tx"><b>Jan Amos Komenský</b><span class="bkline"><span class="bk xs t-wiki"><i class="ic" data-i="book_wikipedia"></i></span><span data-s="book_wikipedia_cs"></span></span></span><span class="sv"><i class="ic" data-i="bookmark_filled"></i></span></a>
+        <a class="row"><span class="tx"><b>Vysoké Tatry</b><span class="bkline"><span class="bk xs t-wiki"><i class="ic" data-i="book_wikipedia"></i></span><span data-s="book_wikipedia_sk"></span></span></span><span class="sv"><i class="ic" data-i="bookmark_filled"></i></span></a>
+        <a class="row dim"><span class="tx"><b>Cesky Krumlov</b><span class="bkline"><span class="bk xs t-travel"><i class="ic" data-i="book_wikivoyage"></i></span><span data-s="saved_unavailable"></span></span></span><span class="sv"><i class="ic" data-i="bookmark_filled"></i></span></a>
+      </div>
+      <div class="toast"><span data-s="saved_removed"></span><a data-s="action_undo"></a></div>
+    </div>
+
+    <div data-show="history">
+      <div class="day"><span data-s="history_today"></span><a data-s="history_clear"></a></div>
+      <div class="group">
+        <a class="row"><span class="tx"><b>Sněžka</b><span class="bkline"><span class="bk xs t-wiki"><i class="ic" data-i="book_wikipedia"></i></span><span data-s="book_wikipedia_cs"></span></span></span><span class="time">14:20</span></a>
+        <a class="row"><span class="tx"><b>Krkonošský národní park</b><span class="bkline"><span class="bk xs t-wiki"><i class="ic" data-i="book_wikipedia"></i></span><span data-s="book_wikipedia_cs"></span></span></span><span class="time">14:12</span></a>
+        <a class="row"><span class="tx"><b>Pec pod Sněžkou</b><span class="bkline"><span class="bk xs t-maps"><i class="ic" data-i="book_maps"></i></span><span data-s="book_maps_cz"></span></span></span><span class="time">13:58</span></a>
+      </div>
+      <div class="day"><span data-s="history_yesterday"></span></div>
+      <div class="group">
+        <a class="row"><span class="tx"><b>Krvácení z nosu</b><span class="bkline"><span class="bk xs t-wiki"><i class="ic" data-i="book_wikipedia"></i></span><span data-s="book_wikipedia_cs"></span></span></span><span class="time">21:05</span></a>
+        <a class="row"><span class="tx"><b>První pomoc – rychlé karty</b><span class="bkline"><span class="bk xs t-aid"><i class="ic" data-i="book_guides"></i></span><span data-s="book_guides"></span></span></span><span class="time">21:01</span></a>
+      </div>
+      <div class="day"><span>úterý 18. listopadu</span></div>
+      <div class="group">
+        <a class="row"><span class="tx"><b>Šachy</b><span class="bkline"><span class="bk xs t-games"><i class="ic" data-i="book_games"></i></span><span data-s="book_games"></span></span></span><span class="time">19:44</span></a>
+      </div>
+    </div>
+    <div style="height:112px"></div>
+  </div>
+  <nav class="nav">
+    <a><i class="ic" data-i="home"></i><span data-s="nav_home"></span></a>
+    <a><i class="ic" data-i="library"></i><span data-s="nav_library"></span></a>
+    <a class="on"><i class="ic" data-i="bookmark"></i><span data-s="nav_saved"></span></a>
+    <a><i class="ic" data-i="settings"></i><span data-s="nav_settings"></span></a>
+  </nav>
+  <div class="homeind"></div>
+</div>
+</body>
+</html>

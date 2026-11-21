@@ -1,12 +1,10 @@
 {
   "_note": "UI strings, Czech (default locale). Short, calm, vy-form, no em dashes, no emoji, never 'Kiwix' outside about_*. {name} = text placeholder, {n} = integer. Plurals: one/few/many/other. Generate: python3 design/tools/generate.py strings",
   "app_name": "Offlinka",
-
   "nav_home": "Domů",
   "nav_library": "Knihovna",
   "nav_saved": "Uložené",
   "nav_settings": "Nastavení",
-
   "action_back": "Zpět",
   "action_forward": "Vpřed",
   "action_close": "Zavřít",
@@ -18,10 +16,8 @@
   "action_retry": "Zkusit znovu",
   "action_undo": "Vrátit",
   "action_copy": "Kopírovat",
-
   "status_offline": "Bez internetu",
   "status_drive_connected": "Flashka je zapojená",
-
   "connect_title": "Zapojte flashku Offlinka",
   "connect_body": "Aplikace čte Wikipedii, mapy a příručky přímo z flashky. Nic se nekopíruje a internet nepotřebujete.",
   "connect_step_plug": "Zasuňte flashku do konektoru USB-C.",
@@ -38,19 +34,16 @@
   "connect_err_noaccess_title": "Nemám přístup",
   "connect_err_noaccess_body": "Povolte aplikaci přístup k flashce. Bez něj ji nepřečte.",
   "connect_pick_again": "Vybrat znovu",
-
   "help_title": "Když se flashka neukazuje",
   "help_1": "Zasuňte flashku až na doraz. Konektor USB-C jde zasunout oběma stranami.",
   "help_2": "Vytáhněte ji, počkejte pár vteřin a zapojte znovu.",
   "help_3_android": "Některé telefony mají v nastavení přepínač OTG. Zapněte ho.",
   "help_4_ios": "iPhone 14 a starší mají konektor Lightning. Do něj flashka nepasuje.",
   "help_5": "Silný obal telefonu někdy nedovolí konektor zasunout. Zkuste to bez obalu.",
-
   "unplugged_title": "Flashka je odpojená",
   "unplugged_body": "Zapojte ji znovu a budete pokračovat tam, kde jste skončili.",
   "unplugged_waiting": "Čekám na flashku…",
   "unplugged_pick_other": "Vybrat jinou flashku",
-
   "home_title": "Co chcete najít?",
   "home_search_placeholder": "Hledat v Offlince",
   "home_quick_first_aid": "První pomoc",
@@ -58,7 +51,6 @@
   "home_quick_random": "Náhodný článek",
   "home_continue": "Pokračovat ve čtení",
   "home_books_title": "Na flashce",
-
   "book_wikipedia_cs": "Česká Wikipedie",
   "book_wikipedia_sk": "Slovenská Wikipedie",
   "book_wikipedia_en": "Anglická Wikipedie",
@@ -87,12 +79,10 @@
   "book_wiktionary_desc": "Význam, výslovnost a skloňování",
   "book_wikivoyage_desc": "Průvodce po Evropě, anglicky",
   "book_other_desc": "Kniha z flashky",
-
   "lang_cs": "čeština",
   "lang_sk": "slovenština",
   "lang_en": "angličtina",
   "lang_mul": "více jazyků",
-
   "search_placeholder": "Hledat v Offlince",
   "search_recent_title": "Nedávno hledané",
   "search_tip": "Háčky a čárky psát nemusíte. „cesky krumlov“ najde Český Krumlov.",
@@ -102,7 +92,6 @@
   "search_fill": "Doplnit do hledání",
   "search_clear_query": "Smazat text",
   "search_remove_recent": "Odebrat z nedávných",
-
   "reader_find": "Hledat v článku",
   "reader_find_placeholder": "Najít v textu",
   "reader_find_count": "{current} z {total}",
@@ -127,7 +116,6 @@
   "reader_external_body": "Offlinka funguje bez internetu, proto ho neotevře.",
   "reader_copy_link": "Kopírovat odkaz",
   "reader_link_copied": "Odkaz je zkopírovaný",
-
   "library_title": "Knihovna",
   "library_subtitle": "Všechno, co je na flashce",
   "library_drive_edition": "Edice {edition}",
@@ -139,6 +127,7 @@
   "library_group_phone": "Menší verze pro telefon",
   "library_group_phone_note": "Použijí se, jen když chybí velká verze.",
   "library_size": "{size} GB",
+  "library_size_mb": "{size} MB",
   "library_details": "Podrobnosti",
   "library_detail_articles": "Články",
   "library_detail_media": "Obrázky a soubory",
@@ -154,9 +143,18 @@
   "library_replaced": "Nahrazuje ji velká verze",
   "library_open_main": "Otevřít úvodní stránku",
   "library_change_drive": "Vybrat jinou flashku",
-  "library_books_count": { "one": "{n} kniha", "few": "{n} knihy", "many": "{n} knihy", "other": "{n} knih" },
-  "library_articles_count": { "one": "{n} článek", "few": "{n} články", "many": "{n} článku", "other": "{n} článků" },
-
+  "library_books_count": {
+    "one": "{n} kniha",
+    "few": "{n} knihy",
+    "many": "{n} knihy",
+    "other": "{n} knih"
+  },
+  "library_articles_count": {
+    "one": "{n} článek",
+    "few": "{n} články",
+    "many": "{n} článku",
+    "other": "{n} článků"
+  },
   "saved_title": "Uložené",
   "saved_tab_saved": "Uložené",
   "saved_tab_history": "Historie",
@@ -172,7 +170,6 @@
   "history_clear": "Vymazat historii",
   "history_clear_confirm_title": "Vymazat celou historii?",
   "history_clear_confirm_body": "Uložené články zůstanou.",
-
   "settings_title": "Nastavení",
   "settings_section_display": "Vzhled",
   "settings_language": "Jazyk",
@@ -199,7 +196,6 @@
   "settings_clear_searches": "Vymazat nedávno hledané",
   "settings_privacy_note": "Všechno zůstává jen v tomto telefonu. Aplikace nepoužívá internet.",
   "settings_about": "O aplikaci",
-
   "about_title": "O aplikaci",
   "about_tagline": "Wikipedie, mapy a příručky z flashky. Bez internetu.",
   "about_version": "Verze {version}",
@@ -218,11 +214,9 @@
   "about_trademark": "Wikipedie je ochranná známka nadace Wikimedia Foundation. S nadací nejsme spojeni.",
   "about_contact": "Napište nám",
   "about_made_by": "Vyrábí Ollcee s.r.o., Praha",
-
   "error_title": "Tohle se nepovedlo otevřít",
   "error_body": "Soubor na flashce může být poškozený. Zkuste flashku vytáhnout a zapojit znovu.",
   "error_unsupported": "Tenhle typ souboru aplikace neumí otevřít.",
-
   "cd_logo": "Offlinka",
   "cd_search": "Hledat",
   "cd_drive_illustration": "Telefon s flashkou v konektoru USB-C",

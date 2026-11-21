@@ -29,7 +29,7 @@ extension Color {
     static let brandSurfaceMuted = Color(light: 0xE9DFC8, dark: 0x1E2F25)
     static let brandInk = Color(light: 0x17231C, dark: 0xEEE8D8)
     static let brandInk2 = Color(light: 0x5F5B4B, dark: 0xBDB6A2)
-    static let brandInk3 = Color(light: 0x7D7663, dark: 0x8E8873)
+    static let brandInk3 = Color(light: 0x736C59, dark: 0x99937D)
     static let brandLine = Color(light: 0xCDBF9F, dark: 0x2E4236)
     static let brandLineSoft = Color(light: 0xE2D6B8, dark: 0x22342A)
     static let brandOutline = Color(light: 0x17231C, dark: 0x4B6B59)
@@ -117,7 +117,7 @@ extension BrandTextStyle {
     static let display = BrandTextStyle(postScriptName: "ArchivoExpanded-ExtraBold", size: 30, lineHeight: 34, tracking: -0.45, relativeTo: .largeTitle)
     static let headline = BrandTextStyle(postScriptName: "ArchivoExpanded-ExtraBold", size: 24, lineHeight: 29, tracking: -0.24, relativeTo: .title)
     static let title = BrandTextStyle(postScriptName: "ArchivoExpanded-ExtraBold", size: 19, lineHeight: 24, tracking: -0.19, relativeTo: .title3)
-    static let titleSmall = BrandTextStyle(postScriptName: "ArchivoExpanded-ExtraBold", size: 16, lineHeight: 21, tracking: -0.08, relativeTo: .headline)
+    static let titleSmall = BrandTextStyle(postScriptName: "ArchivoExpanded-ExtraBold", size: 17, lineHeight: 22, tracking: -0.085, relativeTo: .headline)
     static let button = BrandTextStyle(postScriptName: "ArchivoExpanded-ExtraBold", size: 17, lineHeight: 22, tracking: -0.085, relativeTo: .headline)
     static let subhead = BrandTextStyle(postScriptName: "Archivo-Bold", size: 17, lineHeight: 23, tracking: 0, relativeTo: .headline)
     static let body = BrandTextStyle(postScriptName: "Archivo-Regular", size: 17, lineHeight: 25, tracking: 0, relativeTo: .body)
@@ -209,5 +209,5 @@ enum BrandElevation {
 }
 
 extension View {
-    func brandShadow(_ s: BrandShadow) -> some View { shadow(color: s.color, radius: 0, x: s.x, y: s.y) }
+    func hardShadow(_ s: BrandShadow) -> some View { shadow(color: s.color, radius: 0, x: s.x, y: s.y) }
 }

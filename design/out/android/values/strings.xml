@@ -128,6 +128,7 @@
     <string name="library_group_phone">Menší verze pro telefon</string>
     <string name="library_group_phone_note">Použijí se, jen když chybí velká verze.</string>
     <string name="library_size">%1$s GB</string>
+    <string name="library_size_mb">%1$s MB</string>
     <string name="library_details">Podrobnosti</string>
     <string name="library_detail_articles">Články</string>
     <string name="library_detail_media">Obrázky a soubory</string>

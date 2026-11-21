@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=393">
+<title>Offlinka mockup: Search</title>
+<link rel="stylesheet" href="../out/web/tokens.css"><link rel="stylesheet" href="assets/mock.css">
+<script src="assets/icons.js"></script><script src="assets/strings.js"></script><script src="assets/mock.js" defer></script>
+<style>
+  .sbar { display: flex; align-items: center; gap: 4px; padding: 6px 16px 10px 4px; background: var(--c-bg); border-bottom: 1px solid var(--c-line); }
+  .sbar .b48 { width: 48px; height: 48px; display: grid; place-items: center; flex: none; }
+  .sbar .search { flex: 1; height: 52px; border-width: 2px; border-color: var(--c-outline); }
+  .rg { display: flex; align-items: center; gap: 10px; padding: 18px 16px 6px; font: 600 14px/18px var(--font-text); color: var(--c-ink2); }
+  .rg em { margin-left: auto; font-style: normal; font-weight: 400; color: var(--c-ink3); }
+  .res { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 0 8px 0 52px; border-bottom: 1px solid var(--c-line-soft);
+    font: 400 17px/23px var(--font-text); color: var(--c-ink2); }
+  .res .t { flex: 1; min-width: 0; padding: 13px 0; }
+  .res .t b { font-weight: 700; color: var(--c-ink); }
+  .res .t small { display: flex; align-items: center; gap: 4px; font: 400 14px/18px var(--font-text); color: var(--c-ink3); }
+  .res .f { width: 44px; height: 44px; display: grid; place-items: center; color: var(--c-ink3); }
+  .more { display: block; padding: 12px 16px 4px 52px; }
+  .recent .res { padding-left: 16px; gap: 14px; color: var(--c-ink); }
+  .recent .res > .ic { color: var(--c-ink3); }
+  .rh { display: flex; align-items: center; justify-content: space-between; padding: 16px 8px 4px 16px; }
+  .rh h2 { font: 700 15px/20px var(--font-text); color: var(--c-ink2); }
+  .rh a { font: 700 15px/20px var(--font-text); color: var(--c-link); padding: 10px 8px; }
+</style>
+</head>
+<body>
+<!-- Search. typing ("cesky krumlov", real titles and the real redirect from the cs maxi): live suggestions grouped by book (the UI language's Wikipedia first), matched part bold,
+     arrow on the right puts the title into the field. recent: empty field shows recent searches + the tip. -->
+<div class="phone">
+  <div class="status"><span>9:41</span><span class="si"><span class="sig"><i></i><i></i><i></i><i></i></span><span class="bat"></span></span></div>
+  <div class="sbar">
+    <a class="b48"><i class="ic" data-i="arrow_back"></i></a>
+    <div class="search" data-show="typing"><span class="q">cesky krumlov<span class="caret"></span></span><a class="x"><i class="ic s20" data-i="close"></i></a></div>
+    <div class="search" data-show="recent"><span class="caret" style="margin-left:2px"></span><span class="ph" data-s="search_placeholder"></span></div>
+  </div>
+
+  <div class="scroll" data-show="typing">
+    <div class="rg"><span class="bk xs t-wiki"><i class="ic" data-i="book_wikipedia"></i></span><span data-s="book_wikipedia_cs"></span></div>
+    <a class="res"><span class="t"><b>Český Krumlov</b></span><span class="f"><i class="ic s20" data-i="fill_query"></i></span></a>
+    <a class="res"><span class="t"><b>Český Krumlov</b> (hrad)<small><i class="ic s18" data-i="redirect"></i>Český Krumlov (hrad a zámek)</small></span><span class="f"><i class="ic s20" data-i="fill_query"></i></span></a>
+    <a class="res"><span class="t"><b>Český Krumlov</b> (nádraží)</span><span class="f"><i class="ic s20" data-i="fill_query"></i></span></a>
+    <a class="res"><span class="t">Okres <b>Český Krumlov</b></span><span class="f"><i class="ic s20" data-i="fill_query"></i></span></a>
+    <a class="more lnk" data-s="search_show_more"></a>
+
+    <div class="rg"><span class="bk xs t-wiki"><i class="ic" data-i="book_wikipedia"></i></span><span data-s="book_wikipedia_sk"></span></div>
+    <a class="res"><span class="t"><b>Český Krumlov</b></span><span class="f"><i class="ic s20" data-i="fill_query"></i></span></a>
+    <a class="res"><span class="t">Okres <b>Český Krumlov</b></span><span class="f"><i class="ic s20" data-i="fill_query"></i></span></a>
+
+    <div class="rg"><span class="bk xs t-wiki"><i class="ic" data-i="book_wikipedia_en"></i></span><span data-s="book_wikipedia_en"></span></div>
+    <a class="res"><span class="t"><b>Cesky Krumlov</b></span><span class="f"><i class="ic s20" data-i="fill_query"></i></span></a>
+    <a class="res"><span class="t"><b>Cesky Krumlov</b> Castle</span><span class="f"><i class="ic s20" data-i="fill_query"></i></span></a>
+
+    <div class="rg"><span class="bk xs t-travel"><i class="ic" data-i="book_wikivoyage"></i></span><span data-s="book_wikivoyage"></span></div>
+    <a class="res"><span class="t"><b>Cesky Krumlov</b></span><span class="f"><i class="ic s20" data-i="fill_query"></i></span></a>
+  </div>
+
+  <div class="scroll recent" data-show="recent">
+    <div class="rh"><h2 data-s="search_recent_title"></h2><a data-s="action_clear"></a></div>
+    <a class="res"><i class="ic" data-i="clock"></i><span class="t">Sněžka</span><span class="f"><i class="ic s20" data-i="close"></i></span></a>
+    <a class="res"><i class="ic" data-i="clock"></i><span class="t">krvácení z nosu</span><span class="f"><i class="ic s20" data-i="close"></i></span></a>
+    <a class="res"><i class="ic" data-i="clock"></i><span class="t">výpadek proudu</span><span class="f"><i class="ic s20" data-i="close"></i></span></a>
+    <a class="res"><i class="ic" data-i="clock"></i><span class="t">Komenský</span><span class="f"><i class="ic s20" data-i="close"></i></span></a>
+    <a class="res"><i class="ic" data-i="clock"></i><span class="t">Praděd</span><span class="f"><i class="ic s20" data-i="close"></i></span></a>
+    <div class="note" style="margin:22px 16px 0"><i class="ic" data-i="info"></i><span data-s="search_tip"></span></div>
+  </div>
+  <div class="homeind"></div>
+</div>
+</body>
+</html>

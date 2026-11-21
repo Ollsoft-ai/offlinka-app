@@ -1,12 +1,10 @@
 {
   "_note": "UI strings, Slovak. Same keys as cs.json. On offlinka.sk the drive is 'USB kľúč'.",
   "app_name": "Offlinka",
-
   "nav_home": "Domov",
   "nav_library": "Knižnica",
   "nav_saved": "Uložené",
   "nav_settings": "Nastavenia",
-
   "action_back": "Späť",
   "action_forward": "Dopredu",
   "action_close": "Zavrieť",
@@ -18,10 +16,8 @@
   "action_retry": "Skúsiť znova",
   "action_undo": "Vrátiť",
   "action_copy": "Kopírovať",
-
   "status_offline": "Bez internetu",
   "status_drive_connected": "USB kľúč je zapojený",
-
   "connect_title": "Zapojte USB kľúč Offlinka",
   "connect_body": "Aplikácia číta Wikipédiu, mapy a príručky priamo z USB kľúča. Nič sa nekopíruje a internet nepotrebujete.",
   "connect_step_plug": "Zasuňte USB kľúč do konektora USB-C.",
@@ -38,19 +34,16 @@
   "connect_err_noaccess_title": "Nemám prístup",
   "connect_err_noaccess_body": "Povoľte aplikácii prístup k USB kľúču. Bez neho ho neprečíta.",
   "connect_pick_again": "Vybrať znova",
-
   "help_title": "Keď sa USB kľúč nezobrazuje",
   "help_1": "Zasuňte USB kľúč až na doraz. Konektor USB-C sa dá zasunúť oboma stranami.",
   "help_2": "Vytiahnite ho, počkajte pár sekúnd a zapojte znova.",
   "help_3_android": "Niektoré telefóny majú v nastaveniach prepínač OTG. Zapnite ho.",
   "help_4_ios": "iPhone 14 a starší majú konektor Lightning. Doň USB kľúč nepasuje.",
   "help_5": "Hrubý obal telefónu niekedy nedovolí konektor zasunúť. Skúste to bez obalu.",
-
   "unplugged_title": "USB kľúč je odpojený",
   "unplugged_body": "Zapojte ho znova a budete pokračovať tam, kde ste skončili.",
   "unplugged_waiting": "Čakám na USB kľúč…",
   "unplugged_pick_other": "Vybrať iný USB kľúč",
-
   "home_title": "Čo chcete nájsť?",
   "home_search_placeholder": "Hľadať v Offlinke",
   "home_quick_first_aid": "Prvá pomoc",
@@ -58,7 +51,6 @@
   "home_quick_random": "Náhodný článok",
   "home_continue": "Pokračovať v čítaní",
   "home_books_title": "Na USB kľúči",
-
   "book_wikipedia_cs": "Česká Wikipédia",
   "book_wikipedia_sk": "Slovenská Wikipédia",
   "book_wikipedia_en": "Anglická Wikipédia",
@@ -87,12 +79,10 @@
   "book_wiktionary_desc": "Význam, výslovnosť a skloňovanie (po česky)",
   "book_wikivoyage_desc": "Sprievodca po Európe, po anglicky",
   "book_other_desc": "Kniha z USB kľúča",
-
   "lang_cs": "čeština",
   "lang_sk": "slovenčina",
   "lang_en": "angličtina",
   "lang_mul": "viac jazykov",
-
   "search_placeholder": "Hľadať v Offlinke",
   "search_recent_title": "Nedávno hľadané",
   "search_tip": "Mäkčene a dĺžne písať nemusíte. „cesky krumlov“ nájde Český Krumlov.",
@@ -102,7 +92,6 @@
   "search_fill": "Doplniť do hľadania",
   "search_clear_query": "Vymazať text",
   "search_remove_recent": "Odobrať z nedávnych",
-
   "reader_find": "Hľadať v článku",
   "reader_find_placeholder": "Nájsť v texte",
   "reader_find_count": "{current} z {total}",
@@ -127,7 +116,6 @@
   "reader_external_body": "Offlinka funguje bez internetu, preto ho neotvorí.",
   "reader_copy_link": "Kopírovať odkaz",
   "reader_link_copied": "Odkaz je skopírovaný",
-
   "library_title": "Knižnica",
   "library_subtitle": "Všetko, čo je na USB kľúči",
   "library_drive_edition": "Edícia {edition}",
@@ -139,6 +127,7 @@
   "library_group_phone": "Menšie verzie pre telefón",
   "library_group_phone_note": "Použijú sa, len keď chýba veľká verzia.",
   "library_size": "{size} GB",
+  "library_size_mb": "{size} MB",
   "library_details": "Podrobnosti",
   "library_detail_articles": "Články",
   "library_detail_media": "Obrázky a súbory",
@@ -154,9 +143,18 @@
   "library_replaced": "Nahrádza ju veľká verzia",
   "library_open_main": "Otvoriť úvodnú stránku",
   "library_change_drive": "Vybrať iný USB kľúč",
-  "library_books_count": { "one": "{n} kniha", "few": "{n} knihy", "many": "{n} knihy", "other": "{n} kníh" },
-  "library_articles_count": { "one": "{n} článok", "few": "{n} články", "many": "{n} článku", "other": "{n} článkov" },
-
+  "library_books_count": {
+    "one": "{n} kniha",
+    "few": "{n} knihy",
+    "many": "{n} knihy",
+    "other": "{n} kníh"
+  },
+  "library_articles_count": {
+    "one": "{n} článok",
+    "few": "{n} články",
+    "many": "{n} článku",
+    "other": "{n} článkov"
+  },
   "saved_title": "Uložené",
   "saved_tab_saved": "Uložené",
   "saved_tab_history": "História",
@@ -172,7 +170,6 @@
   "history_clear": "Vymazať históriu",
   "history_clear_confirm_title": "Vymazať celú históriu?",
   "history_clear_confirm_body": "Uložené články zostanú.",
-
   "settings_title": "Nastavenia",
   "settings_section_display": "Vzhľad",
   "settings_language": "Jazyk",
@@ -199,7 +196,6 @@
   "settings_clear_searches": "Vymazať nedávno hľadané",
   "settings_privacy_note": "Všetko zostáva len v tomto telefóne. Aplikácia nepoužíva internet.",
   "settings_about": "O aplikácii",
-
   "about_title": "O aplikácii",
   "about_tagline": "Wikipédia, mapy a príručky z USB kľúča. Bez internetu.",
   "about_version": "Verzia {version}",
@@ -218,11 +214,9 @@
   "about_trademark": "Wikipédia je ochranná známka nadácie Wikimedia Foundation. S nadáciou nie sme spojení.",
   "about_contact": "Napíšte nám",
   "about_made_by": "Vyrába Ollcee s.r.o., Praha",
-
   "error_title": "Toto sa nepodarilo otvoriť",
   "error_body": "Súbor na USB kľúči môže byť poškodený. Skúste USB kľúč vytiahnuť a zapojiť znova.",
   "error_unsupported": "Tento typ súboru aplikácia nevie otvoriť.",
-
   "cd_logo": "Offlinka",
   "cd_search": "Hľadať",
   "cd_drive_illustration": "Telefón s USB kľúčom v konektore USB-C",

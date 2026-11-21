@@ -2923,6 +2923,29 @@
         }
       }
     },
+    "library_size_mb": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ MB"
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ MB"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ MB"
+          }
+        }
+      }
+    },
     "library_details": {
       "extractionState": "manual",
       "localizations": {

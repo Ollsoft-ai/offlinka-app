@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=393">
+<title>Offlinka mockup: Connect the drive</title>
+<link rel="stylesheet" href="../out/web/tokens.css"><link rel="stylesheet" href="assets/mock.css">
+<script src="assets/icons.js"></script><script src="assets/strings.js"></script><script src="assets/mock.js" defer></script>
+<style>
+  .illus { display: block; width: 236px; height: 236px; margin: 4px auto 0; }
+  .connect { padding: 10px 20px 0; display: flex; flex-direction: column; gap: 16px; }
+  .connect h1 { font: 800 24px/29px var(--font-display); letter-spacing: -0.01em; }
+  .connect .lead { font: 400 16px/23px var(--font-text); color: var(--c-ink2); margin-top: -6px; }
+  .connect .cap { font: 400 14px/20px var(--font-text); color: var(--c-ink2); text-align: center; margin-top: -2px; }
+  .connect .help { text-align: center; }
+  .wait { display: flex; align-items: center; gap: 10px; font: 600 16px/22px var(--font-text); color: var(--c-ink2); }
+  .wait i { width: 10px; height: 10px; border-radius: 50%; background: var(--c-ok); box-shadow: 0 0 0 5px color-mix(in srgb, var(--c-ok) 25%, transparent); }
+  .helplist { list-style: none; margin: 14px 0 20px; padding: 0; display: grid; gap: 12px; }
+  .helplist li { display: grid; grid-template-columns: 24px 1fr; gap: 12px; font: 400 16px/22px var(--font-text); }
+  .helplist .ic { color: var(--c-accent); }
+</style>
+</head>
+<body>
+<!-- Connect the drive. States: default, wrongfolder (picked a folder without ZIMs), help (sheet), unplugged
+     (the drive was pulled out while the app was open; it waits and resumes by itself). -->
+<div class="phone">
+  <div class="status on-hero"><span>9:41</span><span class="si"><span class="sig"><i></i><i></i><i></i><i></i></span><span class="bat"></span></span></div>
+  <section class="hero" style="padding-bottom:40px">
+    <div class="herotop"><img class="logo" src="../brand/logo.svg" alt="Offlinka"></div>
+    <!-- illustration: a phone with the Offlinka drive in its USB-C port; colours follow the theme -->
+    <svg class="illus" viewBox="0 0 240 240" role="img" data-s-aria="cd_drive_illustration">
+      <g data-hide="unplugged">
+        <rect x="109" y="181" width="40" height="58" rx="7" fill="rgba(8,20,14,.45)"/>
+      </g>
+      <rect x="76" y="13" width="100" height="170" rx="17" fill="rgba(8,20,14,.45)"/>
+      <rect x="70" y="6" width="100" height="170" rx="17" fill="var(--c-hero-deep)" stroke="var(--c-on-hero)" stroke-width="3"/>
+      <rect x="78" y="17" width="84" height="146" rx="9" fill="var(--c-bg)"/>
+      <path d="M78 26a9 9 0 0 1 9-9h66a9 9 0 0 1 9 9v26H78z" fill="var(--c-hero)"/>
+      <path d="M78 52l10-5 7 3 9-6 8 5 10-4 9 5 10-6 8 4 13-3v8H78z" fill="var(--c-bg)"/>
+      <rect x="86" y="25" width="26" height="5" rx="2" fill="var(--c-on-hero)"/>
+      <path d="M100 22.5l2.2 3.2h-4.4z" fill="var(--c-primary)"/>
+      <rect x="86" y="35" width="68" height="10" rx="2.5" fill="var(--c-surface)"/>
+      <g fill="var(--c-surface)" stroke="var(--c-outline)" stroke-width="1.3">
+        <rect x="86" y="62" width="68" height="18" rx="3"/>
+        <rect x="86" y="86" width="32" height="30" rx="3"/><rect x="122" y="86" width="32" height="30" rx="3"/>
+        <rect x="86" y="122" width="32" height="30" rx="3"/><rect x="122" y="122" width="32" height="30" rx="3"/>
+      </g>
+      <rect x="90" y="66" width="10" height="10" rx="2" fill="var(--tone-wiki-bg)" stroke="var(--c-outline)" stroke-width="1"/>
+      <rect x="90" y="90" width="9" height="9" rx="2" fill="var(--tone-maps-bg)" stroke="var(--c-outline)" stroke-width="1"/>
+      <rect x="126" y="90" width="9" height="9" rx="2" fill="var(--tone-aid-bg)" stroke="var(--c-outline)" stroke-width="1"/>
+      <rect x="90" y="126" width="9" height="9" rx="2" fill="var(--tone-wiki-bg)" stroke="var(--c-outline)" stroke-width="1"/>
+      <rect x="126" y="126" width="9" height="9" rx="2" fill="var(--tone-games-bg)" stroke="var(--c-outline)" stroke-width="1"/>
+      <rect x="111" y="171" width="18" height="3.5" rx="1.75" fill="var(--c-on-hero2)" opacity=".7"/>
+      <!-- the drive: plugged in -->
+      <g data-hide="unplugged">
+        <rect x="113" y="174" width="14" height="9" rx="1.5" fill="#C9CEC4"/>
+        <rect x="103" y="181" width="34" height="56" rx="6" fill="#262B27" stroke="var(--c-on-hero)" stroke-width="2"/>
+        <rect x="108" y="190" width="24" height="38" rx="3" fill="#1F3D2F"/>
+        <path d="M110 200c6-4 12 2 20-2M110 207c7-3 13 3 20-1M110 214c6-4 13 2 20-2M110 221c7-3 12 3 20-1" stroke="#2F5642" stroke-width="1.2" fill="none"/>
+        <path d="M120 199l5 8h-10z" fill="var(--c-primary)"/>
+      </g>
+      <!-- the drive: pulled out -->
+      <g data-show="unplugged">
+        <rect x="109" y="207" width="40" height="34" rx="7" fill="rgba(8,20,14,.45)"/>
+        <rect x="113" y="196" width="14" height="9" rx="1.5" fill="#C9CEC4"/>
+        <rect x="103" y="203" width="34" height="56" rx="6" fill="#262B27" stroke="var(--c-on-hero)" stroke-width="2"/>
+        <rect x="108" y="212" width="24" height="38" rx="3" fill="#1F3D2F"/>
+        <path d="M120 221l5 8h-10z" fill="var(--c-primary)"/>
+        <path d="M120 180v10" stroke="var(--c-on-hero2)" stroke-width="2" stroke-dasharray="2 3" stroke-linecap="round"/>
+      </g>
+    </svg>
+  </section>
+
+  <div class="connect" data-hide="unplugged">
+    <h1 data-s="connect_title"></h1>
+    <p class="lead" data-s="connect_body"></p>
+    <ol class="steps" data-hide="wrongfolder">
+      <li><span data-s="connect_step_plug"></span></li>
+      <li><span data-s="connect_step_pick_android"></span></li>
+    </ol>
+    <div class="note warn" data-show="wrongfolder"><i class="ic" data-i="warning"></i>
+      <span><b data-s="connect_err_wrongfolder_title"></b><span data-s="connect_err_wrongfolder_body"></span></span></div>
+    <a class="btn primary" style="margin-top:4px"><i class="ic" data-i="drive"></i><span data-s="connect_button" data-hide="wrongfolder"></span><span data-show="wrongfolder" data-s="connect_pick_again"></span></a>
+    <p class="cap" data-s="connect_remember"></p>
+    <p class="help"><a class="lnk" data-s="connect_help_link"></a></p>
+  </div>
+
+  <div class="connect" data-show="unplugged" style="padding-top:8px">
+    <h1 data-s="unplugged_title"></h1>
+    <p class="lead" data-s="unplugged_body"></p>
+    <p class="wait"><i></i><span data-s="unplugged_waiting"></span></p>
+    <a class="btn secondary" style="margin-top:10px"><i class="ic" data-i="drive"></i><span data-s="unplugged_pick_other"></span></a>
+  </div>
+
+  <div class="scrim" data-show="help"></div>
+  <div class="sheet" data-show="help">
+    <div class="grab"></div>
+    <h2 data-s="help_title"></h2>
+    <ul class="helplist">
+      <li><i class="ic" data-i="drive"></i><span data-s="help_1"></span></li>
+      <li><i class="ic" data-i="retry"></i><span data-s="help_2"></span></li>
+      <li><i class="ic" data-i="settings"></i><span data-s="help_3_android"></span></li>
+      <li><i class="ic" data-i="phone_drive"></i><span data-s="help_5"></span></li>
+    </ul>
+    <a class="btn secondary"><span data-s="action_close"></span></a>
+  </div>
+  <div class="homeind"></div>
+</div>
+</body>
+</html>
