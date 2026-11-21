@@ -17,10 +17,13 @@
 //! 8   version u32, flags u32
 //! 16  ZIM uuid                   16
 //! 32  ZIM entry count u32, record count u32
-//! 40  section count u32 (7), reserved u32
+//! 40  section count u32 (7), article record count A u32
 //! 48  7 x (offset u64, len u64): title fst, word fst, title heavy fst, word heavy fst,
-//!     records [u32 display, u32 target], postings [u32], heavy lists [u32]
+//!     records, postings [u32], heavy lists [u32]
 //! ```
+//! Records: ids < A are articles, stored as `[u32 entry; A]`; the rest are redirects,
+//! `[u32 display, u32 target]` each. Word-suffix keys come from article titles only.
+//!
 //! fst values: `id << 1` for a single record, `(offset << 1) | 1` for a posting list
 //! `postings[offset] = n, ids...`. Heavy fst values: offset into heavy lists, `n, ids...`.
 
@@ -37,7 +40,7 @@ use crate::reader::FileSource;
 use crate::zim::{Archive, Kind};
 
 pub const MAGIC: &[u8; 8] = b"OFFIDX\0\x01";
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 const HEADER_LEN: usize = 48 + 7 * 16;
 /// A prefix with more keys than this gets a precomputed top list.
 pub const HEAVY_THRESHOLD: usize = 1024;
@@ -85,6 +88,7 @@ pub struct SearchIndex {
     pub uuid: [u8; 16],
     pub entry_count: u32,
     pub record_count: u32,
+    pub article_records: u32,
     pub byte_len: u64,
     title: fst::Map<Section>,
     word: fst::Map<Section>,
@@ -133,6 +137,10 @@ impl SearchIndex {
         uuid.copy_from_slice(&b[16..32]);
         let entry_count = u32_at(b, 8).unwrap();
         let record_count = u32_at(b, 9).unwrap();
+        let article_records = u32_at(b, 11).unwrap();
+        if article_records > record_count {
+            return Err(invalid("search index: bad record counts"));
+        }
         if u32_at(b, 10).unwrap() != 7 {
             return Err(invalid("search index: bad section table"));
         }
@@ -152,6 +160,7 @@ impl SearchIndex {
             uuid,
             entry_count,
             record_count,
+            article_records,
             byte_len: b.len() as u64,
             title: map(&secs[0])?,
             word: map(&secs[1])?,
@@ -161,7 +170,8 @@ impl SearchIndex {
             postings: secs[5].clone(),
             heavy: secs[6].clone(),
         };
-        if (idx.records.as_ref().len() as u64) < idx.record_count as u64 * 8 {
+        let need = idx.article_records as u64 * 4 + (idx.record_count - idx.article_records) as u64 * 8;
+        if (idx.records.as_ref().len() as u64) < need {
             return Err(invalid("search index: records truncated"));
         }
         Ok(idx)
@@ -170,7 +180,15 @@ impl SearchIndex {
     /// (display entry, target entry) of a record.
     pub fn record(&self, id: u32) -> Option<(u32, u32)> {
         let r = self.records.as_ref();
-        Some((u32_at(r, id as usize * 2)?, u32_at(r, id as usize * 2 + 1)?))
+        if id < self.article_records {
+            let e = u32_at(r, id as usize)?;
+            Some((e, e))
+        } else if id < self.record_count {
+            let k = self.article_records as usize + (id - self.article_records) as usize * 2;
+            Some((u32_at(r, k)?, u32_at(r, k + 1)?))
+        } else {
+            None
+        }
     }
 
     fn push_value(&self, v: u64, out: &mut Vec<u32>) {
@@ -453,6 +471,9 @@ pub fn build(a: &Archive, out: &mut dyn Write, progress: &mut dyn FnMut(&str)) -
     for (id, &d) in displays.iter().enumerate() {
         let (s, l) = spans[(d - base) as usize];
         tkeys.push((s, l, id as u32));
+        if id as u64 >= st.articles {
+            continue; // redirects: full title only
+        }
         let t = sub(&arena, s, l);
         for w in word_starts(t).take(MAX_WORD_KEYS) {
             wkeys.push((s + w as u32, l - w as u32, id as u32));
@@ -471,9 +492,11 @@ pub fn build(a: &Archive, out: &mut dyn Write, progress: &mut dyn FnMut(&str)) -
     drop(wkeys);
 
     let mut records = Vec::with_capacity(displays.len() * 8);
-    for (d, t) in displays.iter().zip(&targets) {
+    for (id, (d, t)) in displays.iter().zip(&targets).enumerate() {
         records.extend_from_slice(&d.to_le_bytes());
-        records.extend_from_slice(&t.to_le_bytes());
+        if id as u64 >= st.articles {
+            records.extend_from_slice(&t.to_le_bytes());
+        }
     }
     let to_bytes = |v: &[u32]| -> Vec<u8> { v.iter().flat_map(|x| x.to_le_bytes()).collect() };
     let postings_b = to_bytes(&postings);
@@ -488,7 +511,7 @@ pub fn build(a: &Archive, out: &mut dyn Write, progress: &mut dyn FnMut(&str)) -
     header.extend_from_slice(&a.header.entry_count.to_le_bytes());
     header.extend_from_slice(&(displays.len() as u32).to_le_bytes());
     header.extend_from_slice(&7u32.to_le_bytes());
-    header.extend_from_slice(&0u32.to_le_bytes());
+    header.extend_from_slice(&(st.articles as u32).to_le_bytes());
     let mut pos = HEADER_LEN as u64;
     for s in &sections {
         pos = pos.div_ceil(8) * 8;

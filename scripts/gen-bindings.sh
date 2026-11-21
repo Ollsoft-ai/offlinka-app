@@ -7,7 +7,7 @@
 #
 # Outputs:
 #   android/core/src/main/kotlin/cz/offlinka/core/offlinka_core.kt   (package cz.offlinka.core)
-#   ios/Offlinka/Generated/{offlinka_core.swift,offlinka_coreFFI.h,offlinka_coreFFI.modulemap}
+#   ios/Offlinka/Generated/{OfflinkaCore.swift,offlinka_coreFFI.h,offlinka_coreFFI.modulemap}
 #   core/target/host/<os>-<arch>/libofflinka_core.{so,dylib}           (JNA resource layout)
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

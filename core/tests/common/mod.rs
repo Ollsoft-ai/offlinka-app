@@ -317,5 +317,7 @@ pub fn sample() -> ZimBuilder {
 pub fn tmp_path(name: &str) -> String {
     let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"));
     std::fs::create_dir_all(dir).unwrap();
-    dir.join(format!("{}-{}", std::process::id(), name)).to_string_lossy().into_owned()
+    static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    dir.join(format!("{}-{n}-{}", std::process::id(), name)).to_string_lossy().into_owned()
 }

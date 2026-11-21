@@ -22,7 +22,9 @@ const MIME_DELETED: u16 = 0xfffd;
 /// Redirect chains longer than this are treated as broken.
 pub const MAX_REDIRECTS: usize = 10;
 /// Refuse to inflate a single cluster beyond this (corrupt or hostile file).
-const MAX_CLUSTER_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_CLUSTER_BYTES: u64 = 256 * 1024 * 1024;
+/// `get()` refuses entries larger than this; media goes through `get_range`.
+pub const MAX_GET_BYTES: u64 = 256 * 1024 * 1024;
 /// Default budget of the decompressed-cluster cache.
 pub const DEFAULT_CLUSTER_CACHE_BYTES: usize = 48 * 1024 * 1024;
 const DIRENT_CACHE_ENTRIES: usize = 16 * 1024;
@@ -718,15 +720,32 @@ fn decompress(c: Compression, raw: Vec<u8>) -> Result<Vec<u8>> {
             Ok(out)
         }
         Compression::Xz => {
-            let mut out = Vec::with_capacity(raw.len() * 4);
+            let mut out = Limited(Vec::with_capacity(raw.len() * 4));
             let mut input = std::io::BufReader::new(&raw[..]);
             lzma_rs::xz_decompress(&mut input, &mut out).map_err(|e| invalid(format!("xz cluster: {e}")))?;
-            check_inflated(&out)?;
-            Ok(out)
+            check_inflated(&out.0)?;
+            Ok(out.0)
         }
         Compression::Zlib => Err(CoreError::Unsupported("zlib-compressed cluster".into())),
         Compression::Bzip2 => Err(CoreError::Unsupported("bzip2-compressed cluster".into())),
         Compression::Unknown(c) => Err(invalid(format!("unknown cluster compression {c}"))),
+    }
+}
+
+/// A `Vec` writer that refuses to grow past the cluster limit (xz bombs).
+struct Limited(Vec<u8>);
+
+impl std::io::Write for Limited {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if self.0.len() as u64 + buf.len() as u64 > MAX_CLUSTER_BYTES {
+            return Err(std::io::Error::other("cluster inflates beyond the size limit"));
+        }
+        self.0.extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
     }
 }
 

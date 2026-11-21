@@ -7,7 +7,7 @@
 # merged with lipo), Swift bindings + C header + module map via scripts/gen-bindings.sh,
 # then xcodebuild -create-xcframework.
 # Output: ios/Frameworks/OfflinkaCore.xcframework (git-ignored),
-#         ios/Offlinka/Generated/offlinka_core.swift (compiled into the app target).
+#         ios/Offlinka/Generated/OfflinkaCore.swift (compiled into the app target).
 # Not run on the Linux box: written for macOS, keep it simple.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

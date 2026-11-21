@@ -338,9 +338,10 @@ fn concurrent_reads() {
     }
 }
 
+/// Is `fd` open on `path`? (Other tests run in parallel and may reuse the number.)
 #[cfg(target_os = "linux")]
-fn fd_open(fd: i32) -> bool {
-    std::fs::read_link(format!("/proc/self/fd/{fd}")).is_ok()
+fn fd_on(fd: i32, path: &str) -> bool {
+    std::fs::read_link(format!("/proc/self/fd/{fd}")).is_ok_and(|p| p == std::path::Path::new(path))
 }
 
 #[cfg(target_os = "linux")]
@@ -350,17 +351,17 @@ fn fd_ownership() {
     let zim = write_sample("fd.zim");
     let fd = std::fs::File::open(&zim).unwrap().into_raw_fd();
     let b = Book::open_fd(fd, "fd.zim".into()).unwrap();
-    assert!(fd_open(fd));
+    assert!(fd_on(fd, &zim));
     assert_eq!(b.get("Brno".into()).unwrap().data, b"<h1>Brno</h1>");
     drop(b);
-    assert!(!fd_open(fd), "the core closes the fd when the book is dropped");
+    assert!(!fd_on(fd, &zim), "the core closes the fd when the book is dropped");
 
     // A failed open closes the fd as well.
     let junk = tmp_path("junk.bin");
     std::fs::write(&junk, b"definitely not a zim").unwrap();
     let fd = std::fs::File::open(&junk).unwrap().into_raw_fd();
     assert!(Book::open_fd(fd, "junk".into()).is_err());
-    assert!(!fd_open(fd), "fd closed after a failed open");
+    assert!(!fd_on(fd, &junk), "fd closed after a failed open");
 
     assert!(matches!(Book::open_fd(-1, "bad".into()), Err(CoreError::Io(_))));
 
@@ -372,7 +373,7 @@ fn fd_ownership() {
     offlinka_core::index::build(&a, &mut std::fs::File::create(&idx).unwrap(), &mut |_| {}).unwrap();
     let ifd = std::fs::File::open(&idx).unwrap().into_raw_fd();
     b.attach_index_fd(ifd).unwrap();
-    assert!(!fd_open(ifd), "index fd is mapped and closed right away");
+    assert!(!fd_on(ifd, &idx), "index fd is mapped and closed right away");
     assert!(b.info().has_index);
     assert_eq!(b.suggest("cesky".into(), 3)[0].title, "Český Krumlov");
 }

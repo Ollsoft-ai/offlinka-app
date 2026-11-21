@@ -16,11 +16,28 @@ pub struct Hit {
     pub snippet: Option<String>,
 }
 
+/// A suggestion before its titles are read: index records stay cheap until they are
+/// among the results actually shown.
+#[derive(Debug, Clone)]
+pub enum Cand {
+    Rec { class: u8, display: u32, target: u32 },
+    Ready(Hit),
+}
+
+impl Cand {
+    pub fn class(&self) -> u8 {
+        match self {
+            Cand::Rec { class, .. } => *class,
+            Cand::Ready(h) => h.class,
+        }
+    }
+}
+
 /// Indexed search: ranked, diacritics-insensitive, redirects deduped by target.
-pub fn indexed(a: &Archive, idx: &SearchIndex, query: &str, limit: usize) -> Result<Vec<Hit>> {
+pub fn indexed(idx: &SearchIndex, query: &str, limit: usize) -> Vec<Cand> {
     let q = normalize(query);
     if q.is_empty() || limit == 0 {
-        return Ok(Vec::new());
+        return Vec::new();
     }
     let mut seen = HashSet::new();
     let mut out = Vec::with_capacity(limit);
@@ -29,15 +46,25 @@ pub fn indexed(a: &Archive, idx: &SearchIndex, query: &str, limit: usize) -> Res
         if !seen.insert(target) {
             continue;
         }
-        let d = a.dirent(display)?;
-        let t = if display == target { d.clone() } else { a.dirent(target)? };
-        let snippet = (display != target && t.title() != d.title()).then(|| t.title().to_string());
-        out.push(Hit { class, title: d.title().to_string(), path: a.api_path(&t), snippet });
+        out.push(Cand::Rec { class, display, target });
         if out.len() >= limit {
             break;
         }
     }
-    Ok(out)
+    out
+}
+
+/// Read the titles and the target path of a candidate.
+pub fn resolve(a: &Archive, c: Cand) -> Result<Hit> {
+    match c {
+        Cand::Ready(h) => Ok(h),
+        Cand::Rec { class, display, target } => {
+            let d = a.dirent(display)?;
+            let t = if display == target { d.clone() } else { a.dirent(target)? };
+            let snippet = (display != target && t.title() != d.title()).then(|| t.title().to_string());
+            Ok(Hit { class, title: d.title().to_string(), path: a.api_path(&t), snippet })
+        }
+    }
 }
 
 fn upper_first(s: &str) -> String {

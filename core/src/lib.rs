@@ -227,16 +227,21 @@ impl Book {
         Ok(())
     }
 
-    /// Ranked hits with their match class (for merging across books).
-    pub(crate) fn hits(&self, query: &str, limit: usize) -> Vec<search::Hit> {
-        let r = match self.search_index() {
-            Some(idx) => search::indexed(&self.archive, &idx, query, limit),
+    /// Ranked candidates with their match class (titles not read yet for indexed books).
+    pub(crate) fn candidates(&self, query: &str, limit: usize) -> Vec<search::Cand> {
+        match self.search_index() {
+            Some(idx) => search::indexed(&idx, query, limit),
             None => match &self.titles {
-                Some(l) => search::fallback(&self.archive, l, self.titles_front_only, query, limit),
-                None => Ok(Vec::new()),
+                Some(l) => search::fallback(&self.archive, l, self.titles_front_only, query, limit)
+                    .map(|v| v.into_iter().map(search::Cand::Ready).collect())
+                    .unwrap_or_default(),
+                None => Vec::new(),
             },
-        };
-        r.unwrap_or_default()
+        }
+    }
+
+    fn hits(&self, query: &str, limit: usize) -> Vec<search::Hit> {
+        self.candidates(query, limit).into_iter().filter_map(|c| search::resolve(&self.archive, c).ok()).collect()
     }
 }
 
@@ -304,14 +309,17 @@ impl Book {
     /// Whole entry (redirects followed). `NotFound` when missing.
     pub fn get(&self, path: String) -> std::result::Result<Resource, CoreError> {
         let (d, loc) = self.blob_of(&path)?;
+        if loc.len() > zim::MAX_GET_BYTES {
+            return Err(CoreError::Unsupported(format!("{path} is {} bytes; read it with get_range", loc.len())));
+        }
         let data = self.archive.read_blob(&loc, 0, u64::MAX)?;
         Ok(Resource { path: self.archive.api_path(&d), mime: self.archive.mime(&d).to_string(), data })
     }
 
-    /// Part of an entry, for media and big files. Clamped to the entry end.
+    /// Part of an entry, for media and big files. Clamped to the entry end (and to 256 MB).
     pub fn get_range(&self, path: String, offset: u64, len: u32) -> std::result::Result<Vec<u8>, CoreError> {
         let (_, loc) = self.blob_of(&path)?;
-        self.archive.read_blob(&loc, offset, len as u64)
+        self.archive.read_blob(&loc, offset, (len as u64).min(zim::MAX_GET_BYTES))
     }
 
     /// Size of an entry in bytes (redirects followed).
@@ -397,14 +405,17 @@ impl Library {
         order.sort_by_key(|&i| (Self::priority(&books[i].info), i));
         let mut all = Vec::new();
         for (rank, &i) in order.iter().enumerate() {
-            for (pos, h) in books[i].hits(&query, limit as usize).into_iter().enumerate() {
-                all.push((h.class, rank, pos, books[i].info.id.clone(), h));
+            for (pos, c) in books[i].candidates(&query, limit as usize).into_iter().enumerate() {
+                all.push((c.class(), rank, pos, i, c));
             }
         }
         all.sort_by_key(|a| (a.0, a.1, a.2));
         all.into_iter()
+            .filter_map(|(_, _, _, i, c)| {
+                let h = search::resolve(&books[i].archive, c).ok()?;
+                Some(LibrarySuggestion { book_id: books[i].info.id.clone(), title: h.title, path: h.path })
+            })
             .take(limit as usize)
-            .map(|(_, _, _, book_id, h)| LibrarySuggestion { book_id, title: h.title, path: h.path })
             .collect()
     }
 }
