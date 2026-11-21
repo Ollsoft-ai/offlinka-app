@@ -18,7 +18,7 @@ For the session with the founders. Work top to bottom and tick the boxes. Rules 
 - [ ] **Release notes** `android/fastlane/metadata/android/*/changelogs/3.txt` still match what 0.3 really does (written from the work in progress on 2026-11-21).
 - [ ] **Fixes that reviewers would hit:** the first four items of "Rejection risks" below.
 - [ ] **Privacy pages published** from `store/privacy/` at https://offlinka.cz/aplikace/soukromi, https://offlinka.sk/aplikacia/sukromie and https://offlinka.cz/en/app/privacy (Kryštof).
-- [ ] **Review sample** published: a zip with one folder `OFFLINKA/Telefon/` holding `wikipedia_cs_all_mini-…zim` (870 MB), `offlinka_cs_prirucky.zim` and `offlinka_mul_hry.zim`. Put its URL into `ios/fastlane/metadata/review_information/notes.txt` and the Play "App access" text.
+- [x] **Review sample** published (https://github.com/Ollsoft-ai/offlinka-app/releases/download/review-sample-2026-11/offlinka-review-sample.zip, 1.5 GB, also has Knihovna/maps_en_slovakia and the cs mini .offidx; guides left out, the app bundles them): a zip with one folder `OFFLINKA/Telefon/` holding `wikipedia_cs_all_mini-…zim` (870 MB), `offlinka_cs_prirucky.zim` and `offlinka_mul_hry.zim`. Put its URL into `ios/fastlane/metadata/review_information/notes.txt` and the Play "App access" text.
 - [ ] **Demo video** (made by us, not the founders; founders 2026-11-21) (1–2 min, iPhone 15 screen recording with the real drive): plug in, choose the drive, search „cesky krumlov“, open an article, the map, unplug and plug back. The same video on a phone with Android for Play (unlisted YouTube link is fine).
 - [ ] **Screenshots:** re-record Paparazzi (`:ui:recordPaparazziDebug`), then `store/screenshots/build.sh --fastlane`. Look at `store/screenshots/out/index.html`. The build lists missing app states; the iPhone and iPad sets must come from the iOS simulator before the App Store submission (step 3).
 - [x] **Public phone number:** **+420 728 374 741**, the same as on offlinka.cz (founders, 2026-11-21). Used as the developer phone on both stores; it confirms by a one-time code.
@@ -124,7 +124,7 @@ For the session with the founders. Work top to bottom and tick the boxes. Rules 
 ## Open questions for the founders
 
 - **Public phone number:** both stores publish a developer phone for Ollsoft s.r.o. Which number?
-- **Review sample:** may we host the 0.9 GB sample zip (Czech Wikipedia phone edition) on offlinka.cz, and who records the demo video with the drive?
+- ~~Review sample hosting and demo video~~: decided 2026-11-21: the sample is a public GitHub release asset (free content, CC BY-SA / ODbL); the demo video is made by us from the iOS simulator + real drive footage, no founder recording.
 - **App terms:** Google shows a Terms of Service link per app from 2027-03-01. Shall we write short app terms (free, as is, licences)?
 - **Countries:** Czechia and Slovakia only, or the whole EU from the start?
 - **Auto Backup:** keep Android's backup of saved articles and history (disclosed in the privacy policy), or switch it off for an absolute "nothing leaves the phone"?

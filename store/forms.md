@@ -18,7 +18,7 @@ Answers for Google Play Console and App Store Connect, checked against the app o
 - **Privacy policy:** https://offlinka.cz/aplikace/soukromi
 - **Ads:** No, the app contains no ads.
 - **App access:** "All or some functionality is restricted". Instruction name "Without the Offlinka drive", text:
-  - `The app reads the Offlinka USB-C flash drive. Without it: 1) the emergency guides are built in: on the first screen tap "Otevřít první pomoc" (English: "Open first aid"). 2) Sample library: download [SAMPLE URL], unzip it into Download/OFFLINKA, tap "Vybrat flashku" ("Choose drive"), then "Vybrat znovu" if the drive is not found, pick the folder OFFLINKA and tap "Use this folder" and "Allow". 3) Video with the real drive: [VIDEO URL]. No login is needed.`
+  - `The app reads the Offlinka USB-C flash drive. Without it: 1) the emergency guides are built in: on the first screen tap "Otevřít první pomoc" (English: "Open first aid"). 2) Sample library: download https://github.com/Ollsoft-ai/offlinka-app/releases/download/review-sample-2026-11/offlinka-review-sample.zip, unzip it into Download/OFFLINKA, tap "Vybrat flashku" ("Choose drive"), then "Vybrat znovu" if the drive is not found, pick the folder OFFLINKA and tap "Use this folder" and "Allow". 3) Video with the real drive: [VIDEO URL]. No login is needed.`
 - **Content rating:** see IARC below.
 - **Target audience:** **13–15, 16–17, 18 and over.** Not under 13 (reasons below).
   - "Could your store listing unintentionally appeal to children?" **No.** The screenshots show Wikipedia, maps and first aid, no characters or kid imagery.
@@ -105,5 +105,5 @@ Answers for Google Play Console and App Store Connect, checked against the app o
 - **Categories:** primary Reference, secondary Education (`primary_category.txt`, `secondary_category.txt`).
 - **Copyright:** `2026 Ollsoft s.r.o.` (`copyright.txt`).
 - **EU Digital Services Act:** **trader**. Apple publishes the D-U-N-S address of Ollsoft s.r.o., a phone number and an email on the EU product page; both are verified by two-factor codes.
-- **Review information:** notes in `ios/fastlane/metadata/review_information/notes.txt` (replace `[SAMPLE URL]`), attach the demo video, fill in the contact person's name, phone and email in App Store Connect.
+- **Review information:** notes in `ios/fastlane/metadata/review_information/notes.txt` (replace `https://github.com/Ollsoft-ai/offlinka-app/releases/download/review-sample-2026-11/offlinka-review-sample.zip`), attach the demo video, fill in the contact person's name, phone and email in App Store Connect.
 - Source: https://developer.apple.com/help/app-store-connect/manage-compliance-information/manage-european-union-digital-services-act-trader-requirements
