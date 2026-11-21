@@ -282,7 +282,13 @@ fn run(args: &[String]) -> R {
             let t = Instant::now();
             let main = b.info().main_path.map(|p| b.get(p).map(|r| r.data.len()));
             let main_t = t.elapsed();
-            println!("open {open:?}, main page {main_t:?} ({main:?}), index: {}", b.info().has_index);
+            let t = Instant::now();
+            b.preload_index()?;
+            let load = t.elapsed();
+            println!(
+                "open {open:?}, main page {main_t:?} ({main:?}), index: {} (loaded into memory in {load:?})",
+                b.info().has_index
+            );
             let queries = read_queries(&o)?;
             keystrokes(&queries, |p| {
                 std::hint::black_box(b.suggest(p.to_string(), 20));
@@ -299,8 +305,17 @@ fn run(args: &[String]) -> R {
             for z in &o.pos {
                 lib.add(open_book(z, &o)?);
             }
+            let opened = t.elapsed();
+            let t = Instant::now();
+            for b in lib.books() {
+                b.preload_index()?;
+            }
             let indexed = lib.books().iter().filter(|b| b.info().has_index).count();
-            println!("library: {} books ({indexed} indexed), opened in {:?}", lib.books().len(), t.elapsed());
+            println!(
+                "library: {} books ({indexed} indexed), opened in {opened:?}, indexes loaded in {:?}",
+                lib.books().len(),
+                t.elapsed()
+            );
             let queries = read_queries(&o)?;
             keystrokes(&queries, |p| {
                 std::hint::black_box(lib.suggest_all(p.to_string(), 20));

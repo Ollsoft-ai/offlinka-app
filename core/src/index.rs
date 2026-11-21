@@ -5,7 +5,7 @@
 //! **Records** are (shown entry, target entry) pairs, one per article and one per
 //! redirect that ends at an article. Each record has a static score (lower is better):
 //! `LEN_COST * normalised title length + REDIRECT_COST * redirect - POP_WEIGHT *
-//! log2(size of the target article)`, quantised to a level. Record ids: articles first,
+//! log2(size of the target article) - INLINK_WEIGHT * log2(1 + redirects to it)`, quantised to a level. Record ids: articles first,
 //! then redirects, each part in level order (ties: shorter title as written, then
 //! alphabetical); "best" inside one match tier is the smallest (level, id).
 //!
@@ -89,6 +89,8 @@ pub(crate) const LEN_COST: f64 = 0.12;
 const REDIRECT_COST: f64 = 1.0;
 /// Static score: per doubling of the target article's size.
 const POP_WEIGHT: f64 = 1.0;
+/// Static score: per doubling of (1 + redirects pointing at the target).
+const INLINK_WEIGHT: f64 = 0.5;
 /// Articles smaller than this count as this size (stubs, empty fixtures).
 const MIN_POP_BYTES: u64 = 1024;
 /// Static score of a hit without an index (title listing fallback): an average article.
@@ -97,9 +99,11 @@ const LEVEL_SCALE: f64 = 16.0;
 const LEVEL_BIAS: f64 = 64.0;
 
 /// Static score of a record (lower is better).
-fn static_score(norm_chars: u32, redirect: bool, target_size: u64) -> f64 {
+fn static_score(norm_chars: u32, redirect: bool, target_size: u64, inlinks: u32) -> f64 {
     let pop = (target_size.max(MIN_POP_BYTES) as f64).log2();
-    LEN_COST * norm_chars as f64 + if redirect { REDIRECT_COST } else { 0.0 } - POP_WEIGHT * pop
+    LEN_COST * norm_chars as f64 + if redirect { REDIRECT_COST } else { 0.0 }
+        - POP_WEIGHT * pop
+        - INLINK_WEIGHT * (1.0 + inlinks as f64).log2()
 }
 
 fn level_of(score: f64) -> u32 {
@@ -744,15 +748,16 @@ pub fn build(a: &Archive, out: &mut dyn WriteSeek, obs: &mut dyn BuildObserver) 
         level: u32,
     }
     let mut recs: Vec<Rec> = Vec::new();
+    // Redirects pointing at each article: a second popularity signal (alternative names
+    // and misspellings exist for well-known topics).
+    let mut inlinks: Vec<u32> = vec![0; n];
     for k in 0..n {
-        let (s, l) = spans[k];
+        let (_, l) = spans[k];
         if l == 0 {
             continue;
         }
-        let chars = sub(&arena, s, l).chars().count() as u32;
         if kind[k] == K_ARTICLE {
-            let level = level_of(static_score(chars, false, size[k] as u64));
-            recs.push(Rec { display: base + k as u32, target: base + k as u32, level });
+            recs.push(Rec { display: base + k as u32, target: base + k as u32, level: 0 });
             st.articles += 1;
         } else if kind[k] == K_REDIRECT {
             let mut t = redirect_to[k];
@@ -770,12 +775,19 @@ pub fn build(a: &Archive, out: &mut dyn WriteSeek, obs: &mut dyn BuildObserver) 
                 break;
             }
             if ok {
-                let level = level_of(static_score(chars, true, size[(t - base) as usize] as u64));
-                recs.push(Rec { display: base + k as u32, target: t, level });
+                inlinks[(t - base) as usize] += 1;
+                recs.push(Rec { display: base + k as u32, target: t, level: 0 });
                 st.redirects += 1;
             }
         }
     }
+    for r in recs.iter_mut() {
+        let (s, l) = spans[(r.display - base) as usize];
+        let chars = sub(&arena, s, l).chars().count() as u32;
+        let t = (r.target - base) as usize;
+        r.level = level_of(static_score(chars, r.display != r.target, size[t] as u64, inlinks[t]));
+    }
+    drop(inlinks);
     drop(redirect_to);
     drop(size);
     // Articles first (record layout), each part in score order.

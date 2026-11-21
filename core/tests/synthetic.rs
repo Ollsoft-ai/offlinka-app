@@ -476,8 +476,10 @@ fn heavy_prefixes_rank_like_a_full_scan() {
     assert!(st.heavy_prefixes > 0, "{st:?}");
     b.attach_index_path(idx).unwrap();
     let titles = |q: &str, n: u32| b.suggest(q.into(), n).into_iter().map(|s| s.title).collect::<Vec<_>>();
-    assert_eq!(titles("t", 4), ["Te", "Tešín", "!!! (Tešín)", "Test 0000"], "articles first, shorter first");
-    assert_eq!(titles("te", 3), ["Te", "Tešín", "!!! (Tešín)"], "same key: shorter written title first");
+    // Equal sizes: shorter first; "Test 0007" has a redirect pointing at it ("Tes"), which
+    // counts as popularity and lifts it above the other "Test" pages.
+    assert_eq!(titles("t", 5), ["Te", "Test 0007", "Tešín", "!!! (Tešín)", "Test 0000"]);
+    assert_eq!(titles("te", 4), ["Te", "Test 0007", "Tešín", "!!! (Tešín)"], "same key: shorter written title first");
     assert_eq!(titles("tesin", 2), ["Tešín", "!!! (Tešín)"]);
     assert_eq!(titles("tes", 4), ["Tes", "Tešín", "!!! (Tešín)", "Test 0000"], "exact redirect first");
     assert_eq!(b.suggest("tes".into(), 1)[0].path, "Test_0007");

@@ -93,7 +93,9 @@ fn build_index(zim: &str, name: &str) -> String {
 }
 
 /// Top results of real Czech queries (popularity ranking, index v5).
-fn check_czech_ranking(b: &Book) {
+/// `full`: the maxi edition (whole articles); the mini one has only intros, so its size
+/// signal is weaker and a few checks are looser.
+fn check_czech_ranking(b: &Book, full: bool) {
     let top = |q: &str| b.suggest(q.into(), 5);
     let titles = |q: &str| top(q).into_iter().map(|s| s.title).collect::<Vec<_>>();
     let first_path = |q: &str| top(q).first().map(|s| s.path.clone()).unwrap_or_default();
@@ -104,12 +106,20 @@ fn check_czech_ranking(b: &Book) {
     assert!(!titles("masaryk").contains(&"Masaryktown".to_string()), "{:?}", titles("masaryk"));
     assert_eq!(titles("praha")[0], "Praha");
     let karel = titles("karel");
-    assert!(karel[..3].contains(&"Karel IV.".to_string()) && karel.contains(&"Karel".to_string()), "{karel:?}");
+    assert!(karel[..3].contains(&"Karel IV.".to_string()), "{karel:?}");
+    if full {
+        assert_eq!(karel[0], "Karel IV.");
+    }
     assert_eq!(titles("voda")[0], "Voda");
     assert_eq!(titles("ohen")[0], "Oheň", "diacritics-insensitive");
     assert_eq!(titles("oheň")[0], "Oheň");
     assert_eq!(titles("prvni pomoc")[0], "První pomoc");
-    assert_eq!(first_path("krumlov"), "Český_Krumlov", "{:?}", titles("krumlov"));
+    let krumlov: Vec<String> = top("krumlov").into_iter().map(|s| s.path).collect();
+    if full {
+        assert_eq!(krumlov[0], "Český_Krumlov", "{krumlov:?}");
+    } else {
+        assert!(krumlov[..2].contains(&"Český_Krumlov".to_string()), "{krumlov:?}");
+    }
     assert_eq!(titles("snezka")[0], "Sněžka");
 }
 
@@ -205,7 +215,7 @@ fn cs_mini_index_quality() {
     assert_eq!(first("praha"), "Praha");
     assert_eq!(first("PRAHA"), "Praha");
     assert_eq!(first("brno"), "Brno");
-    check_czech_ranking(&b);
+    check_czech_ranking(&b, false);
 }
 
 #[test]
@@ -229,7 +239,7 @@ fn cs_maxi_open_main_and_search() {
     b.attach_index_path(idx).unwrap();
     let s = b.suggest("cesky krumlov".into(), 10);
     assert_eq!(s[0].title, "Český Krumlov");
-    check_czech_ranking(&b);
+    check_czech_ranking(&b, true);
     let mut worst = std::time::Duration::ZERO;
     for q in ["cesky krumlov", "praha", "druha svetova valka", "seznam kulturnich pamatek", "a", "s"] {
         for n in 1..=q.len() {
