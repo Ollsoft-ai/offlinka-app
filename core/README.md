@@ -67,41 +67,32 @@ Drive edition 2026-11.3, this box (x86_64, shared, load ~8), release build, warm
 
 **Why libzstd:** inflating one ~2 MB Wikipedia cluster takes 3.3 ms (cs mini) / 3.7 ms (cs maxi) with libzstd vs 12.7 / 52.7 ms with ruzstd (`offlinka-cli inflate`). Opening an article = one cluster.
 
-**Suggest per keystroke** (`offlinka-cli bench --queries bench/queries-cs.txt`, 353 keystrokes, limit 20, index v4, warm run):
+**Suggest per keystroke** (`offlinka-cli bench --queries bench/queries-cs.txt`, 353 keystrokes, limit 20, index v5 preloaded, warm run):
 
-| book | index | p50 | p95 | p99 | max |
-|---|---|---|---|---|---|
-| cs maxi | yes | 0.11 ms | 0.14 ms | 0.18 ms | 2.9 ms |
-| cs mini | yes | 0.11 ms | 0.19 ms | 0.24 ms | 0.32 ms |
-| sk maxi | yes | 0.10 ms | 0.15 ms | 0.21 ms | 5.1 ms |
-| en top1m | yes | 0.10 ms | 0.18 ms | 0.21 ms | 0.26 ms |
-| Library, all 14 books of `Knihovna/` (`bench-lib`) | yes | 0.25 ms | 0.60 ms | 2.2 ms | 14 ms |
-| cs mini | no (fallback listing) | 0.24 ms | 3.4 ms | 7.1 ms | 100 ms |
-
-Cold page cache on this VM disk (after other builds evicted it) the cs maxi worst keystroke was 54 ms (`cs_maxi_open_main_and_search`, budget asserted < 100 ms). A suggestion costs one index record read plus one ZIM dirent read per title shown (two for a redirect).
-
-**Open + main page:** cs maxi 0.1–0.5 s (incl. loading 16 MB of index fst), library of 14 books 0.3–0.5 s, en top1m alone up to 0.9 s cold (76 MB of fst: attach big indexes off the UI thread or lazily).
-
-**Index per book** (`offlinka-cli index`, v4; "RAM" = fst maps kept in memory, the rest is read with `pread`):
-
-| book | records | .offidx | RAM | build |
+| book | p50 | p95 | p99 | max |
 |---|---|---|---|---|
-| wikipedia_cs_all_maxi | 975,172 | 40.1 MB | 16.0 MB | 23 s |
-| wikipedia_cs_all_mini | 963,395 | 39.6 MB | 15.8 MB | 16 s |
-| wikipedia_sk_all_maxi | 439,233 | 19.7 MB | 8.0 MB | 11 s |
-| wikipedia_sk_all_mini | 438,360 | 19.6 MB | 8.0 MB | 6 s |
-| wikipedia_en_top1m_nopic | 5,904,211 | 218.6 MB | 76.2 MB | 104 s (570 MB RSS) |
-| wikipedia_en_medicine_nopic | 371,233 | 13.8 MB | 5.0 MB | 4 s |
-| wikisource_cs | 65,396 | 6.1 MB | 3.3 MB | 2 s |
-| wiktionary_cs | 164,473 | 4.2 MB | 1.4 MB | 1 s |
-| wikiquote_cs | 16,833 | 0.73 MB | read whole | <1 s |
-| wikiversity_cs | 6,611 | 0.58 MB | read whole | <1 s |
-| wikivoyage_en_europe | 18,322 | 0.57 MB | read whole | <1 s |
-| wikibooks_cs | 3,403 | 0.34 MB | read whole | <1 s |
-| maps_en_czech-republic / slovakia | 8,632 / 4,091 | 0.26 / 0.12 MB | read whole | <1 s |
-| offlinka_cs_prirucky / mul_hry | 6 / 11 | 1 KB | read whole | <1 s |
+| cs maxi | 0.15 ms | 0.33 ms | 1.1 ms | 4.5 ms |
+| en top1m | 0.11 ms | 0.33 ms | 0.43 ms | 7.5 ms |
+| Library, all 14 books of `Knihovna/` (`bench-lib`) | 0.36 ms | 1.2 ms | 1.4 ms | 2.4 ms |
 
-All indexes of the edition: ~380 MB on the drive (219 MB of it English).
+First run with a cold page cache: cs maxi max 278 ms on this VM disk (31 ms worst in the asserted test); the budget is 100 ms. Loading the in-memory part of an index: cs maxi 19–26 ms, en top1m 170–450 ms, all 14 books 0.2 s (warm) — do it with `preload_index()` when the search screen opens. Without an index (fallback listing) p99 is ~7 ms, max ~100 ms.
+
+**Opening a book** (`offlinka-cli info --brief`; reads counted with strace, incl. 2 by the loader): before round 2 `open` read 89–109 times (two binary searches per metadata lookup, main page, listing); now `open` = 2 reads (header + MIME list, ~0.1 ms) and the first `info()` = 16–28 reads (one tail window for `M`/`W`/`X`, one partial zstd decode per metadata cluster), the same for a 27-entry guide and the 6.2M-entry English Wikipedia. Warm: first `info()` 3–40 ms.
+
+**Building the index** (`offlinka-cli index` = `build_index` on a phone; this box, release, "cold" = page cache empty):
+
+| book | records | .offidx | RAM when loaded | build cold / warm | peak RSS | read from the ZIM |
+|---|---|---|---|---|---|---|
+| wikipedia_cs_all_maxi | 975,172 | 40.1 MB | 16.0 MB | 28–82 s / 14 s | 86–90 MB | 531 MB in 43k reads |
+| wikipedia_cs_all_mini | 963,395 | 39.6 MB | 15.8 MB | 13–26 s | 83 MB | 189 MB in 15k reads |
+| wikipedia_sk_all_maxi | 439,233 | 19.7 MB | 8.0 MB | 20–44 s | 52 MB | |
+| wikipedia_en_top1m_nopic | 5,904,211 | 218.6 MB | 76.2 MB | 366–668 s cold | 461 MB | ~2.5 GB (50k clusters) |
+| wikipedia_en_medicine_nopic | 371,233 | 13.8 MB | 5.0 MB | 37–82 s cold | 38 MB | |
+| wikisource_cs | 65,396 | 6.1 MB | 3.3 MB | 5 s | 19 MB | |
+| wiktionary_cs | 164,473 | 4.2 MB | 1.4 MB | 12 s cold | 19 MB | |
+| wikiquote, wikiversity, wikivoyage, wikibooks, maps, guides, games | ≤ 18,322 | ≤ 0.73 MB each | read whole | < 4 s | < 9 MB | |
+
+All indexes of the edition: ~380 MB (219 MB of it English). Cold time is dominated by reading one zstd block per article cluster for the sizes (cs maxi: 69 of 82 s). On a phone over USB 3 expect roughly 0.5–2 min for cs maxi/mini, under a minute for sk and the small books. **Recommendation:** build every book except English top1m automatically after the drive is first connected (background, progress in the UI); build **en top1m only on demand** (first search in English Wikipedia, with a warning): several minutes, ~2.5 GB read and ~460 MB peak RAM are too much to do unasked on a 3–4 GB phone. Without its index English still has the plain title-prefix fallback.
 
 **Android library size** (`scripts/build-android-core.sh`, stripped, LTO): opt-level 3 → arm64-v8a 873 KB, armeabi-v7a 672 KB, x86_64 995 KB; opt-level "s" (`PROFILE=release-s`) → 862 / 648 / 962 KB. Only 1–4 % smaller, so the release profile stays at opt-level 3.
 
