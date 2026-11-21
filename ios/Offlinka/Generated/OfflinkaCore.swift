@@ -627,7 +627,7 @@ public protocol BookProtocol: AnyObject, Sendable {
     func get(path: String) throws  -> Resource
     
     /**
-     * Part of an entry, for media and big files. Clamped to the entry end.
+     * Part of an entry, for media and big files. Clamped to the entry end (and to 256 MB).
      */
     func getRange(path: String, offset: UInt64, len: UInt32) throws  -> Data
     
@@ -783,7 +783,7 @@ open func get(path: String)throws  -> Resource  {
 }
     
     /**
-     * Part of an entry, for media and big files. Clamped to the entry end.
+     * Part of an entry, for media and big files. Clamped to the entry end (and to 256 MB).
      */
 open func getRange(path: String, offset: UInt64, len: UInt32)throws  -> Data  {
     return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
@@ -1677,7 +1677,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_offlinka_core_checksum_method_book_get() != 15161) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_offlinka_core_checksum_method_book_get_range() != 55409) {
+    if (uniffi_offlinka_core_checksum_method_book_get_range() != 1071) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_offlinka_core_checksum_method_book_illustration() != 389) {

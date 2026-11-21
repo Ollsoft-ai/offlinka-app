@@ -27,5 +27,5 @@ Written on Linux. **Checked here** (Swift 6.4.3 Linux toolchain): every file par
 15. **Find in page** uses the system find bar (`isFindInteractionEnabled`, `presentFindNavigator(showingReplace:)`), not design's custom find bar (the README allows native find).
 16. **Performance.** Main page under 2 s and suggestions under 100 ms per keystroke depend on `pread` over the external exFAT file provider; measured only on Linux.
 17. **UI tests.** `SmokeUITests` relies on accessibility identifiers and Czech labels on the demo drive; web content is queried through `app.webViews`.
-18. **XcodeGen details.** `excludes` with folder names, `optional: true` sources, `type: folder` for test fixtures, `${OFFLINKA_TEAM_ID}` in `DEVELOPMENT_TEAM`.
+18. **XcodeGen.** `project.yml` was run through XcodeGen 2.42.0 built on Linux: the project generates, sources/resources/frameworks phases and Info.plist are as intended. Not checked: that Xcode builds it, the asset catalogs and string catalog compile, `${OFFLINKA_TEAM_ID}` signing.
 19. **fastlane.** Lanes were not run (no Ruby here). `increment_build_number` needs `VERSIONING_SYSTEM = apple-generic` (set). Store texts are a draft until `store/` has the shared listing.

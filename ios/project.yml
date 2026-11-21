@@ -117,11 +117,10 @@ targets:
         excludes:
           - "Fixtures"
           - "Fixtures/**"
-      # Optional real ZIMs for the core integration test (git-ignored; see README).
+      # Real ZIMs for the core integration test (git-ignored; see Fixtures/README.md).
       - path: OfflinkaTests/Fixtures
         type: folder
         buildPhase: resources
-        optional: true
     dependencies:
       - target: Offlinka
     settings:

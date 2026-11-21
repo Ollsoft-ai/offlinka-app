@@ -6,8 +6,9 @@ build/
 *.xcresult
 # Core build outputs (scripts/build-ios-core.sh, scripts/gen-bindings.sh on macOS)
 Frameworks/
-# Real ZIMs for the optional core integration test
-OfflinkaTests/Fixtures/
+# Real ZIMs for the optional core integration test (the folder itself stays, see its README)
+OfflinkaTests/Fixtures/*.zim
+OfflinkaTests/Fixtures/*.offidx
 # fastlane
 fastlane/report.xml
 fastlane/Preview.html

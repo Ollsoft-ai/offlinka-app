@@ -37,4 +37,5 @@ SwiftUI app (iOS 17+, iPhone 15+ and USB-C iPads) that reads the Offlinka flash 
 
 - Every file parses; the whole app + generated bindings + Brand.swift type-check in Swift 5 and 6 modes against hand-written stand-ins for SwiftUI/UIKit/WebKit (consistency only, not Apple's real signatures).
 - Unit tests of scanner, URL scheme, responder, search model, store, catalog, and `CoreContentSourceTests` against the core built from `main` (Linux `libofflinka_core.so` + the committed bindings) on the real guides and games ZIMs.
+- `project.yml` generates with XcodeGen 2.42.0 (built on Linux); build phases and Info.plist checked.
 - Not compiled with the real SDKs, not run on a simulator or device: see `UNVERIFIED.md`.
