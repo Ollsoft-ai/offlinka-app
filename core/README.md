@@ -62,38 +62,41 @@ Drive edition 2026-11.3, this box (x86_64, shared, load ~8), release build, warm
 
 **Why libzstd:** inflating one ~2 MB Wikipedia cluster takes 3.3 ms (cs mini) / 3.7 ms (cs maxi) with libzstd vs 12.7 / 52.7 ms with ruzstd (`offlinka-cli inflate`). Opening an article = one cluster.
 
-**Suggest per keystroke** (`offlinka-cli bench --queries bench/queries-cs.txt`, 353 keystrokes, limit 20):
+**Suggest per keystroke** (`offlinka-cli bench --queries bench/queries-cs.txt`, 353 keystrokes, limit 20, index v4, warm run):
 
 | book | index | p50 | p95 | p99 | max |
 |---|---|---|---|---|---|
-| cs maxi | yes | 0.15 ms | 0.47 ms | 0.88 ms | 15.8 ms |
-| cs mini | yes | 0.10 ms | 0.19 ms | 0.21 ms | 3.9 ms |
-| sk maxi | yes | 0.09 ms | 0.47 ms | 1.3 ms | 2.5 ms |
-| en top1m | yes | 0.08 ms | 1.5 ms | 16.6 ms | 81 ms (cold dirent reads) |
+| cs maxi | yes | 0.11 ms | 0.14 ms | 0.18 ms | 2.9 ms |
+| cs mini | yes | 0.11 ms | 0.19 ms | 0.24 ms | 0.32 ms |
+| sk maxi | yes | 0.10 ms | 0.15 ms | 0.21 ms | 5.1 ms |
+| en top1m | yes | 0.10 ms | 0.18 ms | 0.21 ms | 0.26 ms |
+| Library, all 14 books of `Knihovna/` (`bench-lib`) | yes | 0.25 ms | 0.60 ms | 2.2 ms | 14 ms |
 | cs mini | no (fallback listing) | 0.24 ms | 3.4 ms | 7.1 ms | 100 ms |
 
-**Open + main page:** cs maxi 69 ms + 12 ms (incl. loading the 16 MB of index fst), en top1m 620 ms (76 MB of fst: attach big indexes off the UI thread or lazily).
+Cold page cache on this VM disk (after other builds evicted it) the cs maxi worst keystroke was 54 ms (`cs_maxi_open_main_and_search`, budget asserted < 100 ms). A suggestion costs one index record read plus one ZIM dirent read per title shown (two for a redirect).
 
-**Index per book** (`offlinka-cli index`; "RAM" = fst maps kept in memory, the rest is read with `pread`):
+**Open + main page:** cs maxi 0.1–0.5 s (incl. loading 16 MB of index fst), library of 14 books 0.3–0.5 s, en top1m alone up to 0.9 s cold (76 MB of fst: attach big indexes off the UI thread or lazily).
+
+**Index per book** (`offlinka-cli index`, v4; "RAM" = fst maps kept in memory, the rest is read with `pread`):
 
 | book | records | .offidx | RAM | build |
 |---|---|---|---|---|
-| wikipedia_cs_all_maxi | 975,172 | 34.7 MB | 16.0 MB | 19 s |
-| wikipedia_cs_all_mini | 963,395 | 34.2 MB | 15.8 MB | 16 s |
-| wikipedia_sk_all_maxi | 439,233 | 17.6 MB | 8.0 MB | 11 s |
-| wikipedia_sk_all_mini | 438,360 | 17.6 MB | 8.0 MB | 6 s |
-| wikipedia_en_top1m_nopic | 5,904,211 | 178.4 MB | 76.2 MB | 147 s (520 MB RSS) |
-| wikipedia_en_medicine_nopic | 371,233 | 11.3 MB | 5.0 MB | 6 s |
-| wikisource_cs | 65,396 | 5.8 MB | 3.3 MB | 2 s |
-| wiktionary_cs | 164,473 | 3.5 MB | read whole (≤ 4 MB) | 1 s |
-| wikiquote_cs | 16,833 | 0.66 MB | read whole | 1 s |
-| wikiversity_cs | 6,611 | 0.55 MB | read whole | <1 s |
-| wikivoyage_en_europe | 18,322 | 0.47 MB | read whole | <1 s |
-| wikibooks_cs | 3,403 | 0.32 MB | read whole | <1 s |
-| maps_en_czech-republic / slovakia | 8,632 / 4,091 | 0.22 / 0.10 MB | read whole | <1 s |
+| wikipedia_cs_all_maxi | 975,172 | 40.1 MB | 16.0 MB | 23 s |
+| wikipedia_cs_all_mini | 963,395 | 39.6 MB | 15.8 MB | 16 s |
+| wikipedia_sk_all_maxi | 439,233 | 19.7 MB | 8.0 MB | 11 s |
+| wikipedia_sk_all_mini | 438,360 | 19.6 MB | 8.0 MB | 6 s |
+| wikipedia_en_top1m_nopic | 5,904,211 | 218.6 MB | 76.2 MB | 104 s (570 MB RSS) |
+| wikipedia_en_medicine_nopic | 371,233 | 13.8 MB | 5.0 MB | 4 s |
+| wikisource_cs | 65,396 | 6.1 MB | 3.3 MB | 2 s |
+| wiktionary_cs | 164,473 | 4.2 MB | 1.4 MB | 1 s |
+| wikiquote_cs | 16,833 | 0.73 MB | read whole | <1 s |
+| wikiversity_cs | 6,611 | 0.58 MB | read whole | <1 s |
+| wikivoyage_en_europe | 18,322 | 0.57 MB | read whole | <1 s |
+| wikibooks_cs | 3,403 | 0.34 MB | read whole | <1 s |
+| maps_en_czech-republic / slovakia | 8,632 / 4,091 | 0.26 / 0.12 MB | read whole | <1 s |
 | offlinka_cs_prirucky / mul_hry | 6 / 11 | 1 KB | read whole | <1 s |
 
-All indexes of the edition: ~305 MB on the drive (178 MB of it English).
+All indexes of the edition: ~380 MB on the drive (219 MB of it English).
 
 **Android library size** (`scripts/build-android-core.sh`, stripped, LTO): opt-level 3 → arm64-v8a 873 KB, armeabi-v7a 672 KB, x86_64 995 KB; opt-level "s" (`PROFILE=release-s`) → 862 / 648 / 962 KB. Only 1–4 % smaller, so the release profile stays at opt-level 3.
 
