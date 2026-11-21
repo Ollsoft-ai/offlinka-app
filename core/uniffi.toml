@@ -6,3 +6,7 @@ cdylib_name = "offlinka_core"
 module_name = "OfflinkaCore"
 ffi_module_name = "offlinka_coreFFI"
 ffi_module_filename = "offlinka_coreFFI"
+
+# `Library` would clash with `com.sun.jna.Library`, which the generated Kotlin imports.
+[bindings.kotlin.rename]
+Library = "BookLibrary"

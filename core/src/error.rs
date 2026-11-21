@@ -18,6 +18,9 @@ pub enum CoreError {
     /// A valid but unsupported feature (zlib/bzip2 clusters, old index version).
     #[error("unsupported: {0}")]
     Unsupported(String),
+    /// The caller cancelled a long operation (`build_index`).
+    #[error("cancelled: {0}")]
+    Cancelled(String),
 }
 
 impl From<std::io::Error> for CoreError {

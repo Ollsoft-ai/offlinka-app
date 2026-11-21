@@ -6,8 +6,10 @@
 //! cluster is uncompressed or xz/zstd compressed and starts with an offset table of
 //! u32 (normal) or u64 (extended) offsets.
 
+use std::collections::HashMap;
 use std::io::Read;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, RwLock};
 
 use crate::cache::ByteLru;
 use crate::error::{invalid, CoreError, Result};
@@ -25,9 +27,42 @@ pub const MAX_REDIRECTS: usize = 10;
 const MAX_CLUSTER_BYTES: u64 = 256 * 1024 * 1024;
 /// `get()` refuses entries larger than this; media goes through `get_range`.
 pub const MAX_GET_BYTES: u64 = 256 * 1024 * 1024;
-/// Default budget of the decompressed-cluster cache.
+/// Default budget of the decompressed-cluster cache, shared by all open books.
 pub const DEFAULT_CLUSTER_CACHE_BYTES: usize = 48 * 1024 * 1024;
-const DIRENT_CACHE_ENTRIES: usize = 16 * 1024;
+/// Directory entries cached, shared by all open books (~150 B each).
+const DIRENT_CACHE_ENTRIES: usize = 32 * 1024;
+
+/// Process-wide caches: one memory budget for every open book.
+struct SharedCaches {
+    clusters: Mutex<ByteLru<(u64, u32), Arc<Cluster>>>,
+    dirents: Mutex<lru::LruCache<(u64, u32), Arc<Dirent>>>,
+}
+
+fn shared() -> &'static SharedCaches {
+    static C: OnceLock<SharedCaches> = OnceLock::new();
+    C.get_or_init(|| SharedCaches {
+        clusters: Mutex::new(ByteLru::new(DEFAULT_CLUSTER_CACHE_BYTES)),
+        dirents: Mutex::new(lru::LruCache::new(std::num::NonZeroUsize::new(DIRENT_CACHE_ENTRIES).unwrap())),
+    })
+}
+
+/// Drop every cached cluster and directory entry of every book.
+pub fn trim_caches() {
+    lock(&shared().clusters).clear();
+    lock(&shared().dirents).clear();
+}
+
+/// Set the shared decompressed-cluster budget (bytes); evicts down to it right away.
+pub fn set_cluster_cache_budget(bytes: usize) {
+    lock(&shared().clusters).set_budget(bytes);
+}
+
+/// Bytes currently held by the shared cluster cache.
+pub fn cluster_cache_bytes() -> usize {
+    lock(&shared().clusters).bytes()
+}
+
+static NEXT_ARCHIVE_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone)]
 pub struct Header {
@@ -281,15 +316,22 @@ pub enum TitleList {
 }
 
 pub struct Archive {
-    src: Box<dyn ReadAt>,
+    /// `None` once closed: every later read fails with `CoreError::Io`.
+    src: RwLock<Option<Box<dyn ReadAt>>>,
+    /// Key of this archive in the shared caches.
+    id: u64,
     pub header: Header,
     pub mimes: Vec<String>,
     size: u64,
     clusters_end: u64,
-    cluster_cache: Mutex<ByteLru<u32, Arc<Cluster>>>,
-    dirent_cache: Mutex<lru::LruCache<u32, Arc<Dirent>>>,
     /// Striped locks so parallel requests for one cluster inflate it once.
     loading: [Mutex<()>; 16],
+}
+
+impl Drop for Archive {
+    fn drop(&mut self) {
+        self.purge_caches();
+    }
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -297,11 +339,8 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl Archive {
+    /// Open: reads the 80-byte header and the MIME list, nothing else (constant time).
     pub fn open(src: Box<dyn ReadAt>) -> Result<Archive> {
-        Self::open_with_cache(src, DEFAULT_CLUSTER_CACHE_BYTES)
-    }
-
-    pub fn open_with_cache(src: Box<dyn ReadAt>, cache_bytes: usize) -> Result<Archive> {
         let size = src.size();
         if size < HEADER_LEN as u64 {
             return Err(invalid("file too small for a ZIM header"));
@@ -329,15 +368,37 @@ impl Archive {
         };
         let mimes = read_mime_list(src.as_ref(), header.mime_list_pos, size)?;
         Ok(Archive {
-            src,
+            src: RwLock::new(Some(src)),
+            id: NEXT_ARCHIVE_ID.fetch_add(1, Ordering::Relaxed),
             header,
             mimes,
             size,
             clusters_end,
-            cluster_cache: Mutex::new(ByteLru::new(cache_bytes)),
-            dirent_cache: Mutex::new(lru::LruCache::new(std::num::NonZeroUsize::new(DIRENT_CACHE_ENTRIES).unwrap())),
             loading: Default::default(),
         })
+    }
+
+    /// Close the file now (fd released). The archive stays usable as an object; every
+    /// read from now on fails with `CoreError::Io`. Waits for reads in flight.
+    pub fn close(&self) {
+        let src = self.src.write().unwrap_or_else(|e| e.into_inner()).take();
+        drop(src);
+        self.purge_caches();
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.src.read().unwrap_or_else(|e| e.into_inner()).is_none()
+    }
+
+    /// Remove this archive's entries from the shared caches.
+    pub fn purge_caches(&self) {
+        let id = self.id;
+        lock(&shared().clusters).retain(|k| k.0 != id);
+        let mut d = lock(&shared().dirents);
+        let keys: Vec<(u64, u32)> = d.iter().map(|(k, _)| *k).filter(|k| k.0 == id).collect();
+        for k in keys {
+            d.pop(&k);
+        }
     }
 
     pub fn size(&self) -> u64 {
@@ -369,7 +430,11 @@ impl Archive {
         if offset.checked_add(buf.len() as u64).is_none_or(|e| e > self.size) {
             return Err(invalid("read beyond the end of the file (truncated?)"));
         }
-        self.src.read_exact_at(buf, offset).map_err(CoreError::from)
+        let g = self.src.read().unwrap_or_else(|e| e.into_inner());
+        match g.as_ref() {
+            Some(src) => src.read_exact_at(buf, offset).map_err(CoreError::from),
+            None => Err(CoreError::Io("the book is closed".into())),
+        }
     }
 
     fn read_u64(&self, offset: u64) -> Result<u64> {
@@ -407,12 +472,52 @@ impl Archive {
 
     /// Directory entry by its index in the path pointer list (cached).
     pub fn dirent(&self, idx: u32) -> Result<Arc<Dirent>> {
-        if let Some(d) = lock(&self.dirent_cache).get(&idx) {
+        if let Some(d) = lock(&shared().dirents).get(&(self.id, idx)) {
             return Ok(d.clone());
         }
         let d = Arc::new(self.dirent_at(self.dirent_offset(idx)?)?);
-        lock(&self.dirent_cache).put(idx, d.clone());
+        lock(&shared().dirents).put((self.id, idx), d.clone());
         Ok(d)
+    }
+
+    /// The last up to `max` entries in path order, read with three I/Os (pointers,
+    /// one window of directory entries). In both namespace schemes `M` (metadata), `W`
+    /// and `X` sort last, so this finds them without a binary search. Cached.
+    pub fn tail_entries(&self, max: u32) -> Result<Vec<(u32, Arc<Dirent>)>> {
+        let n = self.header.entry_count;
+        let first = n.saturating_sub(max);
+        let count = n - first;
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+        let mut pb = vec![0u8; count as usize * 8];
+        self.read_at(&mut pb, self.header.path_ptr_pos + first as u64 * 8)?;
+        let ptrs: Vec<u64> = pb.chunks_exact(8).map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect();
+        let lo = *ptrs.iter().min().unwrap();
+        let hi = *ptrs.iter().max().unwrap();
+        let window = if hi >= lo && hi - lo < 256 * 1024 && lo < self.size {
+            let len = (hi - lo + 4096).min(self.size - lo) as usize;
+            let mut w = vec![0u8; len];
+            self.read_at(&mut w, lo)?;
+            Some(w)
+        } else {
+            None
+        };
+        let mut out = Vec::with_capacity(count as usize);
+        for (i, &p) in ptrs.iter().enumerate() {
+            let idx = first + i as u32;
+            let parsed = match &window {
+                Some(w) if p >= lo && ((p - lo) as usize) < w.len() => Dirent::parse(&w[(p - lo) as usize..])?,
+                _ => None,
+            };
+            let d = Arc::new(match parsed {
+                Some(d) => d,
+                None => self.dirent_at(p)?,
+            });
+            lock(&shared().dirents).put((self.id, idx), d.clone());
+            out.push((idx, d));
+        }
+        Ok(out)
     }
 
     /// First index whose (namespace, path) is >= the given key.
@@ -470,8 +575,13 @@ impl Archive {
             return Err(invalid(format!("cluster {cluster} out of range")));
         }
         let pos = self.header.cluster_ptr_pos + cluster as u64 * 8;
-        let start = self.read_u64(pos)?;
-        let end = if cluster + 1 < self.header.cluster_count { self.read_u64(pos + 8)? } else { self.clusters_end };
+        let (start, end) = if cluster + 1 < self.header.cluster_count {
+            let mut b = [0u8; 16];
+            self.read_at(&mut b, pos)?;
+            (u64::from_le_bytes(b[..8].try_into().unwrap()), u64::from_le_bytes(b[8..].try_into().unwrap()))
+        } else {
+            (self.read_u64(pos)?, self.clusters_end)
+        };
         if start >= end || end > self.size {
             return Err(invalid(format!("cluster {cluster} has a bad position")));
         }
@@ -482,11 +592,11 @@ impl Archive {
 
     /// Decompressed cluster from the cache, or read + decompress it now.
     pub fn cluster(&self, cluster: u32, loc: &ClusterLoc) -> Result<Arc<Cluster>> {
-        if let Some(c) = lock(&self.cluster_cache).get(&cluster) {
+        if let Some(c) = lock(&shared().clusters).get(&(self.id, cluster)) {
             return Ok(c);
         }
         let _loading = lock(&self.loading[cluster as usize % 16]);
-        if let Some(c) = lock(&self.cluster_cache).get(&cluster) {
+        if let Some(c) = lock(&shared().clusters).get(&(self.id, cluster)) {
             return Ok(c); // another thread just inflated it
         }
         let raw_len = loc.end - loc.start - 1;
@@ -498,8 +608,127 @@ impl Archive {
         let data = decompress(loc.compression, raw)?;
         let c = Arc::new(Cluster::parse(data, loc.extended)?);
         let bytes = c.byte_size();
-        lock(&self.cluster_cache).put(cluster, c.clone(), bytes);
+        lock(&shared().clusters).put((self.id, cluster), c.clone(), bytes);
         Ok(c)
+    }
+
+    /// A sequential reader over a cluster's (decoded) data, for uncompressed and zstd
+    /// clusters, plus its offset table. Reads only as far as the caller reads.
+    fn cluster_stream(&self, cluster: u32, loc: &ClusterLoc) -> Result<(Box<dyn Read + '_>, Vec<u64>)> {
+        let osz: usize = if loc.extended { 8 } else { 4 };
+        let range = RangeReader { a: self, pos: loc.start + 1, end: loc.end };
+        let mut r: Box<dyn Read + '_> = match loc.compression {
+            Compression::None => Box::new(range),
+            Compression::Zstd => zstd_reader(std::io::BufReader::with_capacity(32 * 1024, range))?,
+            _ => return Err(CoreError::Unsupported("streamed read of this cluster type".into())),
+        };
+        let parse = |table: &[u8]| -> Vec<u64> {
+            table
+                .chunks_exact(osz)
+                .map(|c| {
+                    if osz == 8 {
+                        u64::from_le_bytes(c.try_into().unwrap())
+                    } else {
+                        u32::from_le_bytes(c.try_into().unwrap()) as u64
+                    }
+                })
+                .collect()
+        };
+        let mut table = vec![0u8; osz];
+        r.read_exact(&mut table).map_err(|e| invalid(format!("cluster {cluster}: {e}")))?;
+        let first = parse(&table)[0];
+        let bound = if loc.compression == Compression::None { loc.end - loc.start - 1 } else { MAX_CLUSTER_BYTES };
+        if first == 0 || first % osz as u64 != 0 || first > bound {
+            return Err(invalid(format!("bad offset table in cluster {cluster}")));
+        }
+        table.resize(first as usize, 0);
+        r.read_exact(&mut table[osz..]).map_err(|e| invalid(format!("cluster {cluster}: {e}")))?;
+        let offs = parse(&table);
+        if offs.windows(2).any(|w| w[1] < w[0]) || *offs.last().unwrap() > bound {
+            return Err(invalid(format!("bad offset table in cluster {cluster}")));
+        }
+        Ok((r, offs))
+    }
+
+    /// Sizes of every blob in a cluster, reading as little as possible: the offset table
+    /// of an uncompressed cluster, only the first decoded bytes of a zstd cluster (one
+    /// zstd block, ~30-60 KB read), the whole cluster for xz. Used for the popularity
+    /// signal of the search index.
+    pub fn blob_sizes(&self, cluster: u32) -> Result<Vec<u64>> {
+        let loc = self.cluster_loc(cluster)?;
+        match loc.compression {
+            Compression::None | Compression::Zstd => {
+                let (_, offs) = self.cluster_stream(cluster, &loc)?;
+                Ok(offs.windows(2).map(|w| w[1] - w[0]).collect())
+            }
+            Compression::Xz => {
+                let c = self.cluster(cluster, &loc)?;
+                Ok((0..c.blob_count()).map(|i| c.blob(i).map(|b| b.len() as u64).unwrap_or(0)).collect())
+            }
+            Compression::Zlib | Compression::Bzip2 => Err(CoreError::Unsupported("zlib/bzip2 cluster".into())),
+            Compression::Unknown(c) => Err(invalid(format!("unknown cluster compression {c}"))),
+        }
+    }
+
+    /// Contents of several small entries of one cluster (metadata) with one partial
+    /// decode: blobs ending within `limit` decoded bytes of a zstd cluster are read without
+    /// inflating or caching the whole cluster; others are read normally.
+    pub fn small_blobs(&self, cluster: u32, blobs: &[u32], limit: u64) -> Result<HashMap<u32, Vec<u8>>> {
+        let mut out = HashMap::new();
+        let loc = self.cluster_loc(cluster)?;
+        let cached = lock(&shared().clusters).get(&(self.id, cluster));
+        if loc.compression == Compression::Zstd && cached.is_none() {
+            let (mut r, offs) = self.cluster_stream(cluster, &loc)?;
+            let mut want: Vec<u32> = blobs.iter().copied().filter(|&b| (b as usize) + 1 < offs.len()).collect();
+            want.sort_unstable();
+            want.dedup();
+            let mut pos = offs[0];
+            for b in want {
+                let (start, end) = (offs[b as usize], offs[b as usize + 1]);
+                if end > limit {
+                    break;
+                }
+                std::io::copy(&mut (&mut r).take(start - pos), &mut std::io::sink())
+                    .map_err(|e| invalid(format!("cluster {cluster}: {e}")))?;
+                let mut v = vec![0u8; (end - start) as usize];
+                r.read_exact(&mut v).map_err(|e| invalid(format!("cluster {cluster}: {e}")))?;
+                pos = end;
+                out.insert(b, v);
+            }
+        }
+        for &b in blobs {
+            if let std::collections::hash_map::Entry::Vacant(e) = out.entry(b) {
+                let l = self.blob_loc(cluster, b)?;
+                e.insert(self.read_blob(&l, 0, u64::MAX)?);
+            }
+        }
+        Ok(out)
+    }
+
+    /// Content of a small entry near the start of its cluster (metadata) without
+    /// inflating or caching the whole cluster: decodes only up to the blob's end when
+    /// that is within `limit` decoded bytes, else reads the cluster normally.
+    pub fn content_small(&self, d: &Dirent, limit: u64) -> Result<Vec<u8>> {
+        let Kind::Content { cluster, blob } = d.kind else {
+            return Err(CoreError::NotFound(format!("{} has no content", d.path)));
+        };
+        let loc = self.cluster_loc(cluster)?;
+        let cached = lock(&shared().clusters).get(&(self.id, cluster));
+        if loc.compression == Compression::Zstd && cached.is_none() {
+            let (mut r, offs) = self.cluster_stream(cluster, &loc)?;
+            let b = blob as usize;
+            if b + 1 >= offs.len() {
+                return Err(invalid(format!("blob {blob} out of range in cluster {cluster}")));
+            }
+            if offs[b + 1] <= limit {
+                std::io::copy(&mut (&mut r).take(offs[b] - offs[0]), &mut std::io::sink())
+                    .map_err(|e| invalid(format!("cluster {cluster}: {e}")))?;
+                let mut out = vec![0u8; (offs[b + 1] - offs[b]) as usize];
+                r.read_exact(&mut out).map_err(|e| invalid(format!("cluster {cluster}: {e}")))?;
+                return Ok(out);
+            }
+        }
+        self.content(d)
     }
 
     /// Locate a blob without reading its bytes (uncompressed clusters stay on disk).
@@ -523,8 +752,19 @@ impl Archive {
                 if blob as u64 >= count {
                     return Err(invalid(format!("blob {blob} out of range in cluster {cluster}")));
                 }
-                let a = read_off(blob as u64)?;
-                let b = read_off(blob as u64 + 1)?;
+                let mut pair = [0u8; 16];
+                self.read_at(&mut pair[..2 * osz as usize], data_start + blob as u64 * osz)?;
+                let (a, b) = if osz == 8 {
+                    (
+                        u64::from_le_bytes(pair[..8].try_into().unwrap()),
+                        u64::from_le_bytes(pair[8..].try_into().unwrap()),
+                    )
+                } else {
+                    (
+                        u32::from_le_bytes(pair[..4].try_into().unwrap()) as u64,
+                        u32::from_le_bytes(pair[4..8].try_into().unwrap()) as u64,
+                    )
+                };
                 if a > b || b > data_len {
                     return Err(invalid(format!("bad blob bounds in cluster {cluster}")));
                 }
@@ -574,7 +814,15 @@ impl Archive {
 
     /// A title-ordered listing stored as a blob (`X/listing/titleOrdered/v0|v1`).
     pub fn listing_blob(&self, name: &str) -> Result<Option<TitleList>> {
-        let Some(idx) = self.find(b'X', name)? else { return Ok(None) };
+        match self.find(b'X', name)? {
+            Some(idx) => self.listing_at(idx),
+            None => Ok(None),
+        }
+    }
+
+    /// The title listing stored in entry `idx`.
+    pub fn listing_at(&self, idx: u32) -> Result<Option<TitleList>> {
+        let name = format!("#{idx}");
         let (_, d) = self.resolve(idx)?;
         let Kind::Content { cluster, blob } = d.kind else { return Ok(None) };
         let loc = self.blob_loc(cluster, blob)?;
@@ -674,12 +922,7 @@ impl Archive {
     }
 
     pub fn clear_caches(&self) {
-        lock(&self.cluster_cache).clear();
-        lock(&self.dirent_cache).clear();
-    }
-
-    pub fn cluster_cache_bytes(&self) -> usize {
-        lock(&self.cluster_cache).bytes()
+        self.purge_caches();
     }
 }
 
@@ -710,6 +953,35 @@ fn read_mime_list(src: &dyn ReadAt, pos: u64, size: u64) -> Result<Vec<String>> 
         }
         chunk *= 4;
     }
+}
+
+/// Reads a byte range of the archive sequentially with `pread`.
+struct RangeReader<'a> {
+    a: &'a Archive,
+    pos: u64,
+    end: u64,
+}
+
+impl Read for RangeReader<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = (buf.len() as u64).min(self.end.saturating_sub(self.pos)) as usize;
+        if n == 0 {
+            return Ok(0);
+        }
+        self.a.read_at(&mut buf[..n], self.pos).map_err(|e| std::io::Error::other(e.to_string()))?;
+        self.pos += n as u64;
+        Ok(n)
+    }
+}
+
+#[cfg(feature = "zstd-c")]
+fn zstd_reader<'a, R: std::io::BufRead + 'a>(r: R) -> Result<Box<dyn Read + 'a>> {
+    Ok(Box::new(zstd::stream::read::Decoder::with_buffer(r).map_err(|e| invalid(format!("zstd cluster: {e}")))?))
+}
+
+#[cfg(all(feature = "zstd-pure", not(feature = "zstd-c")))]
+fn zstd_reader<'a, R: std::io::BufRead + 'a>(r: R) -> Result<Box<dyn Read + 'a>> {
+    Ok(Box::new(ruzstd::decoding::StreamingDecoder::new(r).map_err(|e| invalid(format!("zstd cluster: {e}")))?))
 }
 
 fn decompress(c: Compression, raw: Vec<u8>) -> Result<Vec<u8>> {

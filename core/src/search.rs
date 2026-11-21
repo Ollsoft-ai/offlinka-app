@@ -4,13 +4,14 @@ use std::collections::HashSet;
 use std::hash::{BuildHasher, Hasher};
 
 use crate::error::Result;
-use crate::index::{SearchIndex, CLASS_EXACT, CLASS_PREFIX};
+use crate::index::{SearchIndex, CLASS_EXACT, CLASS_PREFIX, FALLBACK_STATIC, LEN_COST, TIER_COST};
 use crate::normalize::normalize;
 use crate::zim::{Archive, Kind, TitleList};
 
 #[derive(Debug, Clone)]
 pub struct Hit {
-    pub class: u8,
+    /// Query score, lower is better (tier cost + static score).
+    pub score: f32,
     pub title: String,
     pub path: String,
     pub snippet: Option<String>,
@@ -22,7 +23,7 @@ pub struct Hit {
 pub enum Cand {
     /// Directory-entry offsets of the shown entry and the target.
     Rec {
-        class: u8,
+        score: f32,
         display: u64,
         target: u64,
     },
@@ -37,12 +38,12 @@ pub fn indexed(idx: &SearchIndex, query: &str, limit: usize) -> Result<Vec<Cand>
     }
     let mut seen = HashSet::new();
     let mut out = Vec::with_capacity(limit);
-    for (class, id) in idx.search(&q, limit)? {
-        let (display, target) = idx.record(id)?;
+    for h in idx.search(&q, limit)? {
+        let (display, target) = idx.record(h.id)?;
         if !seen.insert(target) {
             continue;
         }
-        out.push(Cand::Rec { class, display, target });
+        out.push(Cand::Rec { score: h.score, display, target });
         if out.len() >= limit {
             break;
         }
@@ -54,11 +55,11 @@ pub fn indexed(idx: &SearchIndex, query: &str, limit: usize) -> Result<Vec<Cand>
 pub fn resolve(a: &Archive, c: Cand) -> Result<Hit> {
     match c {
         Cand::Ready(h) => Ok(h),
-        Cand::Rec { class, display, target } => {
+        Cand::Rec { score, display, target } => {
             let d = a.dirent_at(display)?;
             let t = if display == target { d.clone() } else { a.dirent_at(target)? };
             let snippet = (display != target && t.title() != d.title()).then(|| t.title().to_string());
-            Ok(Hit { class, title: d.title().to_string(), path: a.api_path(&t), snippet })
+            Ok(Hit { score, title: d.title().to_string(), path: a.api_path(&t), snippet })
         }
     }
 }
@@ -133,7 +134,12 @@ pub fn fallback(a: &Archive, list: &TitleList, front_only: bool, query: &str, li
     Ok(cands
         .into_iter()
         .take(limit)
-        .map(|(class, _, _, title, path, snippet)| Hit { class, title, path, snippet })
+        .map(|(class, _, chars, title, path, snippet)| Hit {
+            score: TIER_COST[class as usize] + FALLBACK_STATIC + (LEN_COST * chars as f64) as f32,
+            title,
+            path,
+            snippet,
+        })
         .collect())
 }
 

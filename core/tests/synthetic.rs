@@ -30,7 +30,7 @@ fn indexed_book() -> Arc<Book> {
     let a =
         offlinka_core::zim::Archive::open(Box::new(offlinka_core::reader::FileSource::open(&zim).unwrap())).unwrap();
     let mut f = std::fs::File::create(&idx).unwrap();
-    offlinka_core::index::build(&a, &mut f, &mut |_| {}).unwrap();
+    offlinka_core::index::build(&a, &mut f, &mut |_: &str| {}).unwrap();
     b.attach_index_path(idx).unwrap();
     b
 }
@@ -212,7 +212,7 @@ fn index_must_match_book() {
     let a =
         offlinka_core::zim::Archive::open(Box::new(offlinka_core::reader::FileSource::open(&zim).unwrap())).unwrap();
     let idx = tmp_path("other.offidx");
-    offlinka_core::index::build(&a, &mut std::fs::File::create(&idx).unwrap(), &mut |_| {}).unwrap();
+    offlinka_core::index::build(&a, &mut std::fs::File::create(&idx).unwrap(), &mut |_: &str| {}).unwrap();
     let mut z = sample();
     z.uuid = *b"another-book-id!";
     let other = open(z.build());
@@ -370,7 +370,7 @@ fn fd_ownership() {
     let a =
         offlinka_core::zim::Archive::open(Box::new(offlinka_core::reader::FileSource::open(&zim).unwrap())).unwrap();
     let idx = tmp_path("fd.offidx");
-    offlinka_core::index::build(&a, &mut std::fs::File::create(&idx).unwrap(), &mut |_| {}).unwrap();
+    offlinka_core::index::build(&a, &mut std::fs::File::create(&idx).unwrap(), &mut |_: &str| {}).unwrap();
     let ifd = std::fs::File::open(&idx).unwrap().into_raw_fd();
     b.attach_index_fd(ifd).unwrap();
     assert!(!fd_on(ifd, &idx), "a small index is read whole and its fd closed right away");
@@ -385,7 +385,7 @@ fn index_read_through_pread_matches_memory() {
     let zim = write_sample("pread.zim");
     let a = offlinka_core::zim::Archive::open(Box::new(FileSource::open(&zim).unwrap())).unwrap();
     let idx = tmp_path("pread.offidx");
-    offlinka_core::index::build(&a, &mut std::fs::File::create(&idx).unwrap(), &mut |_| {}).unwrap();
+    offlinka_core::index::build(&a, &mut std::fs::File::create(&idx).unwrap(), &mut |_: &str| {}).unwrap();
     let mem = SearchIndex::from_vec(std::fs::read(&idx).unwrap()).unwrap();
     let file = SearchIndex::open_with_limit(FileSource::open(&idx).unwrap(), 0).unwrap();
     assert!(file.memory_bytes() < file.byte_len);
@@ -445,7 +445,7 @@ fn reattaching_an_index_replaces_it() {
     let a =
         offlinka_core::zim::Archive::open(Box::new(offlinka_core::reader::FileSource::open(&zim).unwrap())).unwrap();
     let idx = tmp_path("re.offidx");
-    offlinka_core::index::build(&a, &mut std::fs::File::create(&idx).unwrap(), &mut |_| {}).unwrap();
+    offlinka_core::index::build(&a, &mut std::fs::File::create(&idx).unwrap(), &mut |_: &str| {}).unwrap();
     b.attach_index_path(idx).unwrap();
     assert!(b.info().has_index);
     assert_eq!(b.suggest("brno".into(), 3)[0].title, "Brno");
@@ -472,7 +472,7 @@ fn heavy_prefixes_rank_like_a_full_scan() {
     let a =
         offlinka_core::zim::Archive::open(Box::new(offlinka_core::reader::FileSource::open(&zim).unwrap())).unwrap();
     let idx = tmp_path("heavy.offidx");
-    let st = offlinka_core::index::build(&a, &mut std::fs::File::create(&idx).unwrap(), &mut |_| {}).unwrap();
+    let st = offlinka_core::index::build(&a, &mut std::fs::File::create(&idx).unwrap(), &mut |_: &str| {}).unwrap();
     assert!(st.heavy_prefixes > 0, "{st:?}");
     b.attach_index_path(idx).unwrap();
     let titles = |q: &str, n: u32| b.suggest(q.into(), n).into_iter().map(|s| s.title).collect::<Vec<_>>();
@@ -488,4 +488,148 @@ fn heavy_prefixes_rank_like_a_full_scan() {
     assert_eq!(s[..10], (1290..1300).map(|i| format!("Test {i}")).collect::<Vec<_>>()[..]);
     assert_eq!(s[10..], (1290..1300).map(|i| format!("Okres Test {i} Sever")).collect::<Vec<_>>()[..]);
     assert_eq!(titles("sever", 1), ["Okres Test 0000 Sever"]);
+}
+
+struct Listener {
+    fractions: std::sync::Mutex<Vec<f64>>,
+    cancel_at: f64,
+}
+
+impl offlinka_core::IndexBuildListener for Listener {
+    fn on_progress(&self, fraction: f64) {
+        self.fractions.lock().unwrap().push(fraction);
+    }
+    fn is_cancelled(&self) -> bool {
+        self.fractions.lock().unwrap().last().is_some_and(|&f| f >= self.cancel_at)
+    }
+}
+
+#[test]
+fn on_device_build_matches_cli_bytes() {
+    let zim = write_sample("ondevice.zim");
+    let book = Book::open_path(zim.clone()).unwrap();
+    // What offlinka-cli index writes (same function the CLI calls).
+    let cli_out = tmp_path("cli.offidx");
+    let a =
+        offlinka_core::zim::Archive::open(Box::new(offlinka_core::reader::FileSource::open(&zim).unwrap())).unwrap();
+    offlinka_core::write_index_file(&a, &cli_out, &mut |_: &str| {}).unwrap();
+    // What the apps call.
+    let app_out = tmp_path("app.offidx");
+    let l = Box::new(Listener { fractions: Default::default(), cancel_at: 2.0 });
+    let fr = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    struct Fwd(std::sync::Arc<std::sync::Mutex<Vec<f64>>>, Box<Listener>);
+    impl offlinka_core::IndexBuildListener for Fwd {
+        fn on_progress(&self, f: f64) {
+            self.0.lock().unwrap().push(f);
+            self.1.on_progress(f);
+        }
+        fn is_cancelled(&self) -> bool {
+            self.1.is_cancelled()
+        }
+    }
+    offlinka_core::build_index(book.clone(), app_out.clone(), Box::new(Fwd(fr.clone(), l))).unwrap();
+    assert_eq!(std::fs::read(&cli_out).unwrap(), std::fs::read(&app_out).unwrap(), "byte-identical");
+    let fr = fr.lock().unwrap().clone();
+    assert!(fr.windows(2).all(|w| w[1] >= w[0]), "progress increases: {fr:?}");
+    assert_eq!(fr.first().copied(), Some(0.0));
+    assert_eq!(fr.last().copied(), Some(1.0));
+    assert!(!std::path::Path::new(&format!("{app_out}.part")).exists());
+    book.attach_index_path(app_out).unwrap();
+    assert_eq!(book.suggest("cesky krumlov".into(), 1)[0].title, "Český Krumlov");
+}
+
+#[test]
+fn on_device_build_can_be_cancelled() {
+    let zim = write_sample("cancel.zim");
+    let book = Book::open_path(zim).unwrap();
+    let out = tmp_path("cancel.offidx");
+    let r = offlinka_core::build_index(
+        book.clone(),
+        out.clone(),
+        Box::new(Listener { fractions: Default::default(), cancel_at: 0.0 }),
+    );
+    assert!(matches!(r, Err(CoreError::Cancelled(_))), "{r:?}");
+    assert!(!std::path::Path::new(&out).exists());
+    assert!(!std::path::Path::new(&format!("{out}.part")).exists(), "no partial file left");
+    // Unwritable target: an I/O error, nothing left.
+    let r = offlinka_core::build_index(
+        book,
+        "/nonexistent-dir/x.offidx".into(),
+        Box::new(Listener { fractions: Default::default(), cancel_at: 2.0 }),
+    );
+    assert!(matches!(r, Err(CoreError::Io(_))), "{r:?}");
+}
+
+#[test]
+fn closed_book_gives_io_errors_never_panics() {
+    let b = indexed_book();
+    let info = b.info();
+    let mut handles = Vec::new();
+    for t in 0..6 {
+        let b = b.clone();
+        handles.push(std::thread::spawn(move || {
+            for i in 0..300 {
+                let p = ["Brno", "Praha", "Prag", "video.webm"][(t + i) % 4];
+                match b.get(p.into()) {
+                    Ok(r) => assert!(!r.data.is_empty()),
+                    Err(CoreError::Io(_)) => {}
+                    Err(e) => panic!("unexpected error after close: {e:?}"),
+                }
+                let _ = b.get_range("video.webm".into(), 10, 100);
+                let _ = b.suggest("kr".into(), 5);
+                let _ = b.info();
+            }
+        }));
+    }
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    b.close_file();
+    for h in handles {
+        h.join().unwrap();
+    }
+    assert!(matches!(b.get("Brno".into()), Err(CoreError::Io(_))));
+    assert!(matches!(b.get_range("video.webm".into(), 0, 10), Err(CoreError::Io(_))));
+    assert!(matches!(b.content_length("Brno".into()), Err(CoreError::Io(_))));
+    assert!(b.suggest("praha".into(), 5).is_empty());
+    assert_eq!(b.info().title, info.title, "info keeps its cached value");
+    assert!(!b.info().has_index);
+    b.close_file(); // twice is fine
+}
+
+#[test]
+fn trim_memory_and_shared_budget() {
+    let b = indexed_book();
+    assert_eq!(b.get("Praha".into()).unwrap().data, b"<h1>Praha</h1>");
+    b.preload_index().unwrap();
+    offlinka_core::trim_memory();
+    assert_eq!(offlinka_core::zim::cluster_cache_bytes(), 0);
+    assert_eq!(b.suggest("cesky krumlov".into(), 1)[0].title, "Český Krumlov", "index reloads after trim");
+    assert_eq!(b.get("Praha".into()).unwrap().data, b"<h1>Praha</h1>");
+}
+
+#[test]
+fn opening_reads_only_the_header() {
+    // A source that counts reads: opening must not depend on the entry count.
+    struct Counting(MemSource, std::sync::Arc<std::sync::atomic::AtomicUsize>);
+    impl offlinka_core::reader::ReadAt for Counting {
+        fn read_exact_at(&self, buf: &mut [u8], offset: u64) -> std::io::Result<()> {
+            self.1.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            self.0.read_exact_at(buf, offset)
+        }
+        fn size(&self) -> u64 {
+            self.0.size()
+        }
+    }
+    let mut z = sample();
+    let c = z.cluster(Comp::Zstd, false);
+    for i in 0..5000 {
+        z.article(&format!("Clanek_{i}"), &format!("Článek {i}"), "<p>x</p>", c);
+    }
+    let reads = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let b = Book::open_source(Box::new(Counting(MemSource(z.build()), reads.clone())), "big.zim").unwrap();
+    assert!(reads.load(std::sync::atomic::Ordering::Relaxed) <= 2, "open = header + MIME list");
+    let info = b.info();
+    let n = reads.load(std::sync::atomic::Ordering::Relaxed);
+    assert_eq!(info.title, "Ukázková kniha");
+    assert_eq!(info.main_path.as_deref(), Some("Hlavní_strana"));
+    assert!(n <= 24, "info() = a handful of reads, not a binary search per field: {n}");
 }

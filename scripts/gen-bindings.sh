@@ -12,11 +12,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 [ -f "$HOME/opt/offlinka-env.sh" ] && source "$HOME/opt/offlinka-env.sh"
-LOCK=/tmp/claude-1000/offlinka-app-build.lock
-run() {
-  if [ -n "${OFFLINKA_NO_LOCK:-}" ] || ! command -v flock >/dev/null; then "$@"
-  else mkdir -p "$(dirname "$LOCK")"; flock "$LOCK" nice -n 10 timeout 3600 "$@"; fi
-}
+source "$ROOT/scripts/lib-lock.sh"
 cd "$ROOT/core"
 run cargo build -j 4 --profile host --lib -p offlinka-core
 run cargo build -j 4 --profile host -p uniffi-bindgen

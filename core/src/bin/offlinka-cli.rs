@@ -5,13 +5,12 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use offlinka_core::index;
 use offlinka_core::reader::FileSource;
 use offlinka_core::zim::{Archive, Kind};
 use offlinka_core::{Book, Library};
 
 const USAGE: &str = "offlinka-cli <command> ...
-  info    <zim> [--index F]                 book info and metadata
+  info    <zim> [--index F] [--brief 1]     book info and metadata (--brief: open + info() timing only)
   ls      <zim> [--ns C] [--prefix P] [--limit N]   entries in path order
   get     <zim> <path> [-o FILE]            entry content (redirects followed)
   suggest <zim>... <query> [--index F] [--limit N]  suggestions (several zims: library merge)
@@ -153,10 +152,16 @@ fn run(args: &[String]) -> R {
             let t = Instant::now();
             let b = open_book(&o.pos[0], &o)?;
             let open = t.elapsed();
+            let t = Instant::now();
             let i = b.info();
+            let info_t = t.elapsed();
             let a = b.archive();
+            if o.flags.contains_key("brief") {
+                println!("{} | open {open:?} | first info() {info_t:?}", i.title);
+                return Ok(());
+            }
             println!("{i:#?}");
-            println!("open: {open:?}");
+            println!("open: {open:?} (incl. index attach), first info(): {info_t:?}");
             println!(
                 "zim v{}.{} uuid {} entries {} clusters {} mimes {}",
                 a.header.major,
@@ -263,11 +268,9 @@ fn run(args: &[String]) -> R {
             let out = o.flags.get("o").ok_or("missing -o <file.offidx>")?;
             let t = Instant::now();
             let a = Archive::open(Box::new(FileSource::open(&o.pos[0])?))?;
-            let tmp = format!("{out}.tmp");
-            let mut w = std::io::BufWriter::new(std::fs::File::create(&tmp)?);
-            let st = index::build(&a, &mut w, &mut |m| eprintln!("[{:>6.1}s] {m}", t.elapsed().as_secs_f64()))?;
-            drop(w);
-            std::fs::rename(&tmp, out)?;
+            // Same code path as the apps' build_index: identical bytes.
+            let mut log = |m: &str| eprintln!("[{:>6.1}s] {m}", t.elapsed().as_secs_f64());
+            let st = offlinka_core::write_index_file(&a, out, &mut log)?;
             println!("{st:#?}");
             println!("built {} in {:.1}s", out, t.elapsed().as_secs_f64());
         }
@@ -312,7 +315,8 @@ fn run(args: &[String]) -> R {
         }
         "inflate" => {
             need(1)?;
-            let a = Archive::open_with_cache(Box::new(FileSource::open(&o.pos[0])?), 0)?;
+            offlinka_core::zim::set_cluster_cache_budget(0);
+            let a = Archive::open(Box::new(FileSource::open(&o.pos[0])?))?;
             let count: u32 = o.flags.get("count").map(|s| s.parse()).transpose()?.unwrap_or(200);
             let n = a.header.cluster_count;
             let step = (n / count.max(1)).max(1);

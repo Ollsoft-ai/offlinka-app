@@ -88,9 +88,29 @@ fn check_book_basics(path: &str) -> Arc<Book> {
 fn build_index(zim: &str, name: &str) -> String {
     let a = Archive::open(Box::new(FileSource::open(zim).unwrap())).unwrap();
     let out = common::tmp_path(name);
-    let mut f = std::io::BufWriter::new(std::fs::File::create(&out).unwrap());
-    offlinka_core::index::build(&a, &mut f, &mut |m| eprintln!("{name}: {m}")).unwrap();
+    offlinka_core::write_index_file(&a, &out, &mut |m: &str| eprintln!("{name}: {m}")).unwrap();
     out
+}
+
+/// Top results of real Czech queries (popularity ranking, index v5).
+fn check_czech_ranking(b: &Book) {
+    let top = |q: &str| b.suggest(q.into(), 5);
+    let titles = |q: &str| top(q).into_iter().map(|s| s.title).collect::<Vec<_>>();
+    let first_path = |q: &str| top(q).first().map(|s| s.path.clone()).unwrap_or_default();
+    for q in ["masaryk", "praha", "karel", "voda", "oheň", "první pomoc", "krumlov", "sněžka"] {
+        eprintln!("{q:>12} => {}", titles(q).join(" | "));
+    }
+    assert_eq!(first_path("masaryk"), "Tomáš_Garrigue_Masaryk", "{:?}", titles("masaryk"));
+    assert!(!titles("masaryk").contains(&"Masaryktown".to_string()), "{:?}", titles("masaryk"));
+    assert_eq!(titles("praha")[0], "Praha");
+    let karel = titles("karel");
+    assert!(karel[..3].contains(&"Karel IV.".to_string()) && karel.contains(&"Karel".to_string()), "{karel:?}");
+    assert_eq!(titles("voda")[0], "Voda");
+    assert_eq!(titles("ohen")[0], "Oheň", "diacritics-insensitive");
+    assert_eq!(titles("oheň")[0], "Oheň");
+    assert_eq!(titles("prvni pomoc")[0], "První pomoc");
+    assert_eq!(first_path("krumlov"), "Český_Krumlov", "{:?}", titles("krumlov"));
+    assert_eq!(titles("snezka")[0], "Sněžka");
 }
 
 #[test]
@@ -185,6 +205,7 @@ fn cs_mini_index_quality() {
     assert_eq!(first("praha"), "Praha");
     assert_eq!(first("PRAHA"), "Praha");
     assert_eq!(first("brno"), "Brno");
+    check_czech_ranking(&b);
 }
 
 #[test]
@@ -208,6 +229,7 @@ fn cs_maxi_open_main_and_search() {
     b.attach_index_path(idx).unwrap();
     let s = b.suggest("cesky krumlov".into(), 10);
     assert_eq!(s[0].title, "Český Krumlov");
+    check_czech_ranking(&b);
     let mut worst = std::time::Duration::ZERO;
     for q in ["cesky krumlov", "praha", "druha svetova valka", "seznam kulturnich pamatek", "a", "s"] {
         for n in 1..=q.len() {

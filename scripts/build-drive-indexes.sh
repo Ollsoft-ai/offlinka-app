@@ -13,10 +13,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="${1:?usage: build-drive-indexes.sh <files-dir> [out-dir]}"
 OUT="${2:-$SRC}"
 [ -f "$HOME/opt/offlinka-env.sh" ] && source "$HOME/opt/offlinka-env.sh"
-LOCK=/tmp/claude-1000/offlinka-app-build.lock
 CLI="$ROOT/core/target/release/offlinka-cli"
 if [ ! -x "$CLI" ] || [ -n "${REBUILD:-}" ]; then
-  (cd "$ROOT/core" && flock "$LOCK" nice -n 10 timeout 3600 cargo build -j 4 --release -p offlinka-core --bin offlinka-cli)
+  source "$ROOT/scripts/lib-lock.sh"
+  (cd "$ROOT/core" && run cargo build -j 4 --release -p offlinka-core --bin offlinka-cli)
 fi
 cd "$SRC"
 find . -name '*.zim' -print0 | sort -z | while IFS= read -r -d '' z; do

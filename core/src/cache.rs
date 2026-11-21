@@ -34,6 +34,30 @@ impl<K: Hash + Eq, V: Clone> ByteLru<K, V> {
         }
     }
 
+    /// Keep only entries whose key passes `keep`.
+    pub fn retain(&mut self, keep: impl Fn(&K) -> bool)
+    where
+        K: Clone,
+    {
+        let gone: Vec<K> = self.inner.iter().filter(|(k, _)| !keep(k)).map(|(k, _)| k.clone()).collect();
+        for k in gone {
+            if let Some((_, s)) = self.inner.pop(&k) {
+                self.bytes -= s;
+            }
+        }
+    }
+
+    /// Change the budget, evicting least recently used entries down to it.
+    pub fn set_budget(&mut self, budget: usize) {
+        self.budget = budget;
+        while self.bytes > self.budget {
+            match self.inner.pop_lru() {
+                Some((_, (_, s))) => self.bytes -= s,
+                None => break,
+            }
+        }
+    }
+
     pub fn clear(&mut self) {
         self.inner.clear();
         self.bytes = 0;
