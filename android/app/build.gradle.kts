@@ -29,7 +29,8 @@ android {
         targetSdk = 36
         versionCode = 3
         versionName = "0.3.0"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Instrumented tests run the real app with a folder as the drive (src/androidTest: FixtureApp, FolderDrive).
+        testInstrumentationRunner = "cz.offlinka.app.FixtureRunner"
         // Only the ABIs the Rust core is built for (scripts/build-android-core.sh). JNA would otherwise add
         // armeabi/mips/x86 copies of its dispatcher and such a phone would install an app without the core.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
@@ -148,6 +149,15 @@ dependencies {
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.jna)
     debugImplementation(libs.compose.ui.test.manifest)
+
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(libs.espresso.core)
+    androidTestImplementation(libs.espresso.intents)
 }
 
 // ---- Design system from ../design: launcher icons (mipmaps) and the reader's assets ----------------

@@ -820,9 +820,16 @@ class Shelf(
         private const val TAG = "OfflinkaShelf"
         const val DEFAULT_LABEL = "OFFLINKA"
 
-        /** Name of a search index built on the phone for a ZIM file (bound to that exact file). */
+        /**
+         * On-device index format tag. Bumped when indexes built by older versions must be rebuilt once:
+         * `v5b` = core index v5 built by the hardened core (an index built while a drive was being pulled
+         * could rank wrongly up to app 0.3.0). Files with other names are removed by the load clean-up.
+         */
+        const val INDEX_TAG = "v5b"
+
+        /** Name of a search index built on the phone for a ZIM file (bound to that exact file and format). */
         fun indexFileName(fileName: String, size: Long): String =
-            fileName.substringBeforeLast('.').replace(Regex("[^A-Za-z0-9._-]"), "_") + "-" + size + ".offidx"
+            fileName.substringBeforeLast('.').replace(Regex("[^A-Za-z0-9._-]"), "_") + "-" + size + "-" + INDEX_TAG + ".offidx"
 
     }
 }

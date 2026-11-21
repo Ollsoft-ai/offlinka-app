@@ -235,6 +235,18 @@ class ShelfRound3Test {
         assertThat(cs.isFile).isTrue()
     }
 
+    @Test fun `indexes built by 0_3_0 and older (untagged names) are rebuilt once with the hardened core`() = runTest(dispatcher) {
+        val dir = Files.createTempDirectory("idx").toFile()
+        val old = File(dir, "wikipedia_cs_all_maxi-offlinka_2026-09-10.offidx").apply { writeText("maybe ranked wrongly") }
+        val s = shelf(indexDir = dir)
+        s.onPicked(drive())
+        advanceUntilIdle()
+        assertThat(old.exists()).isFalse()
+        assertThat(source.built).contains("wikipedia_cs_all")
+        assertThat(File(dir, Shelf.indexFileName("wikipedia_cs_all_maxi-offlinka_2026-09.zim", 10L)).name)
+            .isEqualTo("wikipedia_cs_all_maxi-offlinka_2026-09-10-${Shelf.INDEX_TAG}.offidx")
+    }
+
     @Test fun `a phone-built index goes once the drive ships its own`() = runTest(dispatcher) {
         val dir = Files.createTempDirectory("idx").toFile()
         val built = File(dir, Shelf.indexFileName("wikipedia_cs_all_maxi-offlinka_2026-09.zim", 10L)).apply { writeText("phone") }

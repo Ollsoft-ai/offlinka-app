@@ -131,3 +131,6 @@ Install: `adb install -r offlinka-<version>-universal.apk` (or from the drive's 
 - [ ] Czech article typography: "v Praze", "s ním", "10 km" never break at the line end (look at a long article at 200 % text size).
 - [ ] Pick the Knihovna folder, later the Telefon folder of the same drive: Nastavení shows one drive "OFFLINKA", not two.
 - [ ] Connect screen on a small phone (360×640 dp) at the largest font: "Vybrat flashku" is visible without scrolling or the illustration is hidden.
+- [ ] Nastavení → O aplikaci → "Zásady ochrany soukromí" opens the browser at offlinka.cz/aplikace/soukromi (sk: offlinka.sk/aplikacia/sukromie, en: offlinka.cz/en/app/privacy); "Aplikace Offlinka © 2026 Ollsoft s.r.o." at the bottom.
+- [ ] Without a drive, "Otevřít první pomoc": the guides' main page offers only První pomoc, Výpadek proudu and Licence; nothing mentions Kiwix or "Jak to otevřít v mobilu".
+- [ ] Settings → System → Backup (or `adb shell bmgr list packages`): Offlinka is not backed up.

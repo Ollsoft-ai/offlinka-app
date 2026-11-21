@@ -24,9 +24,13 @@ flock /tmp/claude-1000/offlinka-app-build.lock nice -n 10 timeout 3600 ./gradlew
 - Screenshots: `:ui:verifyPaparazziDebug` checks against the goldens, `:ui:recordPaparazziDebug` rewrites them. Goldens: `ui/src/test/snapshots/images/` (cs/en × light/dark of every screen).
 - Host-core tests (`:core:testDebugUnitTest`, `CoreIntegrationTest` in `:app`) load `../core/target/host/linux-x86-64/libofflinka_core.so` (build it with `../scripts/gen-bindings.sh` or `../scripts/build-host-core.sh`) and read the ZIMs in `/srv/offlinka/drive/release/2026-11.3/files` (`OFFLINKA_DRIVE_FILES` to override). They skip themselves when either is missing.
 
+## Instrumented tests (emulator)
+
+`src/androidTest`: the real app (real core, real WebView) with a folder as the drive. `FixtureRunner` starts `FixtureApp`, whose `FolderDrive` (test-only `DriveAccess`) serves `filesDir/fixture-drive/Knihovna/offlinka_cs_prirucky.zim` (copied from the APK's assets); the system folder picker is answered with Espresso-Intents. `DriveFlowTest`: Connect → Home, search „prvni pomoc“ → article → "Zpět" back to the search, pulling the folder mid-read → unplugged cover → putting it back → the article. Run with `./gradlew connectedDebugAndroidTest` on a device or emulator (CI does it on API 26/30/35; this box has no KVM).
+
 ## Release signing
 
-Only from env vars, never from a file in the tree: `OFFLINKA_KEYSTORE`, `OFFLINKA_KEYSTORE_PASSWORD`, `OFFLINKA_KEY_ALIAS`, `OFFLINKA_KEY_PASSWORD`. A release build (APK or AAB) without them fails in `checkReleaseSigning`; it never falls back to the debug key. Debug builds, unit tests and lint need nothing. Read the key password in the shell, never print it.
+Only from env vars, never from a file in the tree: `OFFLINKA_KEYSTORE`, `OFFLINKA_KEYSTORE_PASSWORD`, `OFFLINKA_KEY_ALIAS`, `OFFLINKA_KEY_PASSWORD`. A release build (APK or AAB) without them fails in `checkReleaseSigning`; it never falls back to the debug key. Debug builds, unit tests and lint need nothing. CI only: with `CI=true` (GitHub Actions) or `-Pofflinka.unsignedRelease=true` the release builds **unsigned** (to check R8 and shrinking; not installable). Read the key password in the shell, never print it.
 
 ## Decisions worth knowing
 
