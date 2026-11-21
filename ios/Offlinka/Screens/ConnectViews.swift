@@ -61,6 +61,12 @@ struct ConnectView: View {
         } bottom: {
             VStack(spacing: BrandSpace.s) {
                 Button {
+                    #if DEBUG
+                    if let fixture = app.fixtureDrive {
+                        app.didPick(.success(fixture))
+                        return
+                    }
+                    #endif
                     showPicker = true
                 } label: {
                     Label {

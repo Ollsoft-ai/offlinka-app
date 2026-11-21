@@ -17,6 +17,7 @@ final class SmokeUITests: XCTestCase {
         let search = app.buttons["home.search"]
         XCTAssertTrue(search.waitForExistence(timeout: 10), "home screen did not appear")
         XCTAssertTrue(app.buttons["tile.wikipedia_cs_all"].exists)
+        keepScreenshot("demo-home")
 
         search.tap()
         let field = app.textFields["search.field"]

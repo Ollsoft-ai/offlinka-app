@@ -83,6 +83,8 @@ final class AppModel {
     @ObservationIgnored private var isActive = true
     @ObservationIgnored private var toastTask: Task<Void, Never>?
     @ObservationIgnored private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+    /// UI tests only (`-fixture-drive`): the folder the Connect button opens instead of the Files sheet.
+    @ObservationIgnored private(set) var fixtureDrive: URL?
 
     static let lowMemoryLimit: UInt64 = 3 * 1024 * 1024 * 1024
 
@@ -114,11 +116,19 @@ final class AppModel {
     /// (launch argument `-demo-drive`, debug builds only).
     static func live(arguments: [String] = ProcessInfo.processInfo.arguments) -> AppModel {
         #if DEBUG
-        if arguments.contains("-demo-drive") {
+        let value = { (flag: String) -> String? in
+            arguments.firstIndex(of: flag).flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }
+        }
+        if arguments.contains("-demo-drive") || arguments.contains("-fixture-drive") {
             let store = UserStore(fileURL: nil)
-            if let language = arguments.firstIndex(of: "-demo-language").flatMap({ arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }),
-               let parsed = AppLanguage(rawValue: language) {
-                store.settings.language = parsed
+            if let language = value("-demo-language").flatMap(AppLanguage.init(rawValue:)) {
+                store.settings.language = language
+            }
+            if let theme = value("-demo-theme").flatMap(AppTheme.init(rawValue:)) {
+                store.settings.theme = theme
+            }
+            if arguments.contains("-fixture-drive") {
+                return fixture(drive: value("-fixture-drive"), store: store)
             }
             return demo(store: store)
         }
@@ -139,6 +149,37 @@ final class AppModel {
                  scanner: { _ in FakeContentEngine.demoScan() }, indexDirectory: nil,
                  bundledGuidesPath: "/bundle/offlinka_cs_prirucky.zim", isDemo: true)
     }
+
+    #if DEBUG
+    /// UI tests on the real core (launch argument `-fixture-drive <folder>`, debug builds only): the
+    /// Connect button opens `<folder>` instead of the Files sheet. Nothing is remembered between
+    /// launches. Without a folder (or with `bundled`) the drive is a temporary folder holding the
+    /// guides bundled with the app.
+    static func fixture(drive path: String?, store: UserStore) -> AppModel {
+        let files = FileManager.default
+        let scratch = files.temporaryDirectory.appendingPathComponent("OfflinkaFixture", isDirectory: true)
+        let indexes = scratch.appendingPathComponent("Indexes", isDirectory: true)
+        try? files.removeItem(at: indexes)
+        let bundled = Bundle.main.path(forResource: "offlinka_cs_prirucky", ofType: "zim")
+        let root: URL
+        if let path, path != "bundled", !path.isEmpty {
+            root = URL(fileURLWithPath: path, isDirectory: true)
+        } else {
+            root = scratch.appendingPathComponent("OFFLINKA", isDirectory: true)
+            let library = root.appendingPathComponent(DriveFolder.library.rawValue, isDirectory: true)
+            let guides = library.appendingPathComponent("offlinka_cs_prirucky.zim")
+            try? files.createDirectory(at: library, withIntermediateDirectories: true)
+            if let bundled, !files.fileExists(atPath: guides.path) {
+                try? files.copyItem(atPath: bundled, toPath: guides.path)
+            }
+        }
+        let model = AppModel(store: store, access: DriveAccess(bookmarkFile: nil), engine: CoreContentEngine(),
+                             scanner: { try DriveScanner().scan(root: $0) }, indexDirectory: indexes,
+                             bundledGuidesPath: bundled)
+        model.fixtureDrive = root
+        return model
+    }
+    #endif
 
     var driveName: String? {
         isDemo ? "OFFLINKA" : access.displayName

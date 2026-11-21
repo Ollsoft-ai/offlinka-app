@@ -128,6 +128,7 @@ struct HomeView: View {
                         Label { Text(tr(.homeQuickFirstAid)) } icon: { BrandIconView(icon: .firstAid, size: BrandSize.iconSmall) }
                     }
                     .buttonStyle(ChipButtonStyle())
+                    .accessibilityIdentifier("home.firstAid")
 
                     Button {
                         app.router.open(ReaderTarget(bookId: guides.id, path: BookCatalog.prepareAtHomePath))

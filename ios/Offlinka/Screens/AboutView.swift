@@ -5,6 +5,7 @@ import UIKit
 @MainActor
 struct AboutView: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.openURL) private var openURL
     static let contactEmail = "info@offlinka.cz"
 
     var body: some View {
@@ -35,6 +36,24 @@ struct AboutView: View {
                     BrandIconView(icon: .lock, size: BrandSize.iconSmall)
                         .foregroundStyle(Color.brandInk2)
                 }
+                // The one link that leaves the app (Apple 5.1.1(i)): opens Safari.
+                Button {
+                    openURL(WebLinks.privacyPolicy())
+                } label: {
+                    HStack {
+                        BrandIconView(icon: .globe, size: BrandSize.iconSmall)
+                            .foregroundStyle(Color.brandInk2)
+                        Text(tr(PendingStr.aboutPrivacyLink))
+                            .brandText(.bodyStrong)
+                            .foregroundStyle(Color.brandLink)
+                        Spacer()
+                        BrandIconView(icon: .chevronRight, size: BrandSize.iconSmall)
+                            .foregroundStyle(Color.brandInk3)
+                    }
+                    .frame(minHeight: BrandSize.touch)
+                }
+                .accessibilityAddTraits(.isLink)
+                .accessibilityIdentifier("about.privacy")
             }
             .listRowBackground(Color.brandSurface)
 

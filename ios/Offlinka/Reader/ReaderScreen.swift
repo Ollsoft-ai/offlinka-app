@@ -53,6 +53,12 @@ private struct ReaderContent: View {
     var body: some View {
         ReaderWebView(webView: model.webView)
             .ignoresSafeArea(.container, edges: .bottom)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                // Hairline under the top bar, like the bottom bar's (Android: PaperBar).
+                if !model.isMap {
+                    Rectangle().fill(Color.brandLine).frame(height: 1)
+                }
+            }
             .overlay(alignment: .top) {
                 if model.isLoading && model.progress < 1 {
                     ProgressView(value: max(model.progress, 0.05))

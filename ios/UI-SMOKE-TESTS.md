@@ -47,7 +47,8 @@
 - [ ] Language switch cs/sk/en applies at once everywhere; „Podle systému“ follows the iOS per-app language.
 - [ ] Theme light/dark/system, including the reader; text size preview.
 - [ ] „Ukládat historii“ off: new articles are not recorded.
-- [ ] About: version, edition 2026-11, licences, open-source list.
+- [ ] About: version, edition 2026-11, licences, open-source list, „© 2026 Ollsoft s.r.o.“ once design/strings has it.
+- [ ] About → „Zásady ochrany soukromí“ opens Safari at offlinka.cz/aplikace/soukromi (sk: offlinka.sk/aplikacia/sukromie, en: offlinka.cz/en/app/privacy).
 
 ## Accessibility and devices
 

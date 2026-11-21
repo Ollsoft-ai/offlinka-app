@@ -42,6 +42,13 @@ enum L10n {
         bundle.localizedString(forKey: key.rawValue, value: nil, table: "Localizable")
     }
 
+    /// A key that `design/strings` does not have yet: its translation once it lands there, until then `fallback`.
+    static func string(pending key: PendingStr) -> String {
+        let value = bundle.localizedString(forKey: key.rawValue, value: "\u{1}", table: "Localizable")
+        guard value == "\u{1}" || value == key.rawValue || value.isEmpty else { return value }
+        return key.fallback[languageCode] ?? key.fallback["cs"] ?? key.rawValue
+    }
+
     /// For tests: is there a real translation (not just the key echoed back)?
     static func hasString(_ key: Str, language: String, base: Bundle = .main) -> Bool {
         guard let path = base.path(forResource: language, ofType: "lproj"), let localized = Bundle(path: path) else { return false }
@@ -56,4 +63,34 @@ func tr(_ key: Str) -> String {
 
 func tr(_ key: Str, _ arguments: CVarArg...) -> String {
     String(format: L10n.string(key), locale: L10n.locale, arguments: arguments)
+}
+
+/// Strings the app needs before `design/strings` has them (Android adds the keys in its round 3).
+/// Looked up by key first, so the design text wins as soon as it lands; then move the key to `Str`.
+enum PendingStr: String, CaseIterable, Sendable {
+    /// About → privacy: the link to the privacy policy on the web (Apple 5.1.1(i)).
+    case aboutPrivacyLink = "about_privacy_link"
+
+    var fallback: [String: String] {
+        switch self {
+        case .aboutPrivacyLink:
+            return ["cs": "Zásady ochrany soukromí", "sk": "Zásady ochrany súkromia", "en": "Privacy policy"]
+        }
+    }
+}
+
+func tr(_ key: PendingStr) -> String {
+    L10n.string(pending: key)
+}
+
+/// Pages on the web the app links to (only from About; everything else stays inside the app).
+enum WebLinks {
+    /// The privacy policy in the UI language; the store listings link the same pages.
+    static func privacyPolicy(language: String = L10n.languageCode) -> URL {
+        switch language {
+        case "sk": return URL(string: "https://offlinka.sk/aplikacia/sukromie")!
+        case "en": return URL(string: "https://offlinka.cz/en/app/privacy")!
+        default: return URL(string: "https://offlinka.cz/aplikace/soukromi")!
+        }
+    }
 }

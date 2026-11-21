@@ -44,6 +44,9 @@ targets:
           - "Generated/*.modulemap"
       - path: Offlinka/Resources
         buildPhase: resources
+      # The guides bundled with the app: the one file both apps ship (Android builds its app edition).
+      - path: ../android/app/src/main/assets/offlinka_cs_prirucky.zim
+        buildPhase: resources
       # Design system (source of truth in design/, shared with Android).
       - path: ../design/out/ios/Brand.swift
       - path: ../design/out/ios/Localizable.xcstrings
