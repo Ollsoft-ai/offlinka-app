@@ -9,7 +9,8 @@
 - **WKURLSchemeHandler**: pages, reader CSS/JS, fonts and images through `offlinka://`; internal links; external links show the offline notice. Reads take 0–60 ms.
 - **Bundled guides** open from inside the app bundle (stand in when the drive has none) and now get a search index like drive books.
 - **Demo-drive smoke** (`SmokeUITests`): search, reader, save, Saved, Library, Settings, Slovak order, external link notice.
-- **Store screenshots** on iPhone 17 Pro Max, 17 Pro and iPad Pro 13" in cs, sk and en.
+- **Maps**: MapLibre (WebGL, web workers, tiles through `offlinka://`) draws the Slovak map in the simulator.
+- **Store screenshots** on iPhone 17 Pro Max, 17 Pro and iPad Pro 13" in cs, sk and en, on the review sample drive.
 - Linux check (`tools/linux-check/check.sh`) still runs for quick type-checks without a Mac.
 
 ## Not verified (ranked by risk)
@@ -24,7 +25,7 @@
 ### Medium
 
 5. **Background index builds.** A running build gets `beginBackgroundTask` time, then stops cleanly (`Cancelled`) and resumes on the next start. Check on a device: build, lock the phone, unlock.
-6. **Maps and games.** MapLibre (WebGL, web workers) and the games' `localStorage` per book origin run in the simulator only; check pan/zoom and a kept score on a device.
+6. **Maps and games on a device.** The map draws in the simulator (slowly on CI: up to ~20 s for the first tiles); games open, but a kept score (`localStorage` per book origin) is untested. Check pan/zoom and a score on a device.
 7. **Privacy manifest.** FileTimestamp `3B52.1` and DiskSpace `E174.1` declared; the archive job lists the required-reason symbols actually linked; compare before the first upload.
 8. **Round-3 strings not wired yet.** The privacy link and „© 2026 Ollsoft s.r.o.“ come from `design/strings`; the other new keys (`reader_bar_save`, `index_stop`, the index and „try“ notes) are generated in `Str.swift` but not used until the copy pass.
 

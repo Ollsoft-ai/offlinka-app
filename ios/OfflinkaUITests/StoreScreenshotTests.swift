@@ -31,10 +31,14 @@ final class StoreScreenshotTests: XCTestCase {
         return parsed.isEmpty ? ["cs", "sk", "en"] : parsed
     }
 
-    func testStoreScreenshots() throws {
-        for language in languages {
-            try captureLanguage(language)
-        }
+    // One test per language: a flaky UI query in one language does not cost the others.
+    func testStoreScreenshotsCs() throws { try capture(language: "cs") }
+    func testStoreScreenshotsEn() throws { try capture(language: "en") }
+    func testStoreScreenshotsSk() throws { try capture(language: "sk") }
+
+    private func capture(language: String) throws {
+        try XCTSkipUnless(languages.contains(language), "\(language) is not in OFFLINKA_STORE_LANGS")
+        try captureLanguage(language)
     }
 
     private func captureLanguage(_ loc: String) throws {
@@ -45,8 +49,8 @@ final class StoreScreenshotTests: XCTestCase {
         app.buttons["home.search"].tap()
         let field = app.textFields["search.field"]
         XCTAssertTrue(field.waitForExistence(timeout: 10), "[\(loc)] search did not open")
+        dismissKeyboardTip(app, wait: 3)
         field.typeText("cesky krumlov")   // not return: that opens the top hit
-        dismissKeyboardTip(app)
         let hit = app.buttons["search.hit"].firstMatch
         XCTAssertTrue(hit.waitForExistence(timeout: 20), "[\(loc)] no search result")
         dismissKeyboard()
@@ -61,8 +65,8 @@ final class StoreScreenshotTests: XCTestCase {
         let map = tile(in: app, "maps_")
         XCTAssertTrue(map.waitForExistence(timeout: 10), "[\(loc)] no map tile")
         map.tap()
-        XCTAssertTrue(app.buttons["reader.back"].firstMatch.waitForExistence(timeout: 60), "[\(loc)] map did not open")
-        try capture("ScreenStatesTest_readerMap[\(loc)-light]", settle: 20)
+        // No UI query on the map: its accessibility tree can time out XCUITest while MapLibre loads.
+        try capture("ScreenStatesTest_readerMap[\(loc)-light]", settle: 25)
 
         // First aid from the guides.
         app = launchApp(language: loc, theme: "light")

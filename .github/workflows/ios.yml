@@ -34,6 +34,10 @@ on:
         description: "App Store screenshots (cs, sk, en on iPhone 6.9\", 6.3\" and iPad 13\"), after the tests"
         type: boolean
         default: false
+      shot_devices:
+        description: "Screenshot sets to capture: all, or some of iphone-69,iphone-63,ipad-13"
+        type: string
+        default: all
       demo_video:
         description: "App Review demo video (simulator recording of the demo walk), after the tests"
         type: boolean
@@ -238,6 +242,8 @@ jobs:
       - name: Restore review sample drive
         id: sample
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        env:
+          SEGMENT_DOWNLOAD_TIMEOUT_MINS: "3"   # a stalled restore falls back to the release asset sooner
         with:
           path: review-sample
           key: ${{ env.SAMPLE_KEY }}
@@ -304,8 +310,12 @@ jobs:
           persist-credentials: false
 
       - name: Boot simulators
+        env:
+          ONLY_SETS: ${{ inputs.shot_devices }}
         run: |
           IFS='|'; for pair in $SHOT_DEVICES; do
+            folder="${pair##*:}"
+            if [ -n "${ONLY_SETS:-}" ] && [ "$ONLY_SETS" != all ] && [[ ",${ONLY_SETS// /}," != *",$folder,"* ]]; then continue; fi
             udid=$(ios/tools/pick-simulator.py "${pair%%:*}")
             (xcrun simctl boot "$udid" >/dev/null 2>&1 &)
           done
@@ -318,6 +328,8 @@ jobs:
       - name: Restore review sample drive
         id: sample
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        env:
+          SEGMENT_DOWNLOAD_TIMEOUT_MINS: "3"   # a stalled restore falls back to the release asset sooner
         with:
           path: review-sample
           key: ${{ env.SAMPLE_KEY }}
@@ -334,6 +346,7 @@ jobs:
 
       - name: Capture
         env:
+          ONLY_SETS: ${{ inputs.shot_devices }}
           TEST_RUNNER_OFFLINKA_STORE_SHOTS: "1"
           TEST_RUNNER_OFFLINKA_STORE_LANGS: cs,sk,en
           TEST_RUNNER_OFFLINKA_FIXTURE_DRIVE: ${{ github.workspace }}/review-sample/OFFLINKA
@@ -345,6 +358,7 @@ jobs:
           IFS='|' read -r -a pairs <<< "$SHOT_DEVICES"
           for pair in "${pairs[@]}"; do
             device="${pair%%:*}"; folder="${pair##*:}"
+            if [ -n "${ONLY_SETS:-}" ] && [ "$ONLY_SETS" != all ] && [[ ",${ONLY_SETS// /}," != *",$folder,"* ]]; then continue; fi
             udid=$(ios/tools/pick-simulator.py "$device")
             ios/tools/sim-prepare.sh "$udid"
             # A simulator that has just finished booting is sometimes not yet a destination: try again.
@@ -407,6 +421,8 @@ jobs:
       - name: Restore review sample drive
         id: sample
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        env:
+          SEGMENT_DOWNLOAD_TIMEOUT_MINS: "3"   # a stalled restore falls back to the release asset sooner
         with:
           path: review-sample
           key: ${{ env.SAMPLE_KEY }}

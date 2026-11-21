@@ -30,8 +30,8 @@ final class FixtureDriveUITests: XCTestCase {
         search.tap()
         let field = app.textFields["search.field"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
+        dismissKeyboardTip(app, wait: 3)
         field.typeText("prvni pomoc")
-        dismissKeyboardTip(app)
         let hit = app.buttons["search.hit"].firstMatch
         XCTAssertTrue(hit.waitForExistence(timeout: 30), "no search result for „prvni pomoc“")
         keepScreenshot("fixture-3-search")
@@ -76,6 +76,7 @@ final class FixtureDriveUITests: XCTestCase {
         search.tap()
         let field = app.textFields["search.field"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
+        dismissKeyboardTip(app, wait: 3)
         pause(1)
         for character in "cesky krumlov" {
             field.typeText(String(character))
@@ -106,7 +107,7 @@ final class FixtureDriveUITests: XCTestCase {
         XCTAssertTrue(map.waitForExistence(timeout: 10), "no map tile")
         map.tap()
         XCTAssertTrue(app.buttons["reader.back"].firstMatch.waitForExistence(timeout: 60), "map did not open")
-        pause(12)   // MapLibre draws its tiles after the page loaded
+        pause(20)   // MapLibre draws its first tiles slowly on a CI simulator
         app.buttons["reader.back"].firstMatch.tap()
         XCTAssertTrue(search.waitForExistence(timeout: 10))
         pause()
@@ -121,9 +122,13 @@ final class FixtureDriveUITests: XCTestCase {
         XCTAssertTrue(search.waitForExistence(timeout: 10))
         pause()
 
-        // 8. The first-aid guides.
+        // 8. The first-aid guides (the chip is in the header: Home is still scrolled down from the games tile).
         let firstAid = app.buttons["home.firstAid"]
         XCTAssertTrue(firstAid.waitForExistence(timeout: 10), "no first-aid link")
+        for _ in 0..<3 where !firstAid.isHittable {
+            app.swipeDown()
+        }
+        pause(1)
         firstAid.tap()
         XCTAssertTrue(app.webViews.firstMatch.staticTexts.firstMatch.waitForExistence(timeout: 60), "guide did not load")
         pause(3)
@@ -164,9 +169,9 @@ extension XCTestCase {
     }
 
     /// The simulator's one-time keyboard tip („Speed up your typing…“) covers half the screen.
-    func dismissKeyboardTip(_ app: XCUIApplication) {
+    func dismissKeyboardTip(_ app: XCUIApplication, wait: TimeInterval = 1) {
         let next = app.buttons["Continue"]
-        if next.waitForExistence(timeout: 1) {
+        if next.waitForExistence(timeout: wait) {
             next.tap()
         }
     }
