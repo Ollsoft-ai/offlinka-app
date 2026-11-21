@@ -901,7 +901,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_offlinka_core_checksum_method_book_get() and 0xFFFF) != 15161) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_offlinka_core_checksum_method_book_get_range() and 0xFFFF) != 55409) {
+    if ((lib.uniffi_offlinka_core_checksum_method_book_get_range() and 0xFFFF) != 1071) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_offlinka_core_checksum_method_book_illustration() and 0xFFFF) != 389) {
@@ -1381,7 +1381,7 @@ public interface BookInterface {
     fun `get`(`path`: kotlin.String): Resource
     
     /**
-     * Part of an entry, for media and big files. Clamped to the entry end.
+     * Part of an entry, for media and big files. Clamped to the entry end (and to 256 MB).
      */
     fun `getRange`(`path`: kotlin.String, `offset`: kotlin.ULong, `len`: kotlin.UInt): kotlin.ByteArray
     
@@ -1582,7 +1582,7 @@ open class Book: Disposable, AutoCloseable, BookInterface
 
     
     /**
-     * Part of an entry, for media and big files. Clamped to the entry end.
+     * Part of an entry, for media and big files. Clamped to the entry end (and to 256 MB).
      */
     @Throws(CoreException::class)override fun `getRange`(`path`: kotlin.String, `offset`: kotlin.ULong, `len`: kotlin.UInt): kotlin.ByteArray {
             return FfiConverterByteArray.lift(

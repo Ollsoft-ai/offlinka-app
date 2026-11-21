@@ -9,6 +9,7 @@ Shared Rust engine of the Offlinka apps: **our own ZIM reader** (no libzim, no K
 - `cargo test --profile host -- --ignored` (optimised, no LTO) — big books (cs/sk mini index quality, cs maxi open + keystroke budget). `OFFLINKA_CS_MAXI_INDEX=<file>` reuses a built index.
 - `cargo clippy --all-targets -- -D warnings`, `cargo fmt`.
 - `scripts/gen-bindings.sh` — host cdylib (profile `host`, unstripped) → Kotlin (`android/core/src/main/kotlin/cz/offlinka/core/offlinka_core.kt`) + Swift (`ios/Offlinka/Generated/OfflinkaCore.swift` + `offlinka_coreFFI.h` + `.modulemap`) + JNA host lib `core/target/host/linux-x86-64/libofflinka_core.so`.
+- **Regenerate the bindings after any change to the exported API, including its doc comments**: UniFFI's API checksums cover the docs, and stale bindings fail at load with "UniFFI API checksum mismatch".
 - `scripts/build-android-core.sh` — cargo-ndk, minSdk 26 → `android/app/src/main/jniLibs/{arm64-v8a,armeabi-v7a,x86_64}/libofflinka_core.so` (release: LTO, 1 codegen unit, stripped).
 - `scripts/build-ios-core.sh` — macOS only: static libs (device + lipo'd simulator), Swift bindings, `ios/Frameworks/OfflinkaCore.xcframework`.
 - `scripts/build-host-core.sh` — just the host library + `offlinka-cli`.
