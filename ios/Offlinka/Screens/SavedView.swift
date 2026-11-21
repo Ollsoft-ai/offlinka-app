@@ -26,8 +26,8 @@ struct SavedView: View {
         .background(Color.brandBg.ignoresSafeArea())
         .navigationTitle(tr(.savedTitle))
         .toolbar {
-            if showsHistory && !app.store.history.isEmpty {
-                ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(placement: .primaryAction) {
+                if showsHistory && !app.store.history.isEmpty {
                     Button(tr(.historyClear), role: .destructive) {
                         confirmClear = true
                     }
