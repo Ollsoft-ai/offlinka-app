@@ -125,9 +125,9 @@ final class FixtureDriveUITests: XCTestCase {
         // 8. The first-aid guides (the chip is in the header: Home is still scrolled down from the games tile).
         let firstAid = app.buttons["home.firstAid"]
         XCTAssertTrue(firstAid.waitForExistence(timeout: 10), "no first-aid link")
-        for _ in 0..<3 where !firstAid.isHittable {
-            app.swipeDown()
-        }
+        // isHittable is true even under the bar: just scroll to the top (a swipe at the top only bounces).
+        app.swipeDown()
+        app.swipeDown()
         pause(1)
         firstAid.tap()
         XCTAssertTrue(app.webViews.firstMatch.staticTexts.firstMatch.waitForExistence(timeout: 60), "guide did not load")

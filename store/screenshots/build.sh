@@ -40,8 +40,11 @@ mkdir -p "$HERE/build" "$HERE/out"
 rm -f "$HERE/build/warnings.txt"
 cd "$HERE"
 
-echo "== content (article, guide, map from the drive)"
-atd-render timeout 120 node render.cjs content
+# The pages drawn into the snapshots' WebView area; captures that already show real pages need none.
+if [ "${SNAPSHOT_PAGES:-}" != app ]; then
+  echo "== content (article, guide, map from the drive)"
+  atd-render timeout 120 node render.cjs content
+fi
 
 for t in "${TARGETS[@]}"; do
   case "$t" in
