@@ -1,5 +1,6 @@
 [workspace]
 members = [".", "uniffi-bindgen"]
+exclude = ["fuzz"]
 resolver = "2"
 
 [package]
@@ -39,6 +40,17 @@ unicode-normalization = "0.1"
 
 [dev-dependencies]
 ruzstd = "0.9" # encodes the zstd test fixtures
+
+# The hardening tests inflate 256 MB bombs and fuzz thousands of files: optimise the
+# decoders in test builds too (overflow checks and debug assertions stay on).
+[profile.dev.package.zstd-sys]
+opt-level = 3
+[profile.dev.package.lzma-rs]
+opt-level = 3
+[profile.dev.package.ruzstd]
+opt-level = 3
+[profile.dev.package.unicode-normalization]
+opt-level = 3
 
 [profile.release]
 lto = true

@@ -3,7 +3,7 @@
 /// Errors returned by every fallible core call.
 ///
 /// Flat on purpose: Kotlin and Swift see the variant plus a readable message.
-#[derive(Debug, thiserror::Error, uniffi::Error)]
+#[derive(Debug, Clone, thiserror::Error, uniffi::Error)]
 #[uniffi(flat_error)]
 pub enum CoreError {
     /// Reading the file failed (unplugged drive, bad fd, permission).
@@ -23,12 +23,18 @@ pub enum CoreError {
     Cancelled(String),
 }
 
+/// A failed read or write of a file is `Io`. Truncated files are caught earlier by the
+/// bounds checks against the size seen at open, so an end of file *inside* that size
+/// means the file vanished under us (drive pulled, fd revoked): also `Io`.
+/// An `io::Error` that wraps a `CoreError` (decoder streams) gives that error back.
 impl From<std::io::Error> for CoreError {
     fn from(e: std::io::Error) -> Self {
-        if e.kind() == std::io::ErrorKind::UnexpectedEof {
-            CoreError::InvalidZim(format!("truncated file ({e})"))
-        } else {
-            CoreError::Io(e.to_string())
+        match e.downcast::<CoreError>() {
+            Ok(c) => c,
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                CoreError::Io(format!("the file ended early, was the drive removed? ({e})"))
+            }
+            Err(e) => CoreError::Io(e.to_string()),
         }
     }
 }
@@ -37,4 +43,19 @@ pub type Result<T> = std::result::Result<T, CoreError>;
 
 pub(crate) fn invalid(msg: impl Into<String>) -> CoreError {
     CoreError::InvalidZim(msg.into())
+}
+
+/// Out of memory for a buffer the file asks for (a corrupt size, or a phone low on RAM):
+/// an error instead of the abort an infallible allocation would cause.
+pub(crate) fn no_memory(what: &str, n: u64) -> CoreError {
+    CoreError::Unsupported(format!("{what}: not enough memory for {n} bytes"))
+}
+
+/// A zero-filled buffer of `n` bytes, allocated fallibly.
+pub(crate) fn zeroed(n: u64, what: &str) -> Result<Vec<u8>> {
+    let len = usize::try_from(n).map_err(|_| no_memory(what, n))?;
+    let mut v = Vec::new();
+    v.try_reserve_exact(len).map_err(|_| no_memory(what, n))?;
+    v.resize(len, 0);
+    Ok(v)
 }

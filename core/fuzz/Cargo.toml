@@ -1,0 +1,30 @@
+[package]
+name = "offlinka-core-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+offlinka-core = { path = ".." }
+
+# Its own workspace: `cargo test` in core/ never builds this (nightly + libFuzzer only).
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "zim"
+path = "fuzz_targets/zim.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "offidx"
+path = "fuzz_targets/offidx.rs"
+test = false
+doc = false
+bench = false

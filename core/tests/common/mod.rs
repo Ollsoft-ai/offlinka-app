@@ -4,6 +4,8 @@
 
 use std::collections::BTreeMap;
 
+pub mod faults;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Comp {
     None,
@@ -35,11 +37,20 @@ pub struct ZimBuilder {
     pub main_page: Option<(u8, String)>,
     pub minor: u16,
     pub uuid: [u8; 16],
+    /// Clusters written verbatim (info byte included) instead of from their blobs.
+    pub raw_clusters: BTreeMap<usize, Vec<u8>>,
 }
 
 impl ZimBuilder {
     pub fn new() -> Self {
-        ZimBuilder { entries: Vec::new(), clusters: Vec::new(), main_page: None, minor: 1, uuid: *b"offlinka-test-01" }
+        ZimBuilder {
+            entries: Vec::new(),
+            clusters: Vec::new(),
+            main_page: None,
+            minor: 1,
+            uuid: *b"offlinka-test-01",
+            raw_clusters: BTreeMap::new(),
+        }
     }
 
     pub fn cluster(&mut self, comp: Comp, extended: bool) -> usize {
@@ -191,6 +202,10 @@ impl ZimBuilder {
                 body.extend_from_slice(b);
             }
             let ext_bit = if *ext { 0x10 } else { 0 };
+            if let Some(raw) = self.raw_clusters.get(&c) {
+                cluster_bytes.push(raw.clone());
+                continue;
+            }
             let mut out = Vec::new();
             match comp {
                 Comp::None => {
@@ -326,4 +341,38 @@ pub fn tmp_path(name: &str) -> String {
     static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     dir.join(format!("{}-{n}-{}", std::process::id(), name)).to_string_lossy().into_owned()
+}
+
+/// A zstd frame from raw (type 0) and RLE (type 1) blocks: `(type, bytes, size)`; for
+/// RLE `bytes` is the one repeated byte and `size` the regenerated size (<= 128 KiB).
+/// Lets tests write zstd bombs of any size in a few bytes. `fcs` = declared content size.
+pub fn zstd_frame(blocks: &[(u8, Vec<u8>, u32)], fcs: Option<u64>) -> Vec<u8> {
+    let mut f = vec![0x28, 0xb5, 0x2f, 0xfd];
+    match fcs {
+        None => f.extend_from_slice(&[0x00, 0x38]), // window 128 KiB
+        Some(n) => {
+            f.extend_from_slice(&[0xc0, 0x38]);
+            f.extend_from_slice(&n.to_le_bytes());
+        }
+    }
+    for (i, (ty, bytes, size)) in blocks.iter().enumerate() {
+        let last = (i + 1 == blocks.len()) as u32;
+        let size = if *ty == 0 { bytes.len() as u32 } else { *size };
+        let h = last | (*ty as u32) << 1 | size << 3;
+        f.extend_from_slice(&h.to_le_bytes()[..3]);
+        f.extend_from_slice(if *ty == 0 { bytes } else { &bytes[..1] });
+    }
+    f
+}
+
+/// RLE blocks regenerating `total` bytes of `byte`.
+pub fn rle_blocks(byte: u8, total: u64) -> Vec<(u8, Vec<u8>, u32)> {
+    let mut v = Vec::new();
+    let mut left = total;
+    while left > 0 {
+        let n = left.min(128 * 1024) as u32;
+        v.push((1, vec![byte], n));
+        left -= n as u64;
+    }
+    v
 }

@@ -6,13 +6,15 @@
 //! cluster is uncompressed or xz/zstd compressed and starts with an offset table of
 //! u32 (normal) or u64 (extended) offsets.
 
+use std::cell::Cell;
 use std::collections::HashMap;
-use std::io::Read;
+use std::io::{BufRead, Read};
+use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, RwLock};
 
 use crate::cache::ByteLru;
-use crate::error::{invalid, CoreError, Result};
+use crate::error::{invalid, no_memory, zeroed, CoreError, Result};
 use crate::reader::ReadAt;
 
 pub const ZIM_MAGIC: u32 = 72_173_914;
@@ -27,6 +29,17 @@ pub const MAX_REDIRECTS: usize = 10;
 const MAX_CLUSTER_BYTES: u64 = 256 * 1024 * 1024;
 /// `get()` refuses entries larger than this; media goes through `get_range`.
 pub const MAX_GET_BYTES: u64 = 256 * 1024 * 1024;
+/// Metadata values (texts, illustrations, favicon) larger than this are corrupt.
+pub const MAX_META_BYTES: u64 = 16 * 1024 * 1024;
+/// Compressed cluster bytes are read in pieces of at most this (one read for ordinary
+/// clusters; a corrupt cluster size costs no more than this before the decoder fails).
+const READ_CHUNK: usize = 4 * 1024 * 1024;
+/// Largest first guess of an inflated cluster's size when its frame does not declare it.
+const INFLATE_HINT_MAX: usize = 8 * 1024 * 1024;
+/// xz clusters (old ZIMs) may inflate to at most this. lzma-rs keeps a whole xz block
+/// in memory, about twice over and growing by doubling, so this stays well under
+/// `MAX_CLUSTER_BYTES`; real xz clusters are about 1 MB.
+const MAX_XZ_CLUSTER_BYTES: u64 = 64 * 1024 * 1024;
 /// Default budget of the decompressed-cluster cache, shared by all open books.
 pub const DEFAULT_CLUSTER_CACHE_BYTES: usize = 48 * 1024 * 1024;
 /// Directory entries cached, shared by all open books (~150 B each).
@@ -238,19 +251,21 @@ impl Cluster {
     }
 
     pub fn blob_count(&self) -> u32 {
-        (self.offsets.len().saturating_sub(1)) as u32
+        self.offsets.len().saturating_sub(1).min(u32::MAX as usize) as u32
     }
 
     pub fn blob(&self, i: u32) -> Result<&[u8]> {
-        let i = i as usize;
-        if i + 1 >= self.offsets.len() {
+        // No `i + 1` here: with a 32-bit usize a corrupt `u32::MAX` would wrap to 0.
+        if i >= self.blob_count() {
             return Err(invalid(format!("blob {i} out of range")));
         }
+        let i = i as usize;
         Ok(&self.data[self.offsets[i] as usize..self.offsets[i + 1] as usize])
     }
 
+    /// Memory held (allocated capacity, not just length) for the cache budget.
     pub fn byte_size(&self) -> usize {
-        self.data.len() + self.offsets.len() * 8 + 64
+        self.data.capacity() + self.offsets.capacity() * 8 + 64
     }
 }
 
@@ -316,8 +331,11 @@ pub enum TitleList {
 }
 
 pub struct Archive {
-    /// `None` once closed: every later read fails with `CoreError::Io`.
-    src: RwLock<Option<Box<dyn ReadAt>>>,
+    /// `None` once closed: every later read fails with `CoreError::Io`. A read clones the
+    /// `Arc` and drops the lock before reading, so closing never waits for a read (a
+    /// hung USB read must not block `close_file` on the UI thread); the file itself is
+    /// closed when the last read in flight finishes.
+    src: RwLock<Option<Arc<dyn ReadAt>>>,
     /// Key of this archive in the shared caches.
     id: u64,
     pub header: Header,
@@ -368,7 +386,7 @@ impl Archive {
         };
         let mimes = read_mime_list(src.as_ref(), header.mime_list_pos, size)?;
         Ok(Archive {
-            src: RwLock::new(Some(src)),
+            src: RwLock::new(Some(Arc::from(src))),
             id: NEXT_ARCHIVE_ID.fetch_add(1, Ordering::Relaxed),
             header,
             mimes,
@@ -378,12 +396,22 @@ impl Archive {
         })
     }
 
-    /// Close the file now (fd released). The archive stays usable as an object; every
-    /// read from now on fails with `CoreError::Io`. Waits for reads in flight.
+    /// Close the file now. The archive stays usable as an object; every read from now
+    /// on fails with `CoreError::Io`. Never waits for reads in flight: they finish (or
+    /// fail) on their own and the fd is released when the last of them is done.
     pub fn close(&self) {
         let src = self.src.write().unwrap_or_else(|e| e.into_inner()).take();
-        drop(src);
+        drop(src); // closes the fd unless a read in flight still holds it
         self.purge_caches();
+    }
+
+    /// The open source, or `Io` once closed.
+    fn source(&self) -> Result<Arc<dyn ReadAt>> {
+        self.src
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+            .ok_or_else(|| CoreError::Io("the book is closed".into()))
     }
 
     pub fn is_closed(&self) -> bool {
@@ -430,11 +458,9 @@ impl Archive {
         if offset.checked_add(buf.len() as u64).is_none_or(|e| e > self.size) {
             return Err(invalid("read beyond the end of the file (truncated?)"));
         }
-        let g = self.src.read().unwrap_or_else(|e| e.into_inner());
-        match g.as_ref() {
-            Some(src) => src.read_exact_at(buf, offset).map_err(CoreError::from),
-            None => Err(CoreError::Io("the book is closed".into())),
-        }
+        // Bounds are checked against the size seen at open, so an end of file from the
+        // source means the file vanished (drive pulled): `Io`, see `CoreError::from`.
+        self.source()?.read_exact_at(buf, offset).map_err(CoreError::from)
     }
 
     fn read_u64(&self, offset: u64) -> Result<u64> {
@@ -599,55 +625,116 @@ impl Archive {
         if let Some(c) = lock(&shared().clusters).get(&(self.id, cluster)) {
             return Ok(c); // another thread just inflated it
         }
+        let data = self.inflate(cluster, loc)?;
+        let c = Arc::new(Cluster::parse(data, loc.extended)?);
+        let bytes = c.byte_size();
+        lock(&shared().clusters).put((self.id, cluster), c.clone(), bytes);
+        if self.is_closed() {
+            // closed while inflating: do not keep its clusters around
+            lock(&shared().clusters).retain(|k| *k != (self.id, cluster));
+        }
+        Ok(c)
+    }
+
+    /// Read and inflate a whole cluster, streaming from the file: memory is bounded by
+    /// what the data really inflates to (at most `MAX_CLUSTER_BYTES`), never by a size
+    /// the file merely declares, and allocation failures are errors, not aborts.
+    fn inflate(&self, cluster: u32, loc: &ClusterLoc) -> Result<Vec<u8>> {
         let raw_len = loc.end - loc.start - 1;
         if raw_len > MAX_CLUSTER_BYTES {
             return Err(invalid(format!("cluster {cluster} is implausibly large")));
         }
-        let mut raw = vec![0u8; raw_len as usize];
-        self.read_at(&mut raw, loc.start + 1)?;
-        let data = decompress(loc.compression, raw)?;
-        let c = Arc::new(Cluster::parse(data, loc.extended)?);
-        let bytes = c.byte_size();
-        lock(&shared().clusters).put((self.id, cluster), c.clone(), bytes);
-        Ok(c)
+        let io = Rc::new(Cell::new(None));
+        let reader = || {
+            let range = RangeReader { a: self, pos: loc.start + 1, end: loc.end, failed: io.clone() };
+            std::io::BufReader::with_capacity((raw_len as usize).clamp(1, READ_CHUNK), range)
+        };
+        let what = format!("cluster {cluster}");
+        let guess = (raw_len as usize).saturating_mul(4).min(INFLATE_HINT_MAX);
+        match loc.compression {
+            Compression::None => read_bounded(reader(), MAX_CLUSTER_BYTES, raw_len as usize, &io, &what),
+            Compression::Zstd => {
+                let mut input = reader();
+                let declared = input.fill_buf().ok().and_then(zstd_content_size);
+                let hint = declared.filter(|&n| n <= MAX_CLUSTER_BYTES).map(|n| n as usize).unwrap_or(guess);
+                read_bounded(zstd_reader(input)?, MAX_CLUSTER_BYTES, hint, &io, &what)
+            }
+            Compression::Xz => {
+                // lzma-rs inflates a whole xz block into its own unbounded buffer before
+                // our size-limited writer sees a byte, so an xz bomb is caught first, from
+                // the LZMA2 chunk headers, without decoding.
+                if raw_len > MAX_XZ_CLUSTER_BYTES + (1 << 20) {
+                    return Err(CoreError::Unsupported(format!(
+                        "xz {what} is {raw_len} bytes (limit {MAX_XZ_CLUSTER_BYTES})"
+                    )));
+                }
+                let mut raw = zeroed(raw_len, &what)?;
+                self.read_at(&mut raw, loc.start + 1)?;
+                match xz_unpacked_bound(&raw) {
+                    None => return Err(invalid(format!("xz {what}: not a readable xz stream"))),
+                    Some(n) if n > MAX_CLUSTER_BYTES => {
+                        return Err(invalid(format!("{what} inflates beyond {MAX_CLUSTER_BYTES} bytes")))
+                    }
+                    Some(n) if n > MAX_XZ_CLUSTER_BYTES => {
+                        return Err(CoreError::Unsupported(format!(
+                            "xz {what} inflates to {n} bytes (limit {MAX_XZ_CLUSTER_BYTES})"
+                        )))
+                    }
+                    Some(_) => {}
+                }
+                let mut out = Limited { v: Vec::new(), oom: false };
+                let _ = out.v.try_reserve_exact(guess);
+                match lzma_rs::xz_decompress(&mut &raw[..], &mut out) {
+                    Ok(()) => Ok(out.v),
+                    Err(_) if out.oom => Err(no_memory(&what, out.v.len() as u64)),
+                    Err(e) => Err(invalid(format!("xz {what}: {e}"))),
+                }
+            }
+            Compression::Zlib => Err(CoreError::Unsupported("zlib-compressed cluster".into())),
+            Compression::Bzip2 => Err(CoreError::Unsupported("bzip2-compressed cluster".into())),
+            Compression::Unknown(c) => Err(invalid(format!("unknown cluster compression {c}"))),
+        }
     }
 
     /// A sequential reader over a cluster's (decoded) data, for uncompressed and zstd
-    /// clusters, plus its offset table. Reads only as far as the caller reads.
-    fn cluster_stream(&self, cluster: u32, loc: &ClusterLoc) -> Result<(Box<dyn Read + '_>, Vec<u64>)> {
+    /// clusters, plus its offset table. Reads only as far as the caller reads. The table
+    /// is read in pieces, so a corrupt first offset costs no more memory than the data
+    /// really behind it, and it may not promise more blobs than the archive has entries.
+    fn cluster_stream(&self, cluster: u32, loc: &ClusterLoc) -> Result<ClusterStream<'_>> {
         let osz: usize = if loc.extended { 8 } else { 4 };
-        let range = RangeReader { a: self, pos: loc.start + 1, end: loc.end };
-        let mut r: Box<dyn Read + '_> = match loc.compression {
+        let io = Rc::new(Cell::new(None));
+        let range = RangeReader { a: self, pos: loc.start + 1, end: loc.end, failed: io.clone() };
+        let r: Box<dyn Read + '_> = match loc.compression {
             Compression::None => Box::new(range),
             Compression::Zstd => zstd_reader(std::io::BufReader::with_capacity(32 * 1024, range))?,
             _ => return Err(CoreError::Unsupported("streamed read of this cluster type".into())),
         };
-        let parse = |table: &[u8]| -> Vec<u64> {
-            table
-                .chunks_exact(osz)
-                .map(|c| {
-                    if osz == 8 {
-                        u64::from_le_bytes(c.try_into().unwrap())
-                    } else {
-                        u32::from_le_bytes(c.try_into().unwrap()) as u64
-                    }
-                })
-                .collect()
+        let mut s = ClusterStream { r, offs: Vec::new(), io, cluster };
+        let le = |c: &[u8]| -> u64 {
+            if osz == 8 {
+                u64::from_le_bytes(c.try_into().unwrap())
+            } else {
+                u32::from_le_bytes(c.try_into().unwrap()) as u64
+            }
         };
-        let mut table = vec![0u8; osz];
-        r.read_exact(&mut table).map_err(|e| invalid(format!("cluster {cluster}: {e}")))?;
-        let first = parse(&table)[0];
+        let first = le(&s.read_vec(osz as u64)?);
         let bound = if loc.compression == Compression::None { loc.end - loc.start - 1 } else { MAX_CLUSTER_BYTES };
-        if first == 0 || first % osz as u64 != 0 || first > bound {
+        let most_blobs = (self.header.entry_count as u64 + 1) * osz as u64;
+        if first == 0 || first % osz as u64 != 0 || first > bound || first > most_blobs {
             return Err(invalid(format!("bad offset table in cluster {cluster}")));
         }
-        table.resize(first as usize, 0);
-        r.read_exact(&mut table[osz..]).map_err(|e| invalid(format!("cluster {cluster}: {e}")))?;
-        let offs = parse(&table);
+        let mut offs = vec![first];
+        let mut left = first - osz as u64;
+        while left > 0 {
+            let n = left.min(64 * 1024);
+            offs.extend(s.read_vec(n)?.chunks_exact(osz).map(le));
+            left -= n;
+        }
         if offs.windows(2).any(|w| w[1] < w[0]) || *offs.last().unwrap() > bound {
             return Err(invalid(format!("bad offset table in cluster {cluster}")));
         }
-        Ok((r, offs))
+        s.offs = offs;
+        Ok(s)
     }
 
     /// Sizes of every blob in a cluster, reading as little as possible: the offset table
@@ -658,8 +745,8 @@ impl Archive {
         let loc = self.cluster_loc(cluster)?;
         match loc.compression {
             Compression::None | Compression::Zstd => {
-                let (_, offs) = self.cluster_stream(cluster, &loc)?;
-                Ok(offs.windows(2).map(|w| w[1] - w[0]).collect())
+                let s = self.cluster_stream(cluster, &loc)?;
+                Ok(s.offs.windows(2).map(|w| w[1] - w[0]).collect())
             }
             Compression::Xz => {
                 let c = self.cluster(cluster, &loc)?;
@@ -672,34 +759,35 @@ impl Archive {
 
     /// Contents of several small entries of one cluster (metadata) with one partial
     /// decode: blobs ending within `limit` decoded bytes of a zstd cluster are read without
-    /// inflating or caching the whole cluster; others are read normally.
+    /// inflating or caching the whole cluster; others are read normally. Blobs over
+    /// `MAX_META_BYTES` are left out (corrupt metadata).
     pub fn small_blobs(&self, cluster: u32, blobs: &[u32], limit: u64) -> Result<HashMap<u32, Vec<u8>>> {
         let mut out = HashMap::new();
         let loc = self.cluster_loc(cluster)?;
         let cached = lock(&shared().clusters).get(&(self.id, cluster));
         if loc.compression == Compression::Zstd && cached.is_none() {
-            let (mut r, offs) = self.cluster_stream(cluster, &loc)?;
-            let mut want: Vec<u32> = blobs.iter().copied().filter(|&b| (b as usize) + 1 < offs.len()).collect();
+            let mut s = self.cluster_stream(cluster, &loc)?;
+            let n = s.offs.len() - 1;
+            let mut want: Vec<u32> = blobs.iter().copied().filter(|&b| (b as usize) < n).collect();
             want.sort_unstable();
             want.dedup();
-            let mut pos = offs[0];
+            let mut pos = s.offs[0];
             for b in want {
-                let (start, end) = (offs[b as usize], offs[b as usize + 1]);
+                let (start, end) = (s.offs[b as usize], s.offs[b as usize + 1]);
                 if end > limit {
                     break;
                 }
-                std::io::copy(&mut (&mut r).take(start - pos), &mut std::io::sink())
-                    .map_err(|e| invalid(format!("cluster {cluster}: {e}")))?;
-                let mut v = vec![0u8; (end - start) as usize];
-                r.read_exact(&mut v).map_err(|e| invalid(format!("cluster {cluster}: {e}")))?;
+                s.skip(start - pos)?;
+                out.insert(b, s.read_vec(end - start)?);
                 pos = end;
-                out.insert(b, v);
             }
         }
         for &b in blobs {
             if let std::collections::hash_map::Entry::Vacant(e) = out.entry(b) {
                 let l = self.blob_loc(cluster, b)?;
-                e.insert(self.read_blob(&l, 0, u64::MAX)?);
+                if l.len() <= MAX_META_BYTES {
+                    e.insert(self.read_blob(&l, 0, u64::MAX)?);
+                }
             }
         }
         Ok(out)
@@ -707,7 +795,8 @@ impl Archive {
 
     /// Content of a small entry near the start of its cluster (metadata) without
     /// inflating or caching the whole cluster: decodes only up to the blob's end when
-    /// that is within `limit` decoded bytes, else reads the cluster normally.
+    /// that is within `limit` decoded bytes, else reads the cluster normally. At most
+    /// `MAX_META_BYTES`.
     pub fn content_small(&self, d: &Dirent, limit: u64) -> Result<Vec<u8>> {
         let Kind::Content { cluster, blob } = d.kind else {
             return Err(CoreError::NotFound(format!("{} has no content", d.path)));
@@ -715,20 +804,18 @@ impl Archive {
         let loc = self.cluster_loc(cluster)?;
         let cached = lock(&shared().clusters).get(&(self.id, cluster));
         if loc.compression == Compression::Zstd && cached.is_none() {
-            let (mut r, offs) = self.cluster_stream(cluster, &loc)?;
+            let mut s = self.cluster_stream(cluster, &loc)?;
             let b = blob as usize;
-            if b + 1 >= offs.len() {
+            if b >= s.offs.len() - 1 {
                 return Err(invalid(format!("blob {blob} out of range in cluster {cluster}")));
             }
-            if offs[b + 1] <= limit {
-                std::io::copy(&mut (&mut r).take(offs[b] - offs[0]), &mut std::io::sink())
-                    .map_err(|e| invalid(format!("cluster {cluster}: {e}")))?;
-                let mut out = vec![0u8; (offs[b + 1] - offs[b]) as usize];
-                r.read_exact(&mut out).map_err(|e| invalid(format!("cluster {cluster}: {e}")))?;
-                return Ok(out);
+            let (first, start, end) = (s.offs[0], s.offs[b], s.offs[b + 1]);
+            if end <= limit {
+                s.skip(start - first)?;
+                return s.read_vec(end - start);
             }
         }
-        self.content(d)
+        self.content_max(d, MAX_META_BYTES)
     }
 
     /// Locate a blob without reading its bytes (uncompressed clusters stay on disk).
@@ -790,7 +877,7 @@ impl Archive {
         let n = len.min(total - offset);
         match loc {
             BlobLoc::File { offset: base, .. } => {
-                let mut buf = vec![0u8; n as usize];
+                let mut buf = zeroed(n, "entry")?;
                 self.read_at(&mut buf, base + offset)?;
                 Ok(buf)
             }
@@ -801,11 +888,19 @@ impl Archive {
         }
     }
 
-    /// Whole content of a content dirent.
+    /// Whole content of a content dirent (at most `MAX_GET_BYTES`).
     pub fn content(&self, d: &Dirent) -> Result<Vec<u8>> {
+        self.content_max(d, MAX_GET_BYTES)
+    }
+
+    /// Whole content of a content dirent; `Unsupported` when it is bigger than `max`.
+    pub fn content_max(&self, d: &Dirent, max: u64) -> Result<Vec<u8>> {
         match d.kind {
             Kind::Content { cluster, blob } => {
                 let loc = self.blob_loc(cluster, blob)?;
+                if loc.len() > max {
+                    return Err(CoreError::Unsupported(format!("{} is {} bytes (limit {max})", d.path, loc.len())));
+                }
                 self.read_blob(&loc, 0, u64::MAX)
             }
             _ => Err(CoreError::NotFound(format!("{} has no content", d.path))),
@@ -827,7 +922,7 @@ impl Archive {
         let Kind::Content { cluster, blob } = d.kind else { return Ok(None) };
         let loc = self.blob_loc(cluster, blob)?;
         let len = loc.len();
-        if len % 4 != 0 {
+        if len % 4 != 0 || len / 4 > self.header.entry_count as u64 {
             return Err(invalid(format!("listing {name} has a bad size")));
         }
         Ok(Some(match loc {
@@ -955,11 +1050,13 @@ fn read_mime_list(src: &dyn ReadAt, pos: u64, size: u64) -> Result<Vec<String>> 
     }
 }
 
-/// Reads a byte range of the archive sequentially with `pread`.
+/// Reads a byte range of the archive sequentially with `pread`. A failed read is kept
+/// in `failed` so the caller reports it as itself (`Io`), not as a decoder error.
 struct RangeReader<'a> {
     a: &'a Archive,
     pos: u64,
     end: u64,
+    failed: Rc<Cell<Option<CoreError>>>,
 }
 
 impl Read for RangeReader<'_> {
@@ -968,10 +1065,98 @@ impl Read for RangeReader<'_> {
         if n == 0 {
             return Ok(0);
         }
-        self.a.read_at(&mut buf[..n], self.pos).map_err(|e| std::io::Error::other(e.to_string()))?;
+        if let Err(e) = self.a.read_at(&mut buf[..n], self.pos) {
+            let msg = e.to_string();
+            self.failed.set(Some(e));
+            return Err(std::io::Error::other(msg));
+        }
         self.pos += n as u64;
         Ok(n)
     }
+}
+
+/// A decoded cluster read sequentially, with its offset table.
+struct ClusterStream<'a> {
+    r: Box<dyn Read + 'a>,
+    offs: Vec<u64>,
+    io: Rc<Cell<Option<CoreError>>>,
+    cluster: u32,
+}
+
+impl ClusterStream<'_> {
+    fn fail(&self, e: std::io::Error) -> CoreError {
+        self.io.take().unwrap_or_else(|| invalid(format!("cluster {}: {e}", self.cluster)))
+    }
+
+    fn read_vec(&mut self, n: u64) -> Result<Vec<u8>> {
+        let mut v = zeroed(n, "cluster data")?;
+        let r = self.r.read_exact(&mut v);
+        r.map_err(|e| self.fail(e))?;
+        Ok(v)
+    }
+
+    fn skip(&mut self, n: u64) -> Result<()> {
+        let r = std::io::copy(&mut (&mut self.r).take(n), &mut std::io::sink());
+        let got = r.map_err(|e| self.fail(e))?;
+        if got < n {
+            return Err(invalid(format!("cluster {}: data ends early", self.cluster)));
+        }
+        Ok(())
+    }
+}
+
+/// Read a stream to its end, at most `limit` bytes (more is an error). Grows from
+/// `hint` with fallible allocations; an exact hint means one allocation.
+fn read_bounded(
+    mut r: impl Read,
+    limit: u64,
+    hint: usize,
+    io: &Cell<Option<CoreError>>,
+    what: &str,
+) -> Result<Vec<u8>> {
+    let max = usize::try_from(limit).unwrap_or(usize::MAX);
+    let fail = |e: std::io::Error| io.take().unwrap_or_else(|| invalid(format!("{what}: {e}")));
+    let read = |r: &mut dyn Read, b: &mut [u8]| loop {
+        match r.read(b) {
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            x => break x,
+        }
+    };
+    let mut buf: Vec<u8> = Vec::new();
+    let mut len = 0usize;
+    let mut next = hint.clamp(1, max);
+    loop {
+        if len == buf.len() {
+            let mut probe = [0u8; 256];
+            let mut extra = 0;
+            if len > 0 {
+                // Full: look for the end before growing (an exact hint never grows).
+                extra = read(&mut r, &mut probe).map_err(fail)?;
+                if extra == 0 {
+                    break;
+                }
+            }
+            if len + extra > max {
+                return Err(invalid(format!("{what} inflates beyond {limit} bytes")));
+            }
+            let grow = next.max(extra).min(max - len).max(extra);
+            buf.try_reserve_exact(grow).map_err(|_| no_memory(what, (len + grow) as u64))?;
+            buf.resize(len + grow, 0);
+            buf[len..len + extra].copy_from_slice(&probe[..extra]);
+            len += extra;
+            next = buf.len();
+            continue;
+        }
+        match read(&mut r, &mut buf[len..]).map_err(fail)? {
+            0 => break,
+            n => len += n,
+        }
+    }
+    buf.truncate(len);
+    if buf.capacity() - len > len / 8 + 4096 {
+        buf.shrink_to_fit();
+    }
+    Ok(buf)
 }
 
 #[cfg(feature = "zstd-c")]
@@ -984,66 +1169,98 @@ fn zstd_reader<'a, R: std::io::BufRead + 'a>(r: R) -> Result<Box<dyn Read + 'a>>
     Ok(Box::new(ruzstd::decoding::StreamingDecoder::new(r).map_err(|e| invalid(format!("zstd cluster: {e}")))?))
 }
 
-fn decompress(c: Compression, raw: Vec<u8>) -> Result<Vec<u8>> {
-    match c {
-        Compression::None => Ok(raw),
-        Compression::Zstd => {
-            let out = zstd_decode(&raw)?;
-            check_inflated(&out)?;
-            Ok(out)
-        }
-        Compression::Xz => {
-            let mut out = Limited(Vec::with_capacity(raw.len() * 4));
-            let mut input = std::io::BufReader::new(&raw[..]);
-            lzma_rs::xz_decompress(&mut input, &mut out).map_err(|e| invalid(format!("xz cluster: {e}")))?;
-            check_inflated(&out.0)?;
-            Ok(out.0)
-        }
-        Compression::Zlib => Err(CoreError::Unsupported("zlib-compressed cluster".into())),
-        Compression::Bzip2 => Err(CoreError::Unsupported("bzip2-compressed cluster".into())),
-        Compression::Unknown(c) => Err(invalid(format!("unknown cluster compression {c}"))),
-    }
-}
-
+/// Content size declared in a zstd frame header, if any (a size hint only).
 #[cfg(feature = "zstd-c")]
-fn zstd_decode(raw: &[u8]) -> Result<Vec<u8>> {
-    let dec = zstd::stream::read::Decoder::with_buffer(raw).map_err(|e| invalid(format!("zstd cluster: {e}")))?;
-    let mut out = Vec::with_capacity(raw.len() * 6);
-    dec.take(MAX_CLUSTER_BYTES + 1).read_to_end(&mut out).map_err(|e| invalid(format!("zstd cluster: {e}")))?;
-    Ok(out)
+fn zstd_content_size(head: &[u8]) -> Option<u64> {
+    zstd::zstd_safe::get_frame_content_size(head).ok().flatten()
 }
 
 #[cfg(all(feature = "zstd-pure", not(feature = "zstd-c")))]
-fn zstd_decode(raw: &[u8]) -> Result<Vec<u8>> {
-    let mut dec = ruzstd::decoding::StreamingDecoder::new(raw).map_err(|e| invalid(format!("zstd cluster: {e}")))?;
-    let mut out = Vec::with_capacity(raw.len() * 6);
-    (&mut dec).take(MAX_CLUSTER_BYTES + 1).read_to_end(&mut out).map_err(|e| invalid(format!("zstd cluster: {e}")))?;
-    Ok(out)
+fn zstd_content_size(_head: &[u8]) -> Option<u64> {
+    None
 }
 
 #[cfg(not(any(feature = "zstd-c", feature = "zstd-pure")))]
 compile_error!("enable feature zstd-c (default) or zstd-pure");
 
-/// A `Vec` writer that refuses to grow past the cluster limit (xz bombs).
-struct Limited(Vec<u8>);
+/// The most an xz stream inflates to, from its block and LZMA2 chunk headers alone (no
+/// decoding): every chunk declares its unpacked size and lzma-rs stops each chunk there
+/// (overshooting by at most one 273-byte match). `None`: not a structure lzma-rs reads.
+fn xz_unpacked_bound(x: &[u8]) -> Option<u64> {
+    const MAGIC: [u8; 6] = [0xfd, b'7', b'z', b'X', b'Z', 0];
+    if x.len() < 12 || x[..6] != MAGIC {
+        return None;
+    }
+    let check = match x[7] & 0x0f {
+        0 => 0,
+        1 => 4,
+        4 => 8,
+        10 => 32,
+        _ => return None,
+    };
+    let be16 = |p: usize| -> Option<u64> { Some(u16::from_be_bytes([*x.get(p)?, *x.get(p.checked_add(1)?)?]) as u64) };
+    let mut pos = 12usize;
+    let mut total = 0u64;
+    loop {
+        let h = *x.get(pos)?;
+        if h == 0 {
+            return Some(total); // the index: no more blocks
+        }
+        let block = pos;
+        pos = pos.checked_add((h as usize + 1) * 4)?;
+        loop {
+            let c = *x.get(pos)?;
+            match c {
+                0 => {
+                    pos += 1;
+                    break;
+                }
+                1 | 2 => {
+                    let n = be16(pos + 1)? + 1;
+                    total += n;
+                    pos = pos.checked_add(3 + n as usize)?;
+                }
+                0x80..=0xff => {
+                    let unpacked = ((((c & 0x1f) as u64) << 16) | be16(pos + 1)?) + 1;
+                    let packed = be16(pos + 3)? + 1;
+                    total += unpacked + 273;
+                    pos = pos.checked_add(5 + (c >= 0xc0) as usize + packed as usize)?;
+                }
+                _ => return None,
+            }
+            if total > MAX_CLUSTER_BYTES {
+                return Some(total); // a bomb: no need to read further
+            }
+        }
+        pos = pos.checked_add((4 - (pos - block) % 4) % 4)?.checked_add(check)?;
+    }
+}
+
+/// A `Vec` writer that refuses to grow past the cluster limit (xz bombs) and fails
+/// instead of aborting when memory runs out.
+struct Limited {
+    v: Vec<u8>,
+    oom: bool,
+}
 
 impl std::io::Write for Limited {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        if self.0.len() as u64 + buf.len() as u64 > MAX_CLUSTER_BYTES {
+        let len = self.v.len();
+        if len as u64 + buf.len() as u64 > MAX_CLUSTER_BYTES {
             return Err(std::io::Error::other("cluster inflates beyond the size limit"));
         }
-        self.0.extend_from_slice(buf);
+        if self.v.capacity() - len < buf.len() {
+            let grow = len.max(buf.len()).min(MAX_CLUSTER_BYTES as usize - len).max(buf.len());
+            if self.v.try_reserve_exact(grow).is_err() {
+                self.oom = true;
+                return Err(std::io::ErrorKind::OutOfMemory.into());
+            }
+        }
+        self.v.extend_from_slice(buf);
         Ok(buf.len())
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
     }
-}
-
-fn check_inflated(out: &[u8]) -> Result<()> {
-    if out.len() as u64 > MAX_CLUSTER_BYTES {
-        return Err(invalid("cluster inflates beyond the size limit"));
-    }
-    Ok(())
 }

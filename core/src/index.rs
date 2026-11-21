@@ -52,7 +52,7 @@ use std::time::{Duration, Instant};
 
 use fst::{IntoStreamer, Streamer};
 
-use crate::error::{invalid, CoreError, Result};
+use crate::error::{invalid, zeroed, CoreError, Result};
 use crate::normalize::{normalize, word_starts};
 use crate::reader::{FileSource, MemSource, ReadAt};
 use crate::zim::{Archive, Kind};
@@ -168,7 +168,13 @@ pub struct SearchIndex {
     pub article_records: u32,
     pub byte_len: u64,
     secs: [Sec; SECTIONS],
+    /// Held only to look at or swap the loaded maps, never during I/O, so `unload`
+    /// (memory pressure, UI thread) never waits for a load in progress.
     maps: Mutex<Option<Arc<Maps>>>,
+    /// Serialises loading (concurrent first searches wait for one load).
+    loading: Mutex<()>,
+    /// Bumped by `unload`; a load that started earlier is not kept.
+    generation: std::sync::atomic::AtomicU64,
 }
 
 /// Every live index, so memory trimming can unload them.
@@ -200,6 +206,25 @@ fn first_ordinal_ge(map: &fst::Map<Vec<u8>>, key: &[u8]) -> u64 {
     map.range().ge(key).into_stream().next().map(|(_, v)| v).unwrap_or(map.len() as u64)
 }
 
+/// An `fst` map from untrusted bytes. The `fst` crate does no integrity check of its
+/// own and panics (or worse) on corrupt input, and on 32-bit targets it panics outright
+/// on a root address above 4 GB. So: check the trailer ourselves, then the checksum
+/// every map we write carries (fst format 3, crc32c over all bytes).
+fn checked_fst(v: Vec<u8>) -> Result<fst::Map<Vec<u8>>> {
+    let bad = || invalid("search index: corrupt word map");
+    let n = v.len() as u64;
+    if n < 36 || u64::from_le_bytes(v[..8].try_into().unwrap()) != 3 {
+        return Err(bad());
+    }
+    let root = u64::from_le_bytes(v[v.len() - 12..v.len() - 4].try_into().unwrap());
+    if !(root == 0 && n == 36 || root.checked_add(21) == Some(n)) {
+        return Err(bad());
+    }
+    let m = fst::Map::new(v).map_err(|e| invalid(format!("search index: {e}")))?;
+    m.as_fst().verify().map_err(|_| bad())?;
+    Ok(m)
+}
+
 impl SearchIndex {
     /// Open an index file: reads and checks the header only. Small files are read whole;
     /// big ones keep the file open, and their `fst` maps load on first use.
@@ -223,6 +248,12 @@ impl SearchIndex {
 
     pub fn from_vec(v: Vec<u8>) -> Result<SearchIndex> {
         Self::from_source(Box::new(MemSource(v)), true)
+    }
+
+    /// An index over any byte source, read with positional reads like a big file (tests:
+    /// fault injection).
+    pub fn from_reader(src: Box<dyn ReadAt>) -> Result<SearchIndex> {
+        Self::from_source(src, false)
     }
 
     fn from_source(src: Box<dyn ReadAt>, in_memory: bool) -> Result<SearchIndex> {
@@ -271,19 +302,35 @@ impl SearchIndex {
             byte_len: size,
             secs,
             maps: Mutex::new(None),
+            loading: Mutex::new(()),
+            generation: Default::default(),
         })
     }
 
     /// The in-memory part, loading it on first use (concurrent callers wait for one load).
     fn maps(&self) -> Result<Arc<Maps>> {
-        let mut g = self.maps.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(m) = g.as_ref() {
+        use std::sync::atomic::Ordering::SeqCst;
+        if let Some(m) = self.maps.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
             return Ok(m.clone());
         }
+        let _one = self.loading.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(m) = self.maps.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            return Ok(m.clone()); // loaded while we waited
+        }
+        let gen = self.generation.load(SeqCst);
+        let m = Arc::new(self.load_maps()?);
+        let mut g = self.maps.lock().unwrap_or_else(|e| e.into_inner());
+        if self.generation.load(SeqCst) == gen {
+            *g = Some(m.clone()); // not trimmed meanwhile: keep it
+        }
+        Ok(m)
+    }
+
+    fn load_maps(&self) -> Result<Maps> {
         let load = |s: Sec| -> Result<fst::Map<Vec<u8>>> {
-            let mut v = vec![0u8; s.len as usize];
+            let mut v = zeroed(s.len, "search index")?;
             self.src.read_exact_at(&mut v, s.off)?;
-            fst::Map::new(v).map_err(|e| invalid(format!("search index: {e}")))
+            checked_fst(v)
         };
         let s = &self.secs;
         let title = KeyMap { fst: load(s[0])?, heavy: load(s[2])?, offsets: s[5], postings: s[6] };
@@ -298,14 +345,15 @@ impl SearchIndex {
         if levels.windows(2).any(|w| w[1].0 <= w[0].0) {
             return Err(invalid("search index: bad score levels"));
         }
-        let m = Arc::new(Maps { title, word, levels });
-        *g = Some(m.clone());
-        Ok(m)
+        Ok(Maps { title, word, levels })
     }
 
-    /// Drop the in-memory part; it loads again on the next search.
+    /// Drop the in-memory part; it loads again on the next search. Never waits for a
+    /// load in progress (that load is then not kept).
     pub fn unload(&self) {
-        *self.maps.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        self.generation.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let old = self.maps.lock().unwrap_or_else(|e| e.into_inner()).take();
+        drop(old); // freed outside the lock
     }
 
     /// Load the in-memory part now (call it off the UI thread after attaching).
@@ -322,10 +370,12 @@ impl SearchIndex {
         if n == 0 {
             return Ok(Vec::new());
         }
-        if (start + n) * 4 > s.len {
+        // Positions come from the file (fst values, counts): no arithmetic may wrap.
+        let end = start.checked_add(n).and_then(|e| e.checked_mul(4));
+        if end.is_none_or(|e| e > s.len) {
             return Err(invalid("search index: read outside a section"));
         }
-        let mut b = vec![0u8; (n * 4) as usize];
+        let mut b = zeroed(n * 4, "search index")?;
         self.src.read_exact_at(&mut b, s.off + start * 4)?;
         Ok(b.chunks_exact(4).map(|c| u32::from_le_bytes(c.try_into().unwrap())).collect())
     }
@@ -379,12 +429,12 @@ impl SearchIndex {
         exact.truncate(keep);
         let prefix = if let Some(off) = m.heavy.get(q) {
             let n = self.read_u32s(self.secs[9], off, 1)?[0];
-            self.read_u32s(self.secs[9], off + 1, n as u64)?
+            self.read_u32s(self.secs[9], off.saturating_add(1), n as u64)?
         } else {
             let lo = first_ordinal_ge(&m.fst, q.as_bytes());
             let mut upper = q.as_bytes().to_vec();
             upper.push(0xff); // never inside UTF-8: above every key starting with q
-            let hi = first_ordinal_ge(&m.fst, &upper).min(lo + RANGE_CAP);
+            let hi = first_ordinal_ge(&m.fst, &upper).min(lo.saturating_add(RANGE_CAP));
             let mut ids = self.postings(m, lo, hi, keep)?;
             if ids.len() > keep {
                 ids.select_nth_unstable_by_key(keep, |&id| (maps.level(id), id));
@@ -402,7 +452,7 @@ impl SearchIndex {
             return Ok(Vec::new());
         }
         let m = self.maps()?;
-        let keep = want.max(1) * 4;
+        let keep = want.clamp(1, 1 << 16) * 4;
         let mut hits = Vec::new();
         for (map, classes) in
             [(&m.title, [CLASS_EXACT, CLASS_PREFIX]), (&m.word, [CLASS_WORD_EXACT, CLASS_WORD_PREFIX])]
@@ -530,6 +580,9 @@ impl<'a> DirentScanner<'a> {
         }
         // Dirents are normally stored in path order: read big windows going forward,
         // small ones when the layout jumps around.
+        if off >= self.a.size() {
+            return Err(invalid("directory entry pointer outside the file"));
+        }
         let forward = self.win.is_empty() || (off >= self.win_start && off < self.win_start + 2 * Self::WIN);
         let want = if forward { Self::WIN } else { 4096 };
         let len = want.min(self.a.size() - off) as usize;
@@ -654,19 +707,22 @@ pub fn build(a: &Archive, out: &mut dyn WriteSeek, obs: &mut dyn BuildObserver) 
     rep.log(&format!("article namespace: {n} entries"));
 
     // Front articles from the v1 listing when present, else HTML content entries.
-    let v1 = if a.new_scheme() { a.listing_blob("listing/titleOrdered/v1")? } else { None };
+    // A corrupt front-article listing is ignored (HTML entries are used instead).
+    let v1 = match a.new_scheme().then(|| a.listing_blob("listing/titleOrdered/v1")) {
+        Some(Ok(l)) => l,
+        Some(Err(e @ CoreError::Io(_))) => return Err(e),
+        _ => None,
+    };
     let mut kind = vec![K_OTHER; n];
     let use_v1 = v1.is_some();
     if let Some(l) = &v1 {
         let len = a.title_list_len(l);
-        let mut i = 0;
-        while i < len {
+        for i in (0..len).step_by(1 << 16) {
             for e in a.title_list_slice(l, i, 1 << 16)? {
                 if e >= range.start && e < range.end {
                     kind[(e - base) as usize] = K_ARTICLE; // provisional: front article
                 }
             }
-            i += 1 << 16;
         }
     }
 
@@ -730,10 +786,16 @@ pub fn build(a: &Archive, out: &mut dyn WriteSeek, obs: &mut dyn BuildObserver) 
     let mut size: Vec<u32> = vec![0; n];
     let clusters = blobs.chunk_by(|x, y| x.0 == y.0).count().max(1);
     for (ci, group) in blobs.chunk_by(|x, y| x.0 == y.0).enumerate() {
-        if let Ok(sizes) = a.blob_sizes(group[0].0) {
-            for &(_, blob, k) in group {
-                size[k as usize] = sizes.get(blob as usize).copied().unwrap_or(0).min(u32::MAX as u64) as u32;
+        match a.blob_sizes(group[0].0) {
+            Ok(sizes) => {
+                for &(_, blob, k) in group {
+                    size[k as usize] = sizes.get(blob as usize).copied().unwrap_or(0).min(u32::MAX as u64) as u32;
+                }
             }
+            // A drive pulled mid-build must not leave a complete-looking index with every
+            // later size missing: stop. A corrupt cluster only loses its sizes.
+            Err(e @ CoreError::Io(_)) => return Err(e),
+            Err(_) => {}
         }
         st.clusters_sized += 1;
         rep.at(0.40 + 0.40 * (ci + 1) as f64 / clusters as f64)?;
