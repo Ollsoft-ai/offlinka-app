@@ -5,12 +5,14 @@
 #
 #   scripts/ci/emulator-smoke.sh <apk-or-dir> <out-dir>
 #
-# 1. Czech system locale, install, launch → Connect screen („Vybrat flashku“); rotate and back; background
-#    and foreground; process killed in the background and restored.
+# 1. Czech system locale, install, launch → Connect screen („Vybrat flashku“); „Otevřít první pomoc“ → the
+#    bundled guides in the WebView, back; rotate and back; background and foreground; process killed in the
+#    background and restored.
 # 2. A USB drive stand-in: the emulator's virtual SD disk (a removable public volume) with the bundled guides
-#    ZIM in Knihovna/, picked in the system folder picker → Home → „První pomoc“ → the reader's WebView shows
-#    the guide; rotate, background, process death again. The picker belongs to the system (DocumentsUI):
-#    when it cannot be driven, part 2 is skipped with a warning. Everything the app itself shows is asserted.
+#    ZIM in Knihovna/, picked in the system folder picker (the SD root is refused on Android 11+, so Knihovna,
+#    as the app's help says) → Home → „První pomoc“ → the guide in the WebView; rotate, background, process
+#    death again. The picker belongs to the system (DocumentsUI): when it cannot be driven, part 2 is skipped
+#    with a warning. Everything the app itself shows is asserted.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
@@ -219,9 +221,23 @@ wait_for "$CONNECT" 60 || fail "Connect screen without „$CONNECT“"
 has "Zapojte flashku Offlinka" || fail "Connect screen without its title"
 end_step
 
-# Only on the "unplugged" variant of the Connect screen (drive seen before); not on a first start.
-if has "Otevřít první pomoc"; then
-  warn "the Connect screen offers the guides on a first start"
+# First aid without the drive: the guides bundled with the app, in the WebView.
+GUIDES_ENTRY="Otevřít první pomoc"
+# Text of the guide pages themselves (WebView content in the accessibility tree), not the reader's title bar.
+GUIDE_RE="Deset situací|záchranná služba|tísňové volání"
+# (Nodes below the fold are in the dump too, with empty bounds.)
+dump || true
+if has "$GUIDES_ENTRY"; then
+  step connect-first-aid
+  scroll_tap "$GUIDES_ENTRY" || fail "no „$GUIDES_ENTRY“ button"
+  wait_for "$GUIDE_RE" 45 || fail "the bundled guides did not show in the reader"
+  end_step
+  step connect-first-aid-back
+  adb shell input keyevent KEYCODE_BACK
+  wait_for "$CONNECT" 20 || fail "Back from the bundled guides did not return to the Connect screen"
+  end_step
+else
+  warn "the Connect screen offers no „$GUIDES_ENTRY“: bundled guides step skipped"
 fi
 
 step rotate-landscape
@@ -384,8 +400,6 @@ pick_drive() {
 }
 
 HOME_RE="Hledat v Offlince"
-# Text of the guide page itself (WebView content in the accessibility tree), not the reader's title bar.
-GUIDE_RE="Deset situací|záchranná služba|tísňové volání"
 step drive-plugged
 if ! virtual_drive; then
   warn "no virtual SD disk on this emulator: drive, Home and reader steps skipped"
@@ -394,7 +408,6 @@ if ! virtual_drive; then
 fi
 foreground
 wait_for "$CONNECT" 30 || fail "Connect screen not shown with the drive plugged in"
-has "Flashku vidím" || warn "the Connect screen does not report the plugged-in drive („Flashku vidím“)"
 end_step
 
 step pick-drive
