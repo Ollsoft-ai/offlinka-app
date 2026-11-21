@@ -4,7 +4,7 @@
 //   node render.cjs frames <target>    store frames -> out/play/... or out/appstore/... (targets in frames.json)
 //   node render.cjs graphics           Play feature graphics (1024x500) + Play icon (512x512)
 // Layout and look of every frame: frame.html.
-// One Chromium, one page at a time. Config: frames.json. Env: SNAPSHOTS, OFFLINKA_CLI, OFFLINKA_DRIVE_FILES, OUT_DIR, BUILD_DIR.
+// One Chromium, one page at a time. Config: frames.json. Env: SNAPSHOTS, SNAPSHOT_PAGES, OFFLINKA_CLI, OFFLINKA_DRIVE_FILES, OUT_DIR, BUILD_DIR.
 const http = require('http'), fs = require('fs'), path = require('path'), os = require('os');
 const { execFile } = require('child_process');
 const { chromium } = require(process.env.PLAYWRIGHT_DIR || '/srv/offlinka/drive/node_modules/playwright');
@@ -12,6 +12,9 @@ const { chromium } = require(process.env.PLAYWRIGHT_DIR || '/srv/offlinka/drive/
 const HERE = __dirname, REPO = path.resolve(HERE, '../..'), DESIGN = path.join(REPO, 'design');
 const CFG = JSON.parse(fs.readFileSync(path.join(HERE, 'frames.json'), 'utf8'));
 const SNAPS = process.env.SNAPSHOTS || path.join(REPO, 'android/ui/src/test/snapshots/images');
+// SNAPSHOT_PAGES=app: the snapshots already show the real pages (iOS simulator captures on the review sample
+// drive), so no page is drawn into their WebView area.
+const PAGES_IN_SNAPS = process.env.SNAPSHOT_PAGES === 'app';
 const BUILD = process.env.BUILD_DIR || path.join(HERE, 'build');
 const OUT = process.env.OUT_DIR || path.join(HERE, 'out');
 const DRIVE = process.env.OFFLINKA_DRIVE_FILES || '/srv/offlinka/drive/release/current/files';
@@ -30,7 +33,7 @@ function resolveScreen(list, loc, what) {
   for (const s of list) {
     const snap = s.snap && snapFile(s.snap.replace('{loc}', loc));
     if (s.snap && !snap) continue;
-    const content = s.content && path.join(BUILD, 'content', s.content + '.png');
+    const content = !(PAGES_IN_SNAPS && snap) && s.content && path.join(BUILD, 'content', s.content + '.png');
     if (content && !fs.existsSync(content)) throw new Error(`build/content/${s.content}.png missing: run the content step first`);
     // the page alone, without the app's bars, means the Paparazzi state for this language is missing
     if (!s.snap && list[0].snap) warn(`${what} [${loc}]: no ${list.filter(x => x.snap).map(x => x.snap.replace('{loc}', loc)).join(' / ')}, showing the page without the app bars`);

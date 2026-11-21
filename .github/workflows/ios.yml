@@ -1,6 +1,7 @@
-# iOS: core XCFramework, build + unit/UI tests on the simulator, App Store screenshots, unsigned Release
-# archive, and (by hand) the App Review demo video. No secrets: signing and TestFlight come later
-# (ios/fastlane). Third-party actions are pinned to commit SHAs.
+# iOS: core XCFramework → one build of the app and its tests → tests on the simulator (+ unsigned Release
+# archive). By hand (workflow_dispatch), after the tests are green: App Store screenshots, App Review demo video.
+# Built once: the test, screenshot and video jobs run the same products (`.xctestrun`) without building.
+# No secrets: signing and TestFlight come later (ios/fastlane). Third-party actions are pinned to commit SHAs.
 name: iOS
 
 on:
@@ -25,12 +26,16 @@ on:
       - ".github/workflows/ios.yml"
   workflow_dispatch:
     inputs:
+      only_testing:
+        description: "Run only these tests (comma-separated -only-testing targets, e.g. OfflinkaUITests/FixtureDriveUITests); empty = all"
+        type: string
+        default: ""
       store_shots:
-        description: "App Store screenshots (cs, sk, en on iPhone 6.9\", 6.3\" and iPad 13\")"
+        description: "App Store screenshots (cs, sk, en on iPhone 6.9\", 6.3\" and iPad 13\"), after the tests"
         type: boolean
-        default: true
+        default: false
       demo_video:
-        description: "App Review demo video (simulator recording of the demo walk)"
+        description: "App Review demo video (simulator recording of the demo walk), after the tests"
         type: boolean
         default: false
       demo_language:
@@ -42,10 +47,10 @@ on:
 permissions:
   contents: read
 
-# Several people push to main: a newer push waits instead of cancelling a run in progress.
+# A newer push replaces the run in progress (macOS runners are scarce); manual runs have their own group.
 concurrency:
   group: ios-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 env:
   # The Xcode the App Store takes today (Xcode 26 / iOS 26 SDK); runner image macos-26.
@@ -144,46 +149,32 @@ jobs:
           key: ${{ env.SAMPLE_KEY }}
           enableCrossOsArchive: true
 
-  test:
-    name: Build and test (iPhone 17)
-    needs: [core, sample]
+  # The one Debug build of the app, the unit tests and the UI tests (arm64 simulator), shared as an artifact.
+  build:
+    name: Build for testing
+    needs: core
     runs-on: macos-26
-    timeout-minutes: 75
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
+      # Module caches and intermediates of the last build with this Xcode (the project has no SPM packages).
+      - name: Restore DerivedData
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            build/dd
+            !build/dd/Build/Products
+            !build/dd/Logs
+          key: ios-dd-xcode26.6-${{ hashFiles('ios/**', 'design/**') }}
+          restore-keys: ios-dd-xcode26.6-
+
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ios-core
           path: ios
-
-      # Before the simulators boot (they saturate the disk). A stalled restore falls back to the release asset.
-      - name: Restore review sample drive
-        id: sample
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: review-sample
-          key: ${{ env.SAMPLE_KEY }}
-          enableCrossOsArchive: true
-
-      - name: Download review sample drive (cache miss)
-        if: steps.sample.outputs.cache-hit != 'true'
-        run: |
-          rm -rf review-sample
-          curl -fsSL --retry 3 -o "$RUNNER_TEMP/sample.zip" "$SAMPLE_URL"
-          echo "$SAMPLE_SHA256  $RUNNER_TEMP/sample.zip" | shasum -a 256 -c -
-          unzip -q "$RUNNER_TEMP/sample.zip" -d review-sample
-          rm "$RUNNER_TEMP/sample.zip"
-
-      # A simulator's first boot takes minutes on these runners: start it now, it boots during the build.
-      - name: Boot simulator
-        id: sim
-        run: |
-          udid=$(ios/tools/pick-simulator.py "iPhone 17")
-          echo "udid=$udid" >> "$GITHUB_OUTPUT"
-          (xcrun simctl boot "$udid" >/dev/null 2>&1 &)
 
       - name: XcodeGen
         run: |
@@ -200,66 +191,50 @@ jobs:
           ios/tools/sync-design.sh
           (cd ios && xcodegen generate)
 
-      - name: Build (app + tests)
-        env:
-          UDID: ${{ steps.sim.outputs.udid }}
+      - name: Build (app + unit tests + UI tests)
         run: |
           set -o pipefail
           xcodebuild build-for-testing -project "$PROJECT" -scheme "$SCHEME" -configuration Debug \
-            -destination "id=$UDID" -derivedDataPath build/dd | xcbeautify --renderer github-actions
+            -destination "generic/platform=iOS Simulator" -derivedDataPath build/dd \
+            ARCHS=arm64 COMPILER_INDEX_STORE_ENABLE=NO | xcbeautify --renderer github-actions
 
-      - name: Test (unit, core, UI smoke)
-        env:
-          UDID: ${{ steps.sim.outputs.udid }}
-          TEST_RUNNER_OFFLINKA_FIXTURE_DRIVE: ${{ github.workspace }}/review-sample/OFFLINKA
+      # tar keeps the executable bits that a plain artifact upload drops.
+      - name: Pack products
         run: |
-          set -o pipefail
-          ios/tools/sim-prepare.sh "$UDID"
-          xcodebuild test-without-building -project "$PROJECT" -scheme "$SCHEME" -configuration Debug \
-            -destination "id=$UDID" -derivedDataPath build/dd \
-            -parallel-testing-enabled NO -resultBundlePath build/Offlinka.xcresult | xcbeautify --renderer github-actions
-
-      - name: Export screenshots and app log
-        if: always()
-        env:
-          UDID: ${{ steps.sim.outputs.udid }}
-        run: |
-          [ -d build/Offlinka.xcresult ] && ios/tools/export-shots.py build/Offlinka.xcresult build/screenshots || true
-          mkdir -p build/screenshots
-          xcrun simctl spawn "$UDID" log show --last 60m --style compact \
-            --predicate 'subsystem == "cz.offlinka.app"' > build/screenshots/app-log.txt 2>&1 || true
-          tail -n 60 build/screenshots/app-log.txt || true
+          ls build/dd/Build/Products
+          tar -C build/dd/Build -cf build/products.tar Products
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
         with:
-          name: ios-test-results
-          path: |
-            build/Offlinka.xcresult
-            build/screenshots
-          retention-days: 14
-          if-no-files-found: ignore
+          name: ios-test-products
+          path: build/products.tar
+          retention-days: 2
+          if-no-files-found: error
+          compression-level: 1
 
-  screenshots:
-    name: App Store screenshots
-    needs: [core, sample]
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.store_shots)
+  test:
+    name: Test (iPhone 17)
+    needs: [build, sample]
     runs-on: macos-26
-    timeout-minutes: 120
-    env:
-      # Store sizes: 6.9" 1320x2868, 6.3" 1206x2622, iPad 13" 2064x2752.
-      SHOT_DEVICES: "iPhone 17 Pro Max:iphone-69|iPhone 17 Pro:iphone-63|iPad Pro 13-inch (M5):ipad-13"
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
+      # A simulator's first boot takes minutes on these runners: start it now, it boots while the rest downloads.
+      - name: Boot simulator
+        id: sim
+        run: |
+          udid=$(ios/tools/pick-simulator.py "iPhone 17")
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          (xcrun simctl boot "$udid" >/dev/null 2>&1 &)
+
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: ios-core
-          path: ios
+          name: ios-test-products
+          path: build
 
-      # Before the simulators boot (they saturate the disk). A stalled restore falls back to the release asset.
       - name: Restore review sample drive
         id: sample
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -277,6 +252,57 @@ jobs:
           unzip -q "$RUNNER_TEMP/sample.zip" -d review-sample
           rm "$RUNNER_TEMP/sample.zip"
 
+      - name: Test (unit, core, UI smoke)
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
+          ONLY_TESTING: ${{ inputs.only_testing }}
+          TEST_RUNNER_OFFLINKA_FIXTURE_DRIVE: ${{ github.workspace }}/review-sample/OFFLINKA
+        run: |
+          set -o pipefail
+          tar -C build -xf build/products.tar
+          xctestrun=$(ls build/Products/*.xctestrun | head -1)
+          only=()
+          IFS=',' read -r -a targets <<< "${ONLY_TESTING:-}"
+          for t in "${targets[@]}"; do t="${t// /}"; [ -n "$t" ] && only+=("-only-testing:$t"); done
+          ios/tools/sim-prepare.sh "$UDID"
+          xcodebuild test-without-building -xctestrun "$xctestrun" -destination "platform=iOS Simulator,id=$UDID" \
+            -parallel-testing-enabled NO -resultBundlePath build/Offlinka.xcresult ${only[@]+"${only[@]}"} | xcbeautify --renderer github-actions
+
+      - name: Export screenshots and app log
+        if: always()
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
+        run: |
+          [ -d build/Offlinka.xcresult ] && ios/tools/export-shots.py build/Offlinka.xcresult build/screenshots || true
+          mkdir -p build/screenshots
+          xcrun simctl spawn "$UDID" log show --last 60m --style compact \
+            --predicate 'subsystem == "cz.offlinka.app"' > build/screenshots/app-log.txt 2>&1 || true
+          tail -n 40 build/screenshots/app-log.txt || true
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: ios-test-results
+          path: |
+            build/Offlinka.xcresult
+            build/screenshots
+          retention-days: 14
+          if-no-files-found: ignore
+
+  screenshots:
+    name: App Store screenshots
+    needs: [build, sample, test]
+    if: github.event_name == 'workflow_dispatch' && inputs.store_shots
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      # Store sizes: 6.9" 1320x2868, 6.3" 1206x2622, iPad 13" 2064x2752.
+      SHOT_DEVICES: "iPhone 17 Pro Max:iphone-69|iPhone 17 Pro:iphone-63|iPad Pro 13-inch (M5):ipad-13"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Boot simulators
         run: |
           IFS='|'; for pair in $SHOT_DEVICES; do
@@ -284,23 +310,27 @@ jobs:
             (xcrun simctl boot "$udid" >/dev/null 2>&1 &)
           done
 
-      - name: XcodeGen
-        run: |
-          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" "https://github.com/yonaskolb/XcodeGen/releases/download/$XCODEGEN_VERSION/xcodegen.zip"
-          echo "$XCODEGEN_SHA256  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
-          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ios-test-products
+          path: build
 
-      - name: Generate project
-        run: |
-          ios/tools/sync-design.sh
-          (cd ios && xcodegen generate)
+      - name: Restore review sample drive
+        id: sample
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: review-sample
+          key: ${{ env.SAMPLE_KEY }}
+          enableCrossOsArchive: true
 
-      - name: Build (app + UI tests)
+      - name: Download review sample drive (cache miss)
+        if: steps.sample.outputs.cache-hit != 'true'
         run: |
-          set -o pipefail
-          xcodebuild build-for-testing -project "$PROJECT" -scheme "$SCHEME" -configuration Debug \
-            -destination "generic/platform=iOS Simulator" -derivedDataPath build/dd | xcbeautify --renderer github-actions
+          rm -rf review-sample
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/sample.zip" "$SAMPLE_URL"
+          echo "$SAMPLE_SHA256  $RUNNER_TEMP/sample.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/sample.zip" -d review-sample
+          rm "$RUNNER_TEMP/sample.zip"
 
       - name: Capture
         env:
@@ -309,6 +339,8 @@ jobs:
           TEST_RUNNER_OFFLINKA_FIXTURE_DRIVE: ${{ github.workspace }}/review-sample/OFFLINKA
         run: |
           set -o pipefail
+          tar -C build -xf build/products.tar
+          xctestrun=$(ls build/Products/*.xctestrun | head -1)
           status=0
           IFS='|' read -r -a pairs <<< "$SHOT_DEVICES"
           for pair in "${pairs[@]}"; do
@@ -319,9 +351,8 @@ jobs:
             ok=0
             for attempt in 1 2 3; do
               rm -rf "build/shots-$folder.xcresult"
-              if xcodebuild test-without-building -project "$PROJECT" -scheme "$SCHEME" -configuration Debug \
-                  -destination "platform=iOS Simulator,id=$udid" -derivedDataPath build/dd -parallel-testing-enabled NO \
-                  -only-testing:OfflinkaUITests/StoreScreenshotTests \
+              if xcodebuild test-without-building -xctestrun "$xctestrun" -destination "platform=iOS Simulator,id=$udid" \
+                  -parallel-testing-enabled NO -only-testing:OfflinkaUITests/StoreScreenshotTests \
                   -resultBundlePath "build/shots-$folder.xcresult" | xcbeautify --renderer github-actions; then ok=1; break; fi
               [ -d "build/shots-$folder.xcresult" ] && break   # the tests ran and failed: no retry
               echo "::warning::$device: no destination yet (attempt $attempt)"; sleep 30
@@ -352,21 +383,27 @@ jobs:
 
   demo-video:
     name: App Review demo video
-    needs: [core, sample]
+    needs: [build, sample, test]
     if: github.event_name == 'workflow_dispatch' && inputs.demo_video
     runs-on: macos-26
-    timeout-minutes: 60
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
+      - name: Boot simulator
+        id: sim
+        run: |
+          udid=$(ios/tools/pick-simulator.py "iPhone 17 Pro")
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          (xcrun simctl boot "$udid" >/dev/null 2>&1 &)
+
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: ios-core
-          path: ios
+          name: ios-test-products
+          path: build
 
-      # Before the simulators boot (they saturate the disk). A stalled restore falls back to the release asset.
       - name: Restore review sample drive
         id: sample
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -384,33 +421,6 @@ jobs:
           unzip -q "$RUNNER_TEMP/sample.zip" -d review-sample
           rm "$RUNNER_TEMP/sample.zip"
 
-      - name: Boot simulator
-        id: sim
-        run: |
-          udid=$(ios/tools/pick-simulator.py "iPhone 17 Pro")
-          echo "udid=$udid" >> "$GITHUB_OUTPUT"
-          (xcrun simctl boot "$udid" >/dev/null 2>&1 &)
-
-      - name: XcodeGen
-        run: |
-          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" "https://github.com/yonaskolb/XcodeGen/releases/download/$XCODEGEN_VERSION/xcodegen.zip"
-          echo "$XCODEGEN_SHA256  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
-          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
-
-      - name: Generate project
-        run: |
-          ios/tools/sync-design.sh
-          (cd ios && xcodegen generate)
-
-      - name: Build (app + UI tests)
-        env:
-          UDID: ${{ steps.sim.outputs.udid }}
-        run: |
-          set -o pipefail
-          xcodebuild build-for-testing -project "$PROJECT" -scheme "$SCHEME" -configuration Debug \
-            -destination "id=$UDID" -derivedDataPath build/dd | xcbeautify --renderer github-actions
-
       # The whole simulator screen from before the app starts; the walk pauses ~1.5 s between steps.
       - name: Record the demo walk
         env:
@@ -420,15 +430,16 @@ jobs:
           TEST_RUNNER_OFFLINKA_FIXTURE_DRIVE: ${{ github.workspace }}/review-sample/OFFLINKA
         run: |
           set -o pipefail
+          tar -C build -xf build/products.tar
+          xctestrun=$(ls build/Products/*.xctestrun | head -1)
           ios/tools/sim-prepare.sh "$UDID"
           mkdir -p build/video
           xcrun simctl io "$UDID" recordVideo --codec=h264 --force build/video/offlinka-demo-walk.mp4 &
           recorder=$!
           sleep 3
           status=0
-          xcodebuild test-without-building -project "$PROJECT" -scheme "$SCHEME" -configuration Debug \
-            -destination "id=$UDID" -derivedDataPath build/dd -parallel-testing-enabled NO \
-            -only-testing:OfflinkaUITests/FixtureDriveUITests/testDemoWalkthrough \
+          xcodebuild test-without-building -xctestrun "$xctestrun" -destination "platform=iOS Simulator,id=$UDID" \
+            -parallel-testing-enabled NO -only-testing:OfflinkaUITests/FixtureDriveUITests/testDemoWalkthrough \
             -resultBundlePath build/demo.xcresult | xcbeautify --renderer github-actions || status=1
           sleep 2
           kill -INT "$recorder"
@@ -455,6 +466,7 @@ jobs:
   archive:
     name: Unsigned Release archive
     needs: core
+    if: github.event_name != 'workflow_dispatch' || inputs.only_testing == ''
     runs-on: macos-26
     timeout-minutes: 45
     steps:
@@ -483,6 +495,7 @@ jobs:
           set -o pipefail
           xcodebuild archive -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
             -destination "generic/platform=iOS" -archivePath build/Offlinka.xcarchive \
+            COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" | xcbeautify --renderer github-actions
 
       - name: Check the archive

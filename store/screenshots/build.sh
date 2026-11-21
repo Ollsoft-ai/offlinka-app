@@ -5,6 +5,8 @@
 #   store/screenshots/build.sh --fastlane      also copy the Play images into android/fastlane/metadata/android/*/images
 # Sources: the Paparazzi goldens in android/ui/src/test/snapshots/images (re-record them first when the UI changed:
 # :ui:recordPaparazziDebug) and real pages from the drive's ZIMs (offlinka-cli + /srv/offlinka/drive/release/current).
+# iOS: SNAPSHOTS=<folder of simulator captures> SNAPSHOT_PAGES=app store/screenshots/build.sh ios-63 (the captures from
+# the CI job "App Store screenshots" show real pages, so none is drawn over them).
 # Output (git-ignored): out/play/<locale>/images/…, out/appstore/<locale>/…, out/index.html (contact sheet).
 # Every Chromium step runs alone under atd-render with a 120 s timeout. Edit headlines and screens in frames.json.
 set -euo pipefail

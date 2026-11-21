@@ -31,14 +31,17 @@ SwiftUI app (iOS 17+, iPhone 15+ and USB-C iPads) that reads the Offlinka flash 
 
 ## CI (GitHub Actions, `.github/workflows/ios.yml`)
 
-Runs on `macos-26` with Xcode 26.6 for pushes to `main` and PRs touching `ios/`, `core/`, `design/`; also by hand (`gh workflow run ios.yml -f demo_video=true`).
+Runs on `macos-26` with Xcode 26.6 for pushes to `main` and PRs touching `ios/`, `core/`, `design/` (a newer push cancels the run in progress). Built once: one `build-for-testing`, then every test job runs the same `.xctestrun` products.
 
 - **Core XCFramework**: `scripts/build-ios-core.sh`, cached by the core sources (an iOS-only change skips Rust); warns when the committed bindings differ.
-- **Review sample drive**: the public release asset `review-sample-2026-11` (1.5 GB: Czech Wikipedia mini + index, games, Slovak map), checked by SHA-256 and cached once for the macOS jobs.
-- **Build and test**: unit tests, core tests on the guides ZIM, UI smoke on the demo drive and on the sample drive (`FixtureDriveUITests`), iPhone 17 simulator. Artifact `ios-test-results`: the `.xcresult`, `screenshots/` and the app's debug log.
-- **App Store screenshots** (push and manual runs): `StoreScreenshotTests` on the sample drive in cs, sk, en on iPhone 17 Pro Max (6.9"), iPhone 17 Pro (6.3"), iPad Pro 13" (M5), named like the Paparazzi goldens. Artifact `ios-store-shots/<iphone-69|iphone-63|ipad-13>/`; frame them with `SNAPSHOTS=<folder> store/screenshots/build.sh <target>`.
-- **App Review demo video** (manual, `demo_video`): `simctl io recordVideo` while `testDemoWalkthrough` walks drive → Home → search „cesky krumlov“ → article → Back → map → games → first aid. Artifact `ios-demo-video/offlinka-demo-walk.mp4`.
-- **Unsigned Release archive**: `CODE_SIGNING_ALLOWED=NO`; checks the bundle and that no debug launch argument ships.
+- **Review sample drive**: the public release asset `review-sample-2026-11` (1.5 GB: Czech Wikipedia mini + index, games, Slovak map), SHA-256 checked, cached once on Linux for the macOS jobs.
+- **Build for testing**: Debug, arm64 simulator, DerivedData cached by the hash of `ios/**` + `design/**`; artifact `ios-test-products`.
+- **Test (iPhone 17)**: unit tests, core tests on the guides ZIM, UI smoke on the demo drive and on the sample drive. Artifact `ios-test-results`: `.xcresult`, `screenshots/`, the app's debug log.
+- **Unsigned Release archive**: `CODE_SIGNING_ALLOWED=NO`; checks the bundle, no debug launch argument, required-reason symbols.
+- **By hand, after the tests are green** (`gh workflow run ios.yml -f store_shots=true -f demo_video=true`):
+  - **App Store screenshots**: `StoreScreenshotTests` on the sample drive in cs, sk, en on iPhone 17 Pro Max (6.9"), 17 Pro (6.3"), iPad Pro 13" (M5). Artifact `ios-store-shots/<iphone-69|iphone-63|ipad-13>/`; frame them with `SNAPSHOTS=<folder> SNAPSHOT_PAGES=app store/screenshots/build.sh <ios-69|ios-63|ipad-13>`.
+  - **App Review demo video**: `simctl io recordVideo` while `testDemoWalkthrough` walks drive → Home → search „cesky krumlov“ → article → Back → map → games → first aid. Artifact `ios-demo-video/offlinka-demo-walk.mp4`.
+- **Only some tests** while fixing: `gh workflow run ios.yml -f only_testing=OfflinkaUITests/FixtureDriveUITests` (comma-separated `-only-testing` targets; skips the archive).
 
 ## Release
 
