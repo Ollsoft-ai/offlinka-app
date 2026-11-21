@@ -1,0 +1,2 @@
+# The root .gitignore ignores out/ (build output). design/out/ is generated but committed: the app agents copy from it.
+!out/
