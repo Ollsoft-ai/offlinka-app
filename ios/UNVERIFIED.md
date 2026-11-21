@@ -26,7 +26,7 @@
 5. **Background index builds.** A running build gets `beginBackgroundTask` time, then stops cleanly (`Cancelled`) and resumes on the next start. Check on a device: build, lock the phone, unlock.
 6. **Maps and games.** MapLibre (WebGL, web workers) and the games' `localStorage` per book origin run in the simulator only; check pan/zoom and a kept score on a device.
 7. **Privacy manifest.** FileTimestamp `3B52.1` and DiskSpace `E174.1` declared; the archive job lists the required-reason symbols actually linked; compare before the first upload.
-8. **Strings still pending in design.** „Zásady ochrany soukromí“ uses a fallback until `design/strings` has the key (`PendingStr`); „© 2026 Ollsoft s.r.o.“, `reader_bar_save`, „Zastavit přípravu“ and the index notes arrive with Android round 3.
+8. **Round-3 strings not wired yet.** The privacy link and „© 2026 Ollsoft s.r.o.“ come from `design/strings`; the other new keys (`reader_bar_save`, `index_stop`, the index and „try“ notes) are generated in `Str.swift` but not used until the copy pass.
 
 ### Low
 

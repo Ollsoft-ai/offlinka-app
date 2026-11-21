@@ -35,21 +35,19 @@ final class LocalizationTests: XCTestCase {
         XCTAssertEqual(tr(.readerFindCount, 2, 5), "2 of 5")
     }
 
-    /// Keys still waiting for design/strings: a text in every language, from design or the fallback.
-    func testPendingKeysHaveTextInEveryLanguage() {
-        defer { L10n.apply(.system) }
-        for language in [AppLanguage.cs, .sk, .en] {
-            L10n.apply(language)
-            for key in PendingStr.allCases {
-                let text = tr(key)
-                XCTAssertFalse(text.isEmpty || text == key.rawValue, "\(language): \(key.rawValue)")
-            }
-        }
-    }
-
     func testPrivacyPolicyLinkFollowsTheUILanguage() {
         XCTAssertEqual(WebLinks.privacyPolicy(language: "cs").absoluteString, "https://offlinka.cz/aplikace/soukromi")
         XCTAssertEqual(WebLinks.privacyPolicy(language: "sk").absoluteString, "https://offlinka.sk/aplikacia/sukromie")
         XCTAssertEqual(WebLinks.privacyPolicy(language: "en").absoluteString, "https://offlinka.cz/en/app/privacy")
+    }
+
+    /// design/strings (`about_privacy_url`) and the built-in fallback point at the same pages.
+    func testPrivacyPolicyLinkFromDesignMatchesTheFallback() throws {
+        try XCTSkipIf(Bundle.main.path(forResource: "cs", ofType: "lproj") == nil, "strings are not compiled into this bundle")
+        defer { L10n.apply(.system) }
+        for language in [AppLanguage.cs, .sk, .en] {
+            L10n.apply(language)
+            XCTAssertEqual(WebLinks.privacyPolicy(), WebLinks.privacyPolicy(language: language.rawValue))
+        }
     }
 }

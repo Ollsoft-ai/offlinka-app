@@ -43,7 +43,7 @@ struct AboutView: View {
                     HStack {
                         BrandIconView(icon: .globe, size: BrandSize.iconSmall)
                             .foregroundStyle(Color.brandInk2)
-                        Text(tr(PendingStr.aboutPrivacyLink))
+                        Text(tr(.aboutPrivacyLink))
                             .brandText(.bodyStrong)
                             .foregroundStyle(Color.brandLink)
                         Spacer()
