@@ -126,9 +126,9 @@ private struct NoticesView: View {
     /// Keep in sync with core/LICENSES-THIRD-PARTY.md ("Compiled into the app library").
     private static let components: [Component] = [
         Component(name: "UniFFI", licence: "MPL-2.0", source: "github.com/mozilla/uniffi-rs"),
+        Component(name: "Zstandard (libzstd)", licence: "BSD-3-Clause", source: "github.com/facebook/zstd"),
+        Component(name: "zstd, zstd-safe, zstd-sys", licence: "BSD-3-Clause, BSD-2-Clause", source: "github.com/gyscos/zstd-rs"),
         Component(name: "fst", licence: "Unlicense / MIT", source: "github.com/BurntSushi/fst"),
-        Component(name: "ruzstd", licence: "MIT", source: "github.com/KillingSpark/zstd-rs"),
-        Component(name: "twox-hash", licence: "MIT", source: "github.com/shepmaster/twox-hash"),
         Component(name: "lzma-rs", licence: "MIT", source: "github.com/gendx/lzma-rs"),
         Component(name: "crc", licence: "MIT / Apache-2.0", source: "github.com/mrhooray/crc-rs"),
         Component(name: "byteorder", licence: "Unlicense / MIT", source: "github.com/BurntSushi/byteorder"),
@@ -141,6 +141,10 @@ private struct NoticesView: View {
         Component(name: "Rust standard library", licence: "MIT / Apache-2.0", source: "github.com/rust-lang/rust"),
         Component(name: "Archivo (The Archivo Project Authors)", licence: "SIL OFL 1.1", source: "github.com/Omnibus-Type/Archivo"),
     ]
+
+    private static func bundledText(_ name: String) -> String? {
+        Bundle.main.url(forResource: name, withExtension: "txt").flatMap { try? String(contentsOf: $0, encoding: .utf8) }
+    }
 
     var body: some View {
         List {
@@ -169,6 +173,19 @@ private struct NoticesView: View {
                 }
             }
             .listRowBackground(Color.brandSurface)
+
+            // BSD-3-Clause asks binary distributions to reproduce the notice.
+            if let zstdLicence = Self.bundledText("zstd-LICENSE") {
+                Section {
+                    Text(verbatim: zstdLicence)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(Color.brandInk2)
+                        .textSelection(.enabled)
+                } header: {
+                    Text(verbatim: "Zstandard")
+                }
+                .listRowBackground(Color.brandSurface)
+            }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
