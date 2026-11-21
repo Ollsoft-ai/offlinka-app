@@ -1,0 +1,7 @@
+• Long-press the app icon to open First aid or Power cut directly.
+• A new Try it now section on the home screen.
+• Search also finds sections of the emergency guides.
+• Search shows how far its preparation is and tells you when accents become optional.
+• Save an article with one tap.
+• Clearer help when the phone does not see the drive.
+• Bug fixes.

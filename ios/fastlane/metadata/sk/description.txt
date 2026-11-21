@@ -1,9 +1,25 @@
-Offlinka číta USB kľúč Offlinka priamo v telefóne. Slovenská a česká Wikipédia s obrázkami, anglická Wikipédia, mapy Slovenska a Česka, núdzové príručky a hry. Všetko funguje bez internetu.
+Offlinka otvorí USB kľúč Offlinka priamo v telefóne. Slovenská a česká Wikipédia s obrázkami, mapy Slovenska a Česka, prvá pomoc, knihy a hry. Všetko funguje bez internetu: na chate, na horách, na cestách aj pri výpadku siete.
 
-USB kľúč zapojíte do konektora USB-C a raz ho vyberiete. Aplikácia si ho zapamätá. Nič sa nekopíruje do telefónu a na USB kľúči sa nič nemení.
+Čo v aplikácii nájdete:
+• Celú slovenskú a českú Wikipédiu s obrázkami.
+• Milión najčítanejších článkov anglickej Wikipédie (len text) a anglické články o medicíne.
+• Mapy Slovenska a Česka až po jednotlivé ulice.
+• Núdzové príručky (po česky): prvá pomoc a výpadok prúdu. Sú priamo v aplikácii, takže fungujú aj bez USB kľúča.
+• České Wikiknihy, Wikicitáty, Wikizdroje, Wikiverzitu, Wikislovník a anglického sprievodcu Wikivoyage po Európe.
+• Hry 2048 a dámu.
 
-Hľadanie funguje aj bez mäkčeňov a dĺžňov. Články si môžete uložiť a vrátiť sa k nim v histórii. Veľkosť písma a tmavý režim nastavíte v aplikácii.
+Ako to funguje:
+• USB kľúč zapojíte do konektora USB-C a raz ho vyberiete. Nabudúce ho stačí zapojiť.
+• Aplikácia číta knihy priamo z USB kľúča. Nič sa nekopíruje do telefónu a na USB kľúči sa nič nemení.
+• Hľadáte vo všetkých knihách naraz. Mäkčene a dĺžne písať nemusíte. Prvýkrát sa hľadanie chvíľu pripravuje.
+• Články si uložíte. Prečítané nájdete v histórii.
+• Veľkosť písma a tmavý režim si nastavíte.
 
-Aplikácia nemá prístup na internet, nezbiera žiadne údaje a nemá účty ani reklamy.
+Súkromie:
+Aplikácia nemá prístup na internet a nič neodosiela. Nezbiera žiadne údaje a nemá účty ani reklamy.
 
-Potrebujete USB kľúč Offlinka (offlinka.sk) a iPhone alebo iPad s konektorom USB-C.
+Čo potrebujete:
+• USB kľúč Offlinka. Kúpite ho na offlinka.sk.
+• iPhone 15 alebo novší, alebo iPad s konektorom USB-C, so systémom iOS 17 alebo novším. Staršie iPhony s konektorom Lightning nefungujú.
+
+Texty Wikipédie napísali jej autori a šíria sa pod licenciou CC BY-SA 4.0. Mapové údaje © prispievatelia OpenStreetMap. Offlinka nesúvisí s nadáciou Wikimedia Foundation.

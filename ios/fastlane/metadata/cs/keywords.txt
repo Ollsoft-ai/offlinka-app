@@ -1,1 +1,1 @@
-wikipedie,offline,bez internetu,flashka,mapy,první pomoc,encyklopedie,slovník,usb-c
+offline,encyklopedie,první pomoc,flashka,usb-c,slovník,knihovna,příručka,výpadek,chata,hory

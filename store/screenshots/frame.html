@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Offlinka store frame</title>
+<!-- Template for every store frame and the Play feature graphic. render.cjs opens it once per target and calls
+     renderFrame(cfg) / renderFeature(cfg) for each image, then screenshots the page. Brand: design/README.md. -->
+<style>
+@font-face { font-family: "Archivo"; font-weight: 400; src: url("../../design/fonts/archivo_regular.ttf") format("truetype"); }
+@font-face { font-family: "Archivo"; font-weight: 600; src: url("../../design/fonts/archivo_semibold.ttf") format("truetype"); }
+@font-face { font-family: "Archivo Expanded"; font-weight: 800; src: url("../../design/fonts/archivo_expanded_extrabold.ttf") format("truetype"); }
+:root {
+  --forest: #1F3D2F; --forest-deep: #14291F; --ridge: #2F5642; --paper: #F5F0E3; --fire: #F26A1B;
+  --bezel: #0B140F; --bezel-line: #4B6B59; --shadow: rgba(8, 20, 14, .5);
+}
+html, body { margin: 0; background: var(--forest); }
+.frame { position: relative; overflow: hidden; background-color: var(--forest); font-family: "Archivo", sans-serif; }
+.frame.dark { background-color: var(--forest-deep); }
+.topo { position: absolute; inset: 0; background-repeat: repeat; }
+.frame.dark .topo { opacity: .55; }
+/* two mountain ridges at the bottom, like the hero of the app's Home screen */
+.ridge { position: absolute; left: 0; right: 0; bottom: 0; }
+.ridge.back { background: var(--ridge); clip-path: polygon(0 9%, 8.3% 4%, 14.6% 7.5%, 23.6% 1%, 31.3% 6.5%, 41.7% 2.7%, 51.4% 8.5%, 62.5% 1.2%, 71.5% 6.2%, 81.9% 1.7%, 90.3% 7.2%, 100% 3.5%, 100% 100%, 0 100%); }
+.ridge.front { background: var(--paper); clip-path: polygon(0 12%, 10.4% 7.7%, 18.1% 11%, 29.9% 5.5%, 40.3% 10.5%, 49.3% 7.7%, 61.1% 12.2%, 73.6% 6%, 83.3% 10.2%, 92.4% 7.2%, 100% 11%, 100% 100%, 0 100%); }
+.frame.dark .ridge.back { background: var(--forest); }
+.frame.dark .ridge.front { background: #0F1A14; }
+.head { position: absolute; color: var(--paper); }
+.peak { display: block; background: var(--fire); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+h1 { margin: 0; font: 800 1em/1.1 "Archivo Expanded", sans-serif; letter-spacing: -0.015em; text-wrap: balance; }
+.logo { display: block; }
+/* a neutral phone: no brand, no notch; hard offset shadow like the app's cards */
+.phone { position: absolute; background: var(--bezel); box-sizing: border-box; }
+.phone::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 var(--line, 2px) var(--bezel-line); pointer-events: none; }
+.screen { position: relative; overflow: hidden; width: 100%; height: 100%; background: var(--paper); }
+.screen img { display: block; }
+.screen .snap { width: 100%; height: 100%; }
+.screen .content { position: absolute; left: 0; right: 0; overflow: hidden; }
+.screen .content img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+</style>
+</head>
+<body>
+<div class="frame" id="frame"></div>
+<script>
+const el = (tag, cls, parent) => { const e = document.createElement(tag); if (cls) e.className = cls; if (parent) parent.appendChild(e); return e; };
+const loaded = img => img.complete && img.naturalWidth ? Promise.resolve() : new Promise((ok, no) => { img.onload = ok; img.onerror = () => no(new Error('image failed')); });
+
+/** The WebView area of a reader snapshot: between the divider under the top bar and the divider above the bottom bar.
+ *  Returns fractions of the image height; falls back to the 0.2 layout (64 dp bars) and warns when no divider is found. */
+function webViewArea(img, label) {
+  const W = img.naturalWidth, H = img.naturalHeight, c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, W, H).data;
+  const row = y => {
+    const mn = [255, 255, 255], mx = [0, 0, 0];
+    for (let x = 4; x < W - 4; x++) { const i = (y * W + x) * 4; for (let k = 0; k < 3; k++) { const v = d[i + k]; if (v < mn[k]) mn[k] = v; if (v > mx[k]) mx[k] = v; } }
+    return { flat: Math.max(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]) <= 6, c: mn.map((v, k) => (v + mx[k]) / 2) };
+  };
+  const dist = (a, b) => Math.max(...a.map((v, k) => Math.abs(v - b[k])));
+  // a divider: a flat row whose colour differs from the flat rows 4 px above and below it
+  const divider = y => { const r = row(y), a = row(y - 4), b = row(y + 4); return r.flat && a.flat && b.flat && dist(r.c, a.c) > 8 && dist(r.c, b.c) > 8; };
+  let top = null, bottom = null;
+  for (let y = Math.round(H * 0.03); y < H * 0.2; y++) if (divider(y)) { top = y; while (divider(top + 1)) top++; break; }
+  for (let y = Math.round(H * 0.97); y > H * 0.8; y--) if (divider(y)) { bottom = y; while (divider(bottom - 1)) bottom--; break; }
+  if (top === null || bottom === null) {
+    console.warn(`${label}: no bar dividers found in the snapshot, using the default WebView area`);
+    return { top: 0.077, bottom: 0.923 };
+  }
+  return { top: (top + 1) / H, bottom: bottom / H };
+}
+
+/** Phone with one app screen: a snapshot, a snapshot with a page drawn into its WebView area, or a page alone. */
+async function buildPhone(parent, screen, label) {
+  const phone = el('div', 'phone', parent), scr = el('div', 'screen', phone);
+  let aspect = 461 / 1000;   // Paparazzi PIXEL_5 goldens
+  if (screen.snap) {
+    const s = el('img', 'snap', scr); s.src = screen.snap; await loaded(s);
+    aspect = s.naturalWidth / s.naturalHeight;
+    if (screen.content) {
+      const a = webViewArea(s, label), box = el('div', 'content', scr), c = el('img', '', box);
+      box.style.top = (a.top * 100) + '%'; box.style.bottom = ((1 - a.bottom) * 100) + '%';
+      c.src = screen.content; await loaded(c);
+    }
+  } else {
+    const box = el('div', 'content', scr), c = el('img', '', box);
+    box.style.top = '0'; box.style.bottom = '0';
+    c.src = screen.content; await loaded(c);
+  }
+  return { phone, scr, aspect };
+}
+
+function sizePhone(p, screenW, u) {
+  const bezel = Math.round(screenW * 0.032), screenH = Math.round(screenW / p.aspect);
+  Object.assign(p.phone.style, { width: (screenW + 2 * bezel) + 'px', height: (screenH + 2 * bezel) + 'px', padding: bezel + 'px',
+    borderRadius: Math.round(screenW * 0.11) + 'px', boxShadow: `${Math.round(1.3 * u)}px ${Math.round(1.3 * u)}px 0 var(--shadow)` });
+  p.phone.style.setProperty('--line', Math.max(2, Math.round(screenW * 0.004)) + 'px');
+  p.scr.style.borderRadius = Math.round(screenW * 0.08) + 'px';
+  return { w: screenW + 2 * bezel, h: screenH + 2 * bezel };
+}
+
+function background(f, cfg, u, ridgeH) {
+  const topo = el('div', 'topo', f);
+  topo.style.backgroundImage = `url("${cfg.assets.topoDark}")`;
+  topo.style.backgroundSize = `${Math.round(70 * u)}px`;
+  topo.style.backgroundPosition = `${Math.round(-18 * u)}px ${Math.round(-12 * u)}px`;
+  el('div', 'ridge back', f).style.height = Math.round(ridgeH + 0.02 * ridgeH) + 'px';
+  el('div', 'ridge front', f).style.height = ridgeH + 'px';
+}
+
+async function ready() {
+  await document.fonts.ready;
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  document.body.dataset.ready = '1';
+}
+
+window.renderFrame = async function (cfg) {
+  document.body.dataset.ready = '0';
+  document.documentElement.lang = cfg.lang;
+  const f = document.getElementById('frame');
+  f.innerHTML = ''; f.className = 'frame' + (cfg.dark ? ' dark' : '');
+  f.style.width = cfg.w + 'px'; f.style.height = cfg.h + 'px';
+  const u = cfg.w / 100, unit = cfg.tablet ? cfg.h / 133 : u;   // tablets: size type from the height
+  background(f, cfg, u, Math.round(cfg.h * 0.36));
+  const head = el('div', 'head', f), peak = el('span', 'peak', head), h1 = el('h1', '', head);
+  const side = cfg.tablet ? 12 * u : 7 * u;
+  Object.assign(head.style, { left: side + 'px', right: side + 'px', top: Math.round(6.5 * unit) + 'px', fontSize: (6.6 * unit) + 'px' });
+  Object.assign(peak.style, { width: Math.round(4.2 * unit) + 'px', height: Math.round(3.4 * unit) + 'px', marginBottom: Math.round(2.6 * unit) + 'px' });
+  h1.textContent = cfg.headline;
+  const p = await buildPhone(f, cfg.screen, cfg.label);
+  await document.fonts.ready;
+  const top = head.getBoundingClientRect().bottom + 5 * unit, bottomMargin = 5 * unit;
+  const avail = cfg.h - top - bottomMargin, maxW = (cfg.tablet ? 62 : 80) * u;
+  // biggest screen that fits under the headline (bezel ~3 % of the width on each side)
+  let screenW = Math.floor(avail / (1 / p.aspect + 0.064));
+  screenW = Math.min(screenW, Math.floor(maxW / 1.064));
+  const size = sizePhone(p, screenW, u);
+  p.phone.style.left = Math.round((cfg.w - size.w) / 2) + 'px';
+  p.phone.style.top = Math.round(top + (avail - size.h) / 2) + 'px';
+  await ready();
+};
+
+window.renderFeature = async function (cfg) {
+  document.body.dataset.ready = '0';
+  document.documentElement.lang = cfg.lang;
+  const W = 1024, H = 500, u = W / 100, f = document.getElementById('frame');
+  f.innerHTML = ''; f.className = 'frame';
+  f.style.width = W + 'px'; f.style.height = H + 'px';
+  background(f, cfg, u * 1.4, 150);
+  const head = el('div', 'head', f), logo = el('img', 'logo', head), h1 = el('h1', '', head);
+  logo.src = cfg.assets.logo; await loaded(logo);
+  Object.assign(head.style, { left: '64px', width: '540px', top: '92px', fontSize: '42px' });
+  Object.assign(logo.style, { height: '44px', marginBottom: '30px' });
+  h1.textContent = cfg.headline;
+  const p = await buildPhone(f, cfg.screen, 'feature');
+  const size = sizePhone(p, 250, u * 0.6);
+  Object.assign(p.phone.style, { left: (W - size.w - 96) + 'px', top: '52px' });   // bleeds off the bottom edge
+  await ready();
+};
+</script>
+</body>
+</html>

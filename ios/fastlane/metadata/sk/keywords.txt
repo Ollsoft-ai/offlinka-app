@@ -1,1 +1,1 @@
-wikipédia,offline,bez internetu,usb kľúč,mapy,prvá pomoc,encyklopédia,slovník,usb-c
+offline,encyklopédia,prvá pomoc,usb kľúč,usb-c,slovník,knižnica,príručka,výpadok,chata

@@ -1,0 +1,56 @@
+{
+  "_note": "Store frames. Edit headlines and sources here, then run ./build.sh. {loc} = cs | sk | en. Each screen lists sources in order of preference; the first whose Paparazzi PNG exists wins. snap = Paparazzi test name without the cz.offlinka.ui_ prefix; content = a page rendered from the drive's ZIMs (see content below), drawn into the snap's WebView area, or the whole screen when there is no snap.",
+  "targets": {
+    "play":    { "w": 1080, "h": 1920, "store": "play" },
+    "ios-69":  { "w": 1320, "h": 2868, "store": "appstore" },
+    "ios-63":  { "w": 1206, "h": 2622, "store": "appstore" },
+    "ios-65":  { "w": 1284, "h": 2778, "store": "appstore" },
+    "ipad-13": { "w": 2064, "h": 2752, "store": "appstore", "tablet": true }
+  },
+  "locales": {
+    "cs": { "play": "cs-CZ", "appstore": "cs" },
+    "sk": { "play": "sk", "appstore": "sk" },
+    "en": { "play": "en-US", "appstore": "en-US" }
+  },
+  "books": {
+    "wcs": "Knihovna/wikipedia_cs_all_maxi",
+    "guides": "Knihovna/offlinka_cs_prirucky",
+    "mapcz": "Knihovna/maps_en_czech-republic"
+  },
+  "content": [
+    { "id": "article", "book": "wcs", "path": "Sněžka", "scheme": "light" },
+    { "id": "article-dark", "book": "wcs", "path": "Karlštejn", "scheme": "dark" },
+    { "id": "guide", "book": "guides", "path": "prvni-pomoc.html", "scheme": "light" },
+    { "id": "map", "book": "mapcz", "path": "index.html", "scheme": "light", "height": 724, "map": { "center": [14.4163, 50.0868], "zoom": 15.0 } }
+  ],
+  "frames": [
+    { "id": "home", "stores": ["play", "appstore"],
+      "screen": [{ "snap": "ScreensTest_home[{loc}-light]" }, { "snap": "LocaleAndFontTest_home[{loc}-light]" }],
+      "headline": { "cs": "Wikipedie, mapy a první pomoc bez internetu", "sk": "Wikipédia, mapy a prvá pomoc bez internetu", "en": "Wikipedia, maps and first aid without internet" } },
+    { "id": "search", "stores": ["play", "appstore"],
+      "screen": [{ "snap": "ScreensTest_search[{loc}-light]" }, { "snap": "LocaleAndFontTest_search[{loc}-light]" }],
+      "headline": { "cs": "Hledejte i bez háčků a čárek", "sk": "Hľadajte aj bez mäkčeňov a dĺžňov", "en": "Search without typing accents" } },
+    { "id": "article", "stores": ["play", "appstore"],
+      "screen": [{ "snap": "ScreensTest_reader[{loc}-light]", "content": "article" }, { "snap": "LocaleAndFontTest_reader[{loc}-light]", "content": "article" }],
+      "headline": { "cs": "Celá česká Wikipedie s obrázky", "sk": "Česká aj slovenská Wikipédia s obrázkami", "en": "Czech and Slovak Wikipedia with pictures" } },
+    { "id": "map", "stores": ["play", "appstore"],
+      "screen": [{ "snap": "ScreenStatesTest_readerMap[{loc}-light]", "content": "map" }, { "content": "map" }],
+      "headline": { "cs": "Mapy Česka a Slovenska až po ulice", "sk": "Mapy Slovenska a Česka až po ulice", "en": "Street maps of Czechia and Slovakia" } },
+    { "id": "first-aid", "stores": ["play", "appstore"],
+      "screen": [{ "snap": "ScreenStatesTest_readerGuides[{loc}-light]", "content": "guide" }, { "content": "guide" }],
+      "headline": { "cs": "První pomoc funguje i bez flashky", "sk": "Prvá pomoc funguje aj bez USB kľúča", "en": "Czech first aid guides, even without the drive" } },
+    { "id": "dark", "stores": ["play", "appstore"], "dark": true,
+      "screen": [{ "snap": "ScreensTest_reader[{loc}-dark]", "content": "article-dark" }, { "content": "article-dark" }],
+      "headline": { "cs": "Tmavý režim na čtení večer", "sk": "Tmavý režim na čítanie večer", "en": "Dark mode for reading at night" } },
+    { "id": "library", "stores": ["play", "appstore"],
+      "screen": [{ "snap": "ScreensTest_library[{loc}-light]" }, { "snap": "LocaleAndFontTest_library[{loc}-light]" }],
+      "headline": { "cs": "Všechno z flashky na jednom místě", "sk": "Všetko z USB kľúča na jednom mieste", "en": "Everything on the drive in one place" } },
+    { "id": "connect", "stores": ["play"],
+      "screen": [{ "snap": "ScreensTest_connect[{loc}-light]" }, { "snap": "LocaleAndFontTest_connect[{loc}-light]" }],
+      "headline": { "cs": "Flashku vyberete jen jednou", "sk": "USB kľúč vyberiete len raz", "en": "Pick the drive once, then just plug it in" } }
+  ],
+  "feature": {
+    "screen": [{ "snap": "ScreensTest_home[{loc}-light]" }, { "snap": "LocaleAndFontTest_home[{loc}-light]" }],
+    "headline": { "cs": "Wikipedie, mapy a první pomoc bez internetu", "sk": "Wikipédia, mapy a prvá pomoc bez internetu", "en": "Wikipedia, maps and first aid without internet" }
+  }
+}

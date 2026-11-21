@@ -1,1 +1,1 @@
-All of Wikipedia, maps and first aid in your pocket. No signal, no internet.
+Wikipedia, maps and first aid in your pocket. Works where there is no signal, and sends nothing.

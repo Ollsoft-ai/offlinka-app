@@ -1,9 +1,25 @@
-Offlinka čte flashku Offlinka přímo v telefonu. Česká a slovenská Wikipedie s obrázky, anglická Wikipedie, mapy Česka a Slovenska, nouzové příručky a hry. Všechno funguje bez internetu.
+Offlinka otevře flashku Offlinka přímo v telefonu. Česká a slovenská Wikipedie s obrázky, mapy Česka a Slovenska, první pomoc, knihy a hry. Všechno funguje bez internetu: na chatě, na horách, na cestách i při výpadku sítě.
 
-Flashku zapojíte do konektoru USB-C a jednou ji vyberete. Aplikace si ji zapamatuje. Nic se nekopíruje do telefonu a na flashce se nic nemění.
+Co v aplikaci najdete:
+• Celou českou a slovenskou Wikipedii s obrázky.
+• Milion nejčtenějších článků anglické Wikipedie (jen text) a anglické články o medicíně.
+• Mapy Česka a Slovenska až po jednotlivé ulice.
+• Nouzové příručky: první pomoc a výpadek proudu. Jsou přímo v aplikaci, takže fungují i bez flashky.
+• Wikiknihy, Wikicitáty, Wikizdroje, Wikiverzitu, Wikislovník a anglického průvodce Wikivoyage po Evropě.
+• Hry 2048 a dámu.
 
-Hledání funguje i bez háčků a čárek. Články si můžete uložit a vrátit se k nim v historii. Velikost písma a tmavý režim nastavíte v aplikaci.
+Jak to funguje:
+• Flashku zapojíte do konektoru USB-C a jednou ji vyberete. Příště ji stačí zapojit.
+• Aplikace čte knihy přímo z flashky. Nic se nekopíruje do telefonu a na flashce se nic nemění.
+• Hledáte ve všech knihách najednou. Háčky a čárky psát nemusíte. Poprvé se hledání chvíli připravuje.
+• Články si uložíte. Přečtené najdete v historii.
+• Velikost písma a tmavý režim si nastavíte.
 
-Aplikace nemá přístup k internetu, nesbírá žádná data a nemá účty ani reklamy.
+Soukromí:
+Aplikace nemá přístup k internetu a nic neodesílá. Nesbírá žádná data a nemá účty ani reklamy.
 
-Potřebujete flashku Offlinka (offlinka.cz) a iPhone nebo iPad s konektorem USB-C.
+Co potřebujete:
+• Flashku Offlinka. Koupíte ji na offlinka.cz.
+• iPhone 15 nebo novější, nebo iPad s konektorem USB-C, se systémem iOS 17 nebo novějším. Starší iPhony s konektorem Lightning nefungují.
+
+Texty Wikipedie napsali její autoři a šíří se pod licencí CC BY-SA 4.0. Mapová data © přispěvatelé OpenStreetMap. Offlinka nesouvisí s nadací Wikimedia Foundation.

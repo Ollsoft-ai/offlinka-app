@@ -1,1 +1,1 @@
-wikipedia,offline,no internet,usb drive,maps,first aid,encyclopedia,dictionary,usb-c
+encyclopedia,first aid,usb drive,usb-c,no internet,czech,slovak,dictionary,library,survival

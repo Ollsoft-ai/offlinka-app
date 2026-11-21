@@ -1,0 +1,130 @@
+# Store release: step by step
+
+For the session with the founders. Work top to bottom and tick the boxes. Rules and fees checked on **2026-11-21**; the sources are linked at each step. Answers for the forms: `store/forms.md`.
+
+## Decided: who owns the accounts
+
+- [x] **Ollsoft s.r.o.** owns both store accounts (founders, 2026-11-21).
+  - IČO 19336039, Příčná 1892/4, Nové Město, 110 00 Praha 1.
+  - D-U-N-S **933697073**, verified through Apple's lookup on 2026-11-02.
+- **One account per store for all Ollsoft apps:** Offlinka is the second app next to Olingo Sken (`org.ollsoft.sken`).
+- **Developer page** (both apps): https://ollsoft.ai, info@ollsoft.ai.
+- **Offlinka's own listing:** https://offlinka.cz, info@offlinka.cz.
+- Marketing text and screenshots name no company. The stores show the developer name themselves.
+
+## 0. Before the session (agents and Kryštof)
+
+- [ ] **0.3 merged** on `main`, device checklist `docs/DEVICE-TESTS.md` passed on two phones.
+- [ ] **Release notes** `android/fastlane/metadata/android/*/changelogs/3.txt` still match what 0.3 really does (written from the work in progress on 2026-11-21).
+- [ ] **Fixes that reviewers would hit:** the first four items of "Rejection risks" below.
+- [ ] **Privacy pages published** from `store/privacy/` at https://offlinka.cz/aplikace/soukromi, https://offlinka.sk/aplikacia/sukromie and https://offlinka.cz/en/app/privacy (Kryštof).
+- [ ] **Review sample** published: a zip with one folder `OFFLINKA/Telefon/` holding `wikipedia_cs_all_mini-…zim` (870 MB), `offlinka_cs_prirucky.zim` and `offlinka_mul_hry.zim`. Put its URL into `ios/fastlane/metadata/review_information/notes.txt` and the Play "App access" text.
+- [ ] **Demo video** (1–2 min, iPhone 15 screen recording with the real drive): plug in, choose the drive, search „cesky krumlov“, open an article, the map, unplug and plug back. The same video on a phone with Android for Play (unlisted YouTube link is fine).
+- [ ] **Screenshots:** re-record Paparazzi (`:ui:recordPaparazziDebug`), then `store/screenshots/build.sh --fastlane`. Look at `store/screenshots/out/index.html`. The build lists missing app states; the iPhone and iPad sets must come from the iOS simulator before the App Store submission (step 3).
+- [ ] **Public phone number** decided (both stores publish one, see open questions).
+
+## 1. Google Play account (once, for all Ollsoft apps)
+
+- [ ] Create at https://play.google.com/console/signup: **organization** account, Ollsoft s.r.o., D-U-N-S 933697073.
+  - **Fee: US$25, one time** (2026-11-21).
+  - Legal name and address must match the Dun & Bradstreet record exactly.
+  - Contact email and phone, developer email and phone: each confirmed by a one-time code.
+  - Source: https://support.google.com/googleplay/android-developer/answer/13628312
+- [ ] **Shown publicly** on Google Play: legal name, D-U-N-S, legal address, developer email (info@ollsoft.ai) and developer phone.
+- [ ] **Developer page:** website https://ollsoft.ai, email info@ollsoft.ai.
+- [ ] **EU trader declaration:** a new account declares on creation; every account must declare by **2027-02-01**.
+  - Trader: yes.
+  - From **2027-03-01** Play shows the contact details, the D-U-N-S and a **Terms of Service link per app**. Offlinka needs short app terms by then (open item).
+  - In the EEA and UK, "Offered by" will show Ollsoft s.r.o. instead of Google.
+  - Source: https://support.google.com/googleplay/android-developer/answer/17594752
+- [ ] **12 testers for 14 days does not apply to us.** Google: "Developers with personal accounts created after November 13, 2023, must run a closed test … with a minimum of 12 testers … for at least 14 days." Organization accounts are not named.
+  - No Google page says outright that organizations are exempt (the community guide does).
+  - If the Dashboard still shows "Apply for production", follow it.
+  - Source: https://support.google.com/googleplay/android-developer/answer/14151465
+- **Target API:** new apps and updates must target **API 36** since **2026-08-31**. We target 36. Source: https://developer.android.com/google/play/requirements/target-sdk
+- **16 KB pages:** checked on 0.2.0. The 64-bit `.so` files are aligned to 16 KB and `zipalign -c -P 16` passes. Play blocks updates without 16 KB support from 2027-02-01. Source: https://developer.android.com/guide/practices/page-sizes
+
+## 2. Google Play: the Offlinka app
+
+- [ ] **Create app:** name `Offlinka`, default language Czech (cs-CZ), App, Free. Accept the declarations.
+- [ ] **App signing with our own key, BEFORE the first release.** Play's default is now Google-generated keys; once a release is rolled out it cannot be changed. Source: https://support.google.com/googleplay/android-developer/answer/9842756
+  - Test and release → App integrity → Play app signing → **Change app signing key** → "Export and upload a key from Java keystore".
+  - Download the PEPK tool and the encryption key from that page.
+  - Run PEPK on `_secrets/android/offlinka-app-signing.jks` (alias and password from `signing.env`, read in the shell, never printed). Upload the encrypted zip.
+  - **Upload key:** export the certificate of `offlinka-upload.jks` with `keytool -export -rfc` and register it as the upload key.
+  - Google: "If you want to use the same signing key across multiple stores, make sure to provide your own signing key … instead of having Google generate one for you." Keep upload and app signing keys different.
+- [ ] **Build** (shell, from `android/`, secrets loaded with `set -a; source "$OFFLINKA_SECRETS/android/signing.env"; set +a`):
+  - **AAB for Play**, signed with the **upload key**: `OFFLINKA_KEYSTORE="$OFFLINKA_SECRETS/android/$OFFLINKA_UPLOAD_STORE" OFFLINKA_KEY_ALIAS="$OFFLINKA_UPLOAD_ALIAS" OFFLINKA_KEYSTORE_PASSWORD="$OFFLINKA_UPLOAD_PASSWORD" OFFLINKA_KEY_PASSWORD="$OFFLINKA_UPLOAD_PASSWORD" … ./gradlew --no-daemon bundleRelease` (under the build lock, see `docs/SPEC.md`).
+  - **APK for the drive**, signed with the **app signing key**: the same with the `OFFLINKA_SIGNING_*` values and `assembleRelease`.
+- [ ] **Store listing:** `fastlane supply --package_name cz.offlinka.app --metadata_path android/fastlane/metadata/android --json_key <service account json> --skip_upload_apk --skip_upload_aab`, or paste the texts by hand. Category, contact and the rest: `store/forms.md`.
+- [ ] **App content** forms: privacy policy, ads, app access, content rating, target audience 13+, data safety, health, financial, news, advertising ID (`store/forms.md`).
+- [ ] **Countries:** Czechia and Slovakia.
+- [ ] **Internal testing:** upload the AAB, add the founders' Google accounts, install from the opt-in link and run the device checklist once with the drive. Read the pre-launch report: without a drive it only sees the Connect screen, which is fine.
+- [ ] **Closed testing** (optional for us): the same build to a few friends with drives for a week.
+- [ ] **Production:** promote the build, staged rollout 20 % → 100 % after two days without crashes in Android vitals.
+- [ ] Check that the **app signing certificate** under App integrity is ours (SHA-256 matches `keytool -list -v` of `offlinka-app-signing.jks`).
+
+## 3. Apple
+
+- [ ] **Apple Developer Program, organization:** https://developer.apple.com/programs/enroll/
+  - Legal entity Ollsoft s.r.o., D-U-N-S 933697073.
+  - Enrolled by someone who can sign for the company (jednatel).
+  - **Apple Account email on the company domain**, e.g. `…@ollsoft.ai`. Apple: "Your work email address needs to [be] associated with your organization's domain name".
+  - Website https://ollsoft.ai must be public and belong to the company.
+  - **Fee: 99 USD per membership year**, shown in local currency during enrollment (2026-11-21).
+- [ ] **EU trader (DSA):** yes. Apple publishes the D-U-N-S address, a phone and an email on the EU product page; it needs a document proving the business name and address. Apps without trader status are removed from the EU App Store. Source: https://developer.apple.com/help/app-store-connect/manage-compliance-information/manage-european-union-digital-services-act-trader-requirements
+- [ ] **Identifiers:** explicit App ID `cz.offlinka.app`. Note the Team ID (`OFFLINKA_TEAM_ID`). Create an App Store Connect API key (.p8) and store it in the project `_secrets/` (`ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_PATH`, see `ios/fastlane/Appfile`).
+- [ ] **App record** in App Store Connect: iOS, name `Offlinka`, primary language Czech, bundle ID `cz.offlinka.app`, SKU `offlinka-ios`.
+- [ ] **App Information and App Privacy:** categories, content rights, age rating, Data Not Collected, privacy URL (`store/forms.md`). Price free, availability Czechia and Slovakia.
+- [ ] **First build on a Mac** (cloud Mac: skill `cloud-mac`): `ios/README.md` "Build on macOS", then `ios/UI-SMOKE-TESTS.md` on an iPhone 15 with the drive.
+  - Since 2026-04-28 uploads must be built with **Xcode 26 or later**. Source: https://developer.apple.com/news/upcoming-requirements/
+- [ ] **TestFlight:** `cd ios && fastlane beta`, then add the founders as internal testers and test with the drive.
+- [ ] **Screenshots from the iOS simulator:** capture the same moments (Home, search „cesky krumlov“, article, map, first aid, dark, Library) on an iPhone 17 Pro Max simulator and an iPad Pro 13″ simulator. Name them like the Paparazzi files, run `SNAPSHOTS=<that folder> store/screenshots/build.sh ios-69 ios-63 ipad-13`.
+  - Apple requires at least one screenshot of the **"iPhone with Dynamic Island (medium display)"** class (1206×2622 or 1179×2556; our `ios-63`).
+  - It also requires **iPad 13″** (2064×2752) because the app runs on iPad.
+  - 1320×2868 (`ios-69`) and 1284×2778 (`ios-65`) cover the large classes.
+  - Up to 10 per size, no alpha. Source: https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/
+- [ ] **Metadata:** `cd ios && fastlane release` (uploads the build and `fastlane/metadata`, no auto-submit). Upload the screenshots in App Store Connect, or `fastlane deliver --screenshots_path ../store/screenshots/out/appstore --skip_binary_upload --skip_metadata`.
+  - **No "What's New" for the first version:** App Store Connect does not take it. Add `release_notes.txt` from the second version on.
+- [ ] **App Review Information:** contact name, phone and email. Notes come from `review_information/notes.txt` (sample URL filled in). Attach the demo video. Sign-in: not required.
+- [ ] **Submit for review**, release manually after approval.
+- **Export compliance:** nothing to answer per build: `ITSAppUsesNonExemptEncryption` = NO is already in `ios/project.yml`.
+
+## 4. The APK on the drive
+
+- **Same key as Play:** the drive APK is signed with the **app signing key** uploaded to Play in step 2, never with the upload key. Android installs an update only when the certificates match.
+  - Updates from Play therefore install over the drive APK, keeping saved articles and history. Source: https://developer.android.com/studio/publish/app-signing
+- **versionCode on the drive ≤ the one on Play**, so a drive never blocks a Play update. Build the drive APK from the same commit as the Play release.
+- **File name:** `Aplikace/android/Offlinka-<version>.apk`, with its SHA-256 in `Aplikace/SHA256SUMS.txt`.
+- **Android developer verification:** Google is rolling this out for apps on certified phones.
+  - Brazil, Indonesia, Singapore and Thailand from 2026-09-30; everywhere else in 2027.
+  - Play App Signing apps are registered automatically. The drive APK carries the same package name and key, so it is covered.
+  - Sideloaded installs are not checked yet.
+  - Source: https://developer.android.com/developer-verification
+- [ ] Device test once: install the drive APK, save an article, then update from Play (internal track). The saved article must still be there.
+
+## 5. After release
+
+- [ ] Add the store badges and links to offlinka.cz (an idea branch first, per the shop rules), and change the shop's mobile guide from Kiwix to the Offlinka app.
+- [ ] Replies to store reviews: a founder approves, like customer e-mails.
+- [ ] Every new version: changelog in `android/fastlane/metadata/android/*/changelogs/<versionCode>.txt` and `ios/fastlane/metadata/*/release_notes.txt`, screenshots re-built.
+
+## Rejection risks (fix before submitting)
+
+- **Guides tell users to install Kiwix.** The bundled `offlinka_cs_prirucky.zim` (both apps) lists "Jak to otevřít v mobilu … aplikace Kiwix" on its main page; that page and "Jak používat tuto flashku" explain the drive and Kiwix. Reviewers without the drive open exactly these pages. Fix: an app edition of the guides without those two pages (drive-prep), copied into both apps.
+- **No privacy policy link inside the iOS app.** Apple 5.1.1(i): "All apps must include a link to their privacy policy in the App Store Connect metadata field and within the app". About → Soukromí has text only. Fix: add the URL there (both apps; Play accepts text, Apple wants the link).
+- **About names Ollcee s.r.o.** (`about_lic_app`, `about_made_by`) while the stores will show Ollsoft s.r.o. Fix: "Aplikace Offlinka © 2026 Ollsoft s.r.o."; if the drive maker stays, say "Flashku vyrábí Ollcee s.r.o.".
+- **"Najděte se na mapě" / "Find yourself on the map"** (0.3 `try_map`) promises location, but the map cannot show where you are (the shop FAQ says so). Fix: „Prohlédněte si mapu“ / "Explore the map".
+- **App Store screenshots are Android renders** (Paparazzi). Fine for Play; for Apple replace them with iOS simulator captures (guideline 2.3.3: screenshots show the app in use on the device).
+- **No way to review without the drive** (guideline 2.1): the sample folder and the demo video in step 0 remove most of it. Without them, expect "unable to review, provide a demo video or the hardware" and a lost week.
+- Lower risks, no action now:
+  - Maps and games run JavaScript from the drive (guideline 4.7, HTML5 mini games). Both are ours to describe, have no purchases or ads, and fit the 13+ rating.
+  - "Wikipedia" appears in subtitles, keywords and screenshots (guideline 5.2.1, trademarks). It is descriptive and the name is just "Offlinka". If Apple objects, use the subtitle „Encyklopedie a mapy bez internetu“.
+
+## Open questions for the founders
+
+- **Public phone number:** both stores publish a developer phone for Ollsoft s.r.o. Which number?
+- **Review sample:** may we host the 0.9 GB sample zip (Czech Wikipedia phone edition) on offlinka.cz, and who records the demo video with the drive?
+- **App terms:** Google shows a Terms of Service link per app from 2027-03-01. Shall we write short app terms (free, as is, licences)?
+- **Countries:** Czechia and Slovakia only, or the whole EU from the start?
+- **Auto Backup:** keep Android's backup of saved articles and history (disclosed in the privacy policy), or switch it off for an absolute "nothing leaves the phone"?
