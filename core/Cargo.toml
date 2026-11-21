@@ -1,0 +1,52 @@
+[workspace]
+members = [".", "uniffi-bindgen"]
+resolver = "2"
+
+[package]
+name = "offlinka-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+description = "Offlinka shared engine: own ZIM reader, title search index, UniFFI API for Android and iOS"
+license = "LicenseRef-Offlinka-Proprietary"
+publish = false
+
+[lib]
+name = "offlinka_core"
+crate-type = ["lib", "cdylib"]
+
+[[bin]]
+name = "offlinka-cli"
+path = "src/bin/offlinka-cli.rs"
+
+[dependencies]
+uniffi = { version = "0.32", default-features = false }
+thiserror = "2"
+ruzstd = "0.9"
+lzma-rs = "0.3"
+fst = "0.4"
+lru = { version = "0.19", default-features = false }
+memmap2 = "0.9"
+unicode-normalization = "0.1"
+
+[dev-dependencies]
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+strip = true
+panic = "unwind"
+
+# Host build for binding generation and the Android JVM tests: optimised but not
+# stripped (uniffi-bindgen reads the metadata symbols from the library).
+[profile.host]
+inherits = "release"
+lto = "off"
+codegen-units = 16
+strip = false
+
+# Size-optimised variant, measured against release in core/README.md.
+[profile.release-s]
+inherits = "release"
+opt-level = "s"

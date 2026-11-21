@@ -1,0 +1,313 @@
+//! offlinka-cli: manual checks, the drive build's index step, and benchmarks.
+
+use std::io::Write;
+use std::process::ExitCode;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use offlinka_core::index;
+use offlinka_core::reader::FileSource;
+use offlinka_core::zim::{Archive, Kind};
+use offlinka_core::{Book, Library};
+
+const USAGE: &str = "offlinka-cli <command> ...
+  info    <zim> [--index F]                 book info and metadata
+  ls      <zim> [--ns C] [--prefix P] [--limit N]   entries in path order
+  get     <zim> <path> [-o FILE]            entry content (redirects followed)
+  suggest <zim>... <query> [--index F] [--limit N]  suggestions (several zims: library merge)
+  index   <zim> -o <FILE.offidx>            build the title search index
+  bench   <zim> [--index F] [--queries FILE] keystroke latency of suggest, open + main page time
+  verify  <zim>                             decompress every cluster, read every entry";
+
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match run(&args) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+struct Opts {
+    pos: Vec<String>,
+    flags: std::collections::HashMap<String, String>,
+}
+
+fn parse(args: &[String]) -> Opts {
+    let mut pos = Vec::new();
+    let mut flags = std::collections::HashMap::new();
+    let mut i = 0;
+    while i < args.len() {
+        let a = &args[i];
+        if (a.starts_with("--") || a == "-o") && i + 1 < args.len() {
+            flags.insert(a.trim_start_matches('-').to_string(), args[i + 1].clone());
+            i += 2;
+        } else {
+            pos.push(a.clone());
+            i += 1;
+        }
+    }
+    Opts { pos, flags }
+}
+
+type R = Result<(), Box<dyn std::error::Error>>;
+
+fn open_book(path: &str, idx: Option<&String>) -> Result<Arc<Book>, Box<dyn std::error::Error>> {
+    let b = Book::open_path(path.to_string())?;
+    let auto = format!("{}.offidx", path.strip_suffix(".zim").unwrap_or(path));
+    match idx {
+        Some(i) if i == "none" => {}
+        Some(i) => b.attach_index_path(i.clone())?,
+        None => {
+            if std::path::Path::new(&auto).exists() {
+                b.attach_index_path(auto)?;
+            }
+        }
+    }
+    Ok(b)
+}
+
+fn run(args: &[String]) -> R {
+    let Some(cmd) = args.first() else {
+        println!("{USAGE}");
+        return Ok(());
+    };
+    let o = parse(&args[1..]);
+    let need = |n: usize| -> Result<(), Box<dyn std::error::Error>> {
+        if o.pos.len() < n {
+            Err(format!("missing arguments\n{USAGE}").into())
+        } else {
+            Ok(())
+        }
+    };
+    match cmd.as_str() {
+        "info" => {
+            need(1)?;
+            let t = Instant::now();
+            let b = open_book(&o.pos[0], o.flags.get("index"))?;
+            let open = t.elapsed();
+            let i = b.info();
+            let a = b.archive();
+            println!("{i:#?}");
+            println!("open: {open:?}");
+            println!(
+                "zim v{}.{} uuid {} entries {} clusters {} mimes {}",
+                a.header.major,
+                a.header.minor,
+                a.header.uuid_hex(),
+                a.header.entry_count,
+                a.header.cluster_count,
+                a.mimes.len()
+            );
+            for n in b.metadata_names() {
+                let v = b.metadata(&n).unwrap_or_default();
+                if n.starts_with("Illustration") {
+                    println!("M/{n}: {} bytes", v.len());
+                } else {
+                    let s = String::from_utf8_lossy(&v);
+                    let s: String = s.chars().take(120).collect();
+                    println!("M/{n}: {s}");
+                }
+            }
+            if let Some(ix) = b.search_index() {
+                println!(
+                    "index: {} bytes, {} records, {} title keys, {} word keys, {} heavy prefixes",
+                    ix.byte_len,
+                    ix.record_count,
+                    ix.title_keys(),
+                    ix.word_keys(),
+                    ix.heavy_prefixes()
+                );
+            }
+        }
+        "ls" => {
+            need(1)?;
+            let a = Archive::open(Box::new(FileSource::open(&o.pos[0])?))?;
+            let ns = o.flags.get("ns").and_then(|s| s.bytes().next());
+            let prefix = o.flags.get("prefix").cloned().unwrap_or_default();
+            let limit: usize = o.flags.get("limit").map(|s| s.parse()).transpose()?.unwrap_or(50);
+            let start = match ns {
+                Some(n) => a.lower_bound(n, &prefix)?,
+                None => 0,
+            };
+            let mut out = std::io::stdout().lock();
+            for i in start..a.entry_count() {
+                if i - start >= limit as u32 {
+                    break;
+                }
+                let d = a.dirent(i)?;
+                if ns.is_some_and(|n| n != d.ns) || !d.path.starts_with(&prefix) {
+                    break;
+                }
+                let what = match d.kind {
+                    Kind::Content { cluster, blob } => format!("{} c{cluster}/b{blob}", a.mime(&d)),
+                    Kind::Redirect { target } => {
+                        format!("-> #{target} {}", a.dirent(target).map(|t| t.path.clone()).unwrap_or_default())
+                    }
+                    Kind::Other => "(other)".into(),
+                };
+                writeln!(out, "#{i}\t{}/{}\t{}\t{}", d.ns as char, d.path, d.title, what)?;
+            }
+        }
+        "get" => {
+            need(2)?;
+            let b = Book::open_path(o.pos[0].clone())?;
+            let r = b.get(o.pos[1].clone())?;
+            eprintln!("{} {} ({} bytes)", r.path, r.mime, r.data.len());
+            match o.flags.get("o") {
+                Some(f) => std::fs::write(f, &r.data)?,
+                None => std::io::stdout().write_all(&r.data)?,
+            }
+        }
+        "suggest" => {
+            need(2)?;
+            let limit: u32 = o.flags.get("limit").map(|s| s.parse()).transpose()?.unwrap_or(10);
+            let (zims, q) = o.pos.split_at(o.pos.len() - 1);
+            let q = &q[0];
+            if zims.len() == 1 {
+                let b = open_book(&zims[0], o.flags.get("index"))?;
+                let t = Instant::now();
+                let s = b.suggest(q.clone(), limit);
+                let el = t.elapsed();
+                for x in &s {
+                    match &x.snippet {
+                        Some(sn) => println!("{}  ->  {}  [{}]", x.title, sn, x.path),
+                        None => println!("{}  [{}]", x.title, x.path),
+                    }
+                }
+                eprintln!("{} suggestions in {el:?} (index: {})", s.len(), b.info().has_index);
+            } else {
+                let lib = Library::new();
+                for z in zims {
+                    lib.add(open_book(z, None)?);
+                }
+                let t = Instant::now();
+                let s = lib.suggest_all(q.clone(), limit);
+                let el = t.elapsed();
+                for x in &s {
+                    println!("{:<28} {}  [{}]", x.book_id, x.title, x.path);
+                }
+                eprintln!("{} suggestions in {el:?}", s.len());
+            }
+        }
+        "index" => {
+            need(1)?;
+            let out = o.flags.get("o").ok_or("missing -o <file.offidx>")?;
+            let t = Instant::now();
+            let a = Archive::open(Box::new(FileSource::open(&o.pos[0])?))?;
+            let tmp = format!("{out}.tmp");
+            let mut w = std::io::BufWriter::new(std::fs::File::create(&tmp)?);
+            let st = index::build(&a, &mut w, &mut |m| eprintln!("[{:>6.1}s] {m}", t.elapsed().as_secs_f64()))?;
+            drop(w);
+            std::fs::rename(&tmp, out)?;
+            println!("{st:#?}");
+            println!("built {} in {:.1}s", out, t.elapsed().as_secs_f64());
+        }
+        "bench" => {
+            need(1)?;
+            let t = Instant::now();
+            let b = open_book(&o.pos[0], o.flags.get("index"))?;
+            let open = t.elapsed();
+            let t = Instant::now();
+            let main = b.info().main_path.map(|p| b.get(p).map(|r| r.data.len()));
+            let main_t = t.elapsed();
+            println!("open {open:?}, main page {main_t:?} ({main:?}), index: {}", b.info().has_index);
+            let queries: Vec<String> = match o.flags.get("queries") {
+                Some(f) => {
+                    std::fs::read_to_string(f)?.lines().filter(|l| !l.trim().is_empty()).map(String::from).collect()
+                }
+                None => [
+                    "cesky krumlov",
+                    "praha",
+                    "Karel IV",
+                    "druha svetova valka",
+                    "brno",
+                    "mozart",
+                    "tatry",
+                    "voda",
+                    "a",
+                    "s",
+                    "seznam",
+                    "jan",
+                    "kosice",
+                    "bratislava",
+                    "einstein",
+                    "chemie",
+                    "1",
+                    "ostrava",
+                    "pes",
+                    "fotosynteza",
+                ]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+            };
+            let mut times: Vec<(Duration, String)> = Vec::new();
+            for q in &queries {
+                let chars: Vec<char> = q.chars().collect();
+                for n in 1..=chars.len() {
+                    let p: String = chars[..n].iter().collect();
+                    let t = Instant::now();
+                    let s = b.suggest(p.clone(), 20);
+                    times.push((t.elapsed(), p));
+                    std::hint::black_box(s);
+                }
+            }
+            times.sort();
+            let pct = |p: f64| times[((times.len() - 1) as f64 * p) as usize].0;
+            println!(
+                "{} keystrokes: p50 {:?}  p95 {:?}  p99 {:?}  max {:?} ({})",
+                times.len(),
+                pct(0.5),
+                pct(0.95),
+                pct(0.99),
+                times.last().unwrap().0,
+                times.last().unwrap().1
+            );
+            for q in queries.iter().take(6) {
+                let s = b.suggest(q.clone(), 5);
+                println!("  {q:>22} => {}", s.iter().map(|x| x.title.as_str()).collect::<Vec<_>>().join(" | "));
+            }
+        }
+        "verify" => {
+            need(1)?;
+            let a = Archive::open(Box::new(FileSource::open(&o.pos[0])?))?;
+            let t = Instant::now();
+            let mut bytes = 0u64;
+            for c in 0..a.header.cluster_count {
+                let loc = a.cluster_loc(c)?;
+                if loc.compression != offlinka_core::zim::Compression::None {
+                    let cl = a.cluster(c, &loc)?;
+                    bytes += (0..cl.blob_count()).map(|i| cl.blob(i).map(|b| b.len() as u64).unwrap_or(0)).sum::<u64>();
+                }
+            }
+            let mut redirects = 0;
+            for i in 0..a.entry_count() {
+                let d = a.dirent(i)?;
+                match d.kind {
+                    Kind::Content { cluster, blob } => {
+                        a.blob_loc(cluster, blob)?;
+                    }
+                    Kind::Redirect { .. } => {
+                        a.resolve(i)?;
+                        redirects += 1;
+                    }
+                    Kind::Other => {}
+                }
+            }
+            println!(
+                "ok: {} entries ({redirects} redirects), {} clusters, {bytes} bytes inflated, {:?}",
+                a.entry_count(),
+                a.header.cluster_count,
+                t.elapsed()
+            );
+        }
+        _ => {
+            println!("{USAGE}");
+            return Err(format!("unknown command {cmd}").into());
+        }
+    }
+    Ok(())
+}

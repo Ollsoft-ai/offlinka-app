@@ -1,0 +1,8 @@
+[bindings.kotlin]
+package_name = "cz.offlinka.core"
+cdylib_name = "offlinka_core"
+
+[bindings.swift]
+module_name = "OfflinkaCore"
+ffi_module_name = "offlinka_coreFFI"
+ffi_module_filename = "offlinka_coreFFI"
