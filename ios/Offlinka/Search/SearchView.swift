@@ -20,7 +20,7 @@ struct SearchView: View {
             results
         }
         .background(Color.brandBg.ignoresSafeArea())
-        .navigationTitle(scopeTitle ?? tr(.cdSearch))
+        .navigationTitle(scopeTitle ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { focused = true }
     }
@@ -82,7 +82,7 @@ struct SearchView: View {
                     Section {
                         let visible = group.isExpanded ? group.hits : Array(group.hits.prefix(SearchModel.collapsedCount))
                         ForEach(visible, id: \.self) { hit in
-                            HitRow(hit: hit, onOpen: { open(hit) }, onFill: { model.query = hit.title })
+                            HitRow(hit: hit, query: model.trimmedQuery, onOpen: { open(hit) }, onFill: { model.query = hit.title })
                         }
                         if !group.isExpanded && group.hits.count >= SearchModel.collapsedCount {
                             Button(tr(.searchShowMore)) {
@@ -93,19 +93,21 @@ struct SearchView: View {
                             .frame(minHeight: BrandSize.touch)
                         }
                     } header: {
-                        HStack(spacing: BrandSpace.s) {
-                            BookIconBox(kind: BookCatalog.kind(of: group.book), box: 24)
+                        HStack(spacing: BrandSpace.m) {
+                            BookIconBox(kind: BookCatalog.kind(of: group.book), box: 26)
                             Text(BookCatalog.title(of: group.book))
-                                .brandText(.labelSmall)
+                                .brandText(.label)
                                 .foregroundStyle(Color.brandInk2)
                         }
+                        .textCase(nil)
                         .accessibilityElement(children: .combine)
                         .accessibilityAddTraits(.isHeader)
                     }
-                    .listRowBackground(Color.brandSurface)
+                    .listRowBackground(Color.brandBg)
+                    .listRowSeparatorTint(Color.brandLine)
                 }
             }
-            .listStyle(.insetGrouped)
+            .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .scrollDismissesKeyboard(.immediately)
         }
@@ -169,6 +171,7 @@ struct SearchView: View {
 
 private struct HitRow: View {
     let hit: SearchHit
+    let query: String
     let onOpen: () -> Void
     let onFill: () -> Void
 
@@ -176,19 +179,19 @@ private struct HitRow: View {
         HStack(spacing: BrandSpace.s) {
             Button(action: onOpen) {
                 VStack(alignment: .leading, spacing: BrandSpace.xxs) {
-                    Text(hit.title)
-                        .brandText(.bodyStrong)
-                        .foregroundStyle(Color.brandInk)
+                    Self.highlighted(hit.title, query: query)
+                        .lineLimit(2)
                     if let snippet = hit.snippet, !snippet.isEmpty {
                         HStack(spacing: BrandSpace.xs) {
-                            BrandIconView(icon: .redirect, size: 14)
+                            BrandIconView(icon: .redirect, size: 16)
                             Text(snippet)
                         }
-                        .brandText(.caption)
+                        .brandText(.bodySmall)
                         .foregroundStyle(Color.brandInk2)
                     }
                 }
-                .frame(maxWidth: .infinity, minHeight: BrandSize.touch - 8, alignment: .leading)
+                .padding(.leading, 26 + BrandSpace.m)
+                .frame(maxWidth: .infinity, minHeight: BrandSize.touch, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -196,12 +199,27 @@ private struct HitRow: View {
 
             Button(action: onFill) {
                 BrandIconView(icon: .fillQuery, size: BrandSize.iconSmall)
-                    .foregroundStyle(Color.brandInk3)
+                    .foregroundStyle(Color.brandInk2)
                     .frame(width: BrandSize.touch, height: BrandSize.touch)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(tr(.searchFill))
         }
+    }
+
+    /// The title with the part that matched the query in bold (diacritics-insensitive), the rest regular.
+    static func highlighted(_ title: String, query: String) -> Text {
+        let regular = Font.custom("Archivo-Regular", size: 17, relativeTo: .body)
+        let bold = Font.custom("Archivo-Bold", size: 17, relativeTo: .body)
+        guard !query.isEmpty,
+              let match = title.range(of: query, options: [.caseInsensitive, .diacriticInsensitive])
+        else {
+            return Text(title).font(bold).foregroundColor(Color.brandInk)
+        }
+        let before = Text(String(title[..<match.lowerBound])).font(regular).foregroundColor(Color.brandInk2)
+        let matched = Text(String(title[match])).font(bold).foregroundColor(Color.brandInk)
+        let after = Text(String(title[match.upperBound...])).font(regular).foregroundColor(Color.brandInk2)
+        return before + matched + after
     }
 }
 
