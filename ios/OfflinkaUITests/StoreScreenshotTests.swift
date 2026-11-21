@@ -1,25 +1,21 @@
 import XCTest
 
-/// App Store screenshots from the simulator, on the demo drive (`-demo-drive`, debug builds). Runs only
-/// with `OFFLINKA_STORE_SHOTS=1` (CI: `TEST_RUNNER_OFFLINKA_STORE_SHOTS=1`); languages from
-/// `OFFLINKA_STORE_LANGS` (default `cs,sk,en`).
+/// App Store screenshots from the simulator. Runs only with `OFFLINKA_STORE_SHOTS=1` (CI:
+/// `TEST_RUNNER_OFFLINKA_STORE_SHOTS=1`); languages from `OFFLINKA_STORE_LANGS` (default `cs,sk,en`).
 ///
+/// The drive: `OFFLINKA_FIXTURE_DRIVE` (CI: the review sample, real Wikipedia, map and games, opened through
+/// `-fixture-drive` and the Connect button), else the demo drive (`-demo-drive`, fake pages).
 /// Every capture is a result-bundle attachment named like the Paparazzi golden it replaces
 /// (`ScreensTest_home[cs-light]`), so `ios/tools/export-shots.py` + `store/screenshots/build.sh`
-/// (`SNAPSHOTS=<folder>`) frame them. The reader captures show the demo page; the store frame draws
-/// the real page from the drive into the area between the bars. Status bar: `simctl status_bar` (CI).
+/// (`SNAPSHOTS=<folder>`) frame them. Status bar: `simctl status_bar` (CI, `ios/tools/sim-prepare.sh`).
 final class StoreScreenshotTests: XCTestCase {
     private var app: XCUIApplication!
 
-    private struct Texts {
-        let library: String
-
-        static func of(_ language: String) -> Texts {
-            switch language {
-            case "sk": return Texts(library: "Knižnica")
-            case "en": return Texts(library: "Library")
-            default: return Texts(library: "Knihovna")
-            }
+    private static func library(_ language: String) -> String {
+        switch language {
+        case "sk": return "Knižnica"
+        case "en": return "Library"
+        default: return "Knihovna"
         }
     }
 
@@ -43,7 +39,7 @@ final class StoreScreenshotTests: XCTestCase {
 
     private func captureLanguage(_ loc: String) throws {
         // Home, then search „cesky krumlov“ and the article.
-        launch(loc, theme: "light")
+        app = launchApp(language: loc, theme: "light")
         try capture("ScreensTest_home[\(loc)-light]")
 
         app.buttons["home.search"].tap()
@@ -52,58 +48,46 @@ final class StoreScreenshotTests: XCTestCase {
         field.typeText("cesky krumlov")   // not return: that opens the top hit
         dismissKeyboardTip(app)
         let hit = app.buttons["search.hit"].firstMatch
-        XCTAssertTrue(hit.waitForExistence(timeout: 10), "[\(loc)] no search result")
+        XCTAssertTrue(hit.waitForExistence(timeout: 20), "[\(loc)] no search result")
         dismissKeyboard()
         try capture("ScreensTest_search[\(loc)-light]")
 
         hit.tap()
         XCTAssertTrue(app.webViews.firstMatch.staticTexts.firstMatch.waitForExistence(timeout: 60), "[\(loc)] article did not load")
-        try capture("ScreensTest_reader[\(loc)-light]")
+        try capture("ScreensTest_reader[\(loc)-light]", settle: 3)
 
-        // The map.
-        launch(loc, theme: "light")
-        let map = tile("maps_")
+        // The map (MapLibre draws its tiles after the page loaded).
+        app = launchApp(language: loc, theme: "light")
+        let map = tile(in: app, "maps_")
         XCTAssertTrue(map.waitForExistence(timeout: 10), "[\(loc)] no map tile")
         map.tap()
         XCTAssertTrue(app.buttons["reader.back"].firstMatch.waitForExistence(timeout: 60), "[\(loc)] map did not open")
-        try capture("ScreenStatesTest_readerMap[\(loc)-light]")
+        try capture("ScreenStatesTest_readerMap[\(loc)-light]", settle: 8)
 
         // First aid from the guides.
-        launch(loc, theme: "light")
+        app = launchApp(language: loc, theme: "light")
         let firstAid = app.buttons["home.firstAid"]
         XCTAssertTrue(firstAid.waitForExistence(timeout: 10), "[\(loc)] no first-aid link")
         firstAid.tap()
         XCTAssertTrue(app.webViews.firstMatch.staticTexts.firstMatch.waitForExistence(timeout: 60), "[\(loc)] guide did not load")
-        try capture("ScreenStatesTest_readerGuides[\(loc)-light]")
+        try capture("ScreenStatesTest_readerGuides[\(loc)-light]", settle: 3)
 
         // Library.
-        launch(loc, theme: "light")
-        let library = app.buttons[Texts.of(loc).library].firstMatch
+        app = launchApp(language: loc, theme: "light")
+        let library = app.buttons[Self.library(loc)].firstMatch
         XCTAssertTrue(library.waitForExistence(timeout: 10), "[\(loc)] no Library tab")
         library.tap()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Wiki")).firstMatch.waitForExistence(timeout: 10))
         try capture("ScreensTest_library[\(loc)-light]")
 
-        // Dark: Home and an article.
-        launch(loc, theme: "dark")
+        // Dark: Home and a Wikipedia page.
+        app = launchApp(language: loc, theme: "dark")
         try capture("ScreensTest_home[\(loc)-dark]")
-        let wikipedia = tile("wikipedia_\(loc == "sk" ? "sk" : "cs")_all")
+        let wikipedia = tile(in: app, "wikipedia_")
         XCTAssertTrue(wikipedia.waitForExistence(timeout: 10), "[\(loc)] no Wikipedia tile")
         wikipedia.tap()
         XCTAssertTrue(app.webViews.firstMatch.staticTexts.firstMatch.waitForExistence(timeout: 60), "[\(loc)] dark article did not load")
-        try capture("ScreensTest_reader[\(loc)-dark]")
-    }
-
-    private func launch(_ language: String, theme: String) {
-        app?.terminate()
-        app = XCUIApplication()
-        app.launchArguments = ["-demo-drive", "-demo-language", language, "-demo-theme", theme]
-        app.launch()
-        XCTAssertTrue(app.buttons["home.search"].waitForExistence(timeout: 30), "[\(language)] home did not appear")
-    }
-
-    private func tile(_ prefix: String) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "tile.\(prefix)")).firstMatch
+        try capture("ScreensTest_reader[\(loc)-dark]", settle: 3)
     }
 
     /// The results list hides the keyboard as soon as it is dragged.
@@ -114,8 +98,8 @@ final class StoreScreenshotTests: XCTestCase {
     }
 
     /// Lets animations and web content settle, then keeps the screen as `name`.
-    private func capture(_ name: String) throws {
-        Thread.sleep(forTimeInterval: 1.5)
+    private func capture(_ name: String, settle: TimeInterval = 1.5) throws {
+        Thread.sleep(forTimeInterval: settle)
         keepScreenshot(name)
     }
 }
