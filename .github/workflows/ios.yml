@@ -489,4 +489,7 @@ jobs:
             echo "- version: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist") ($(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist"))"
             echo "- SDK: $(/usr/libexec/PlistBuddy -c 'Print :DTSDKName' "$APP/Info.plist"), Xcode $(/usr/libexec/PlistBuddy -c 'Print :DTXcode' "$APP/Info.plist")"
             echo "- app: $(du -sh "$APP" | cut -f1), binary: $(du -h "$APP/Offlinka" | cut -f1)"
+            # Required-reason APIs linked (compare with ios/Offlinka/Resources/PrivacyInfo.xcprivacy).
+            echo "- required-reason symbols: $(nm -u "$APP/Offlinka" | grep -E '^_(mach_absolute_time|stat|fstat|lstat|fstatat|statfs|fstatfs|getattrlist|getattrlistbulk|fgetattrlist|systemUptime)$' | tr '\n' ' ')"
           } >> "$GITHUB_STEP_SUMMARY"
+          cat "$GITHUB_STEP_SUMMARY"

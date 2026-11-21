@@ -44,7 +44,7 @@ for f in Core/ContentSource.swift Core/ContentEngine.swift Core/FakeContentSourc
          Core/CoreContentEngine.swift Drive/DriveScanner.swift Drive/Shelf.swift Drive/ShelfContent.swift \
          Reader/OfflinkaURL.swift Reader/ByteRange.swift Reader/SchemeResponder.swift Localization/L10n.swift \
          Localization/Str.swift Library/BookCatalog.swift Design/BrandIcon.swift Persistence/UserStore.swift \
-         Search/SearchModel.swift Generated/OfflinkaCore.swift; do
+         Search/SearchModel.swift App/DebugLog.swift Generated/OfflinkaCore.swift; do
   ln -sf "$ROOT/ios/Offlinka/$f" "$P/Sources/Offlinka/$(basename "$f")"
 done
 for t in "$ROOT"/ios/OfflinkaTests/*.swift; do ln -sf "$t" "$P/Tests/OfflinkaTests/"; done

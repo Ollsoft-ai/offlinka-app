@@ -42,6 +42,7 @@ final class FixtureDriveUITests: XCTestCase {
         let heading = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "První pomoc")).firstMatch
         XCTAssertTrue(heading.waitForExistence(timeout: 90), "the article did not load from the ZIM")
         XCTContext.runActivity(named: String(format: "article shown after %.1f s", Date().timeIntervalSince(opened))) { _ in }
+        Thread.sleep(forTimeInterval: 2)   // the text is in the accessibility tree before the first paint
         keepScreenshot("fixture-4-article")
 
         app.buttons["reader.back"].firstMatch.tap()

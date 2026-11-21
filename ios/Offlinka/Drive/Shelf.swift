@@ -129,6 +129,8 @@ final class Shelf {
     @ObservationIgnored private let uiLanguage: () -> String
     @ObservationIgnored private let bundledGuidesPath: String?
     @ObservationIgnored private var builtinBook: ContentBook?
+    /// The bundled guides as an index target: their search index is built on the phone like a drive book's.
+    @ObservationIgnored private var builtinEntry: DriveEntry?
     @ObservationIgnored private var guidesOnly: ShelfContent?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var openTask: Task<Void, Never>?
@@ -179,6 +181,13 @@ final class Shelf {
         guard builtinBook == nil, let opened else { return }
         builtinBook = opened.book
         builtinGuides = opened.record
+        builtinEntry = DriveEntry(url: URL(fileURLWithPath: path), folder: .app, name: ZimFileName(fileName: opened.record.fileName),
+                                  indexURL: nil, sizeBytes: opened.record.sizeBytes)
+    }
+
+    /// Where a tile's index comes from: its drive file, or the app bundle for the bundled guides.
+    private func indexEntry(of tile: ShelfTile) -> DriveEntry? {
+        tile.entry ?? (tile.isBuiltin ? builtinEntry : nil)
     }
 
     /// Only the bundled guides, for "Otevřít první pomoc" without a drive.
@@ -467,7 +476,7 @@ final class Shelf {
         // No build runs now: drop .part files and indexes of files that are not on this drive.
         // A file that has its .offidx on the drive does not need the phone's copy either.
         let current = Set(tiles.compactMap { tile in
-            tile.entry.flatMap { $0.indexURL == nil ? BookCatalog.indexFileName(zimFileName: $0.url.lastPathComponent, size: $0.sizeBytes) : nil }
+            indexEntry(of: tile).flatMap { $0.indexURL == nil ? BookCatalog.indexFileName(zimFileName: $0.url.lastPathComponent, size: $0.sizeBytes) : nil }
         })
         Self.prepareIndexDirectory(directory, keep: current)
         while gen == generation, foreground, !control.shouldStop(gen), let target = nextIndexTarget() {
@@ -548,6 +557,10 @@ final class Shelf {
     private func markIndexed(_ record: BookRecord) {
         let updated = record.withIndex(true)
         content?.update(updated)
+        if record.folder == .app, builtinGuides?.id == record.id {
+            // The bundled book keeps its index across drives: no second attach on the next load.
+            builtinGuides = updated
+        }
         if let index = tiles.firstIndex(where: { $0.record?.id == record.id }) {
             tiles[index].record = updated
         }
@@ -560,7 +573,7 @@ final class Shelf {
         let asked = indexRequests()
         var best: (record: BookRecord, entry: DriveEntry, book: ContentBook, priority: Int)?
         for tile in tiles {
-            guard tile.state == .open, let record = tile.record, let entry = tile.entry, !record.hasIndex,
+            guard tile.state == .open, let record = tile.record, let entry = indexEntry(of: tile), !record.hasIndex,
                   !failedIndex.contains(record.fileName), let book = content.handle(id: record.id),
                   let priority = BookCatalog.indexPriority(name: record.name, uiLanguage: ui, requested: asked.contains(record.name))
             else { continue }

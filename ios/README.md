@@ -1,6 +1,6 @@
 # Offlinka for iOS
 
-SwiftUI app (iOS 17+, iPhone 15+ and USB-C iPads) that reads the Offlinka flash drive in place through the Rust core. Spec: `docs/SPEC.md`. Written on Linux without Xcode: **read `UNVERIFIED.md` before the first build**.
+SwiftUI app (iOS 17+, iPhone 15+ and USB-C iPads) that reads the Offlinka flash drive in place through the Rust core. Spec: `docs/SPEC.md`. Written on Linux; built and tested on Xcode 26 by CI (below). What still needs a device: `UNVERIFIED.md`.
 
 ## Layout
 
@@ -18,14 +18,14 @@ SwiftUI app (iOS 17+, iPhone 15+ and USB-C iPads) that reads the Offlinka flash 
 
 ## Build on macOS (first time)
 
-1. Xcode 15.4 or newer (Swift 5.10+), command line tools selected: `sudo xcode-select -s /Applications/Xcode.app`.
+1. Xcode 26 (the App Store requires it; CI uses 26.6), command line tools selected: `sudo xcode-select -s /Applications/Xcode.app`.
 2. `brew install xcodegen` (and `brew install fastlane` for the lanes).
 3. Rust: `curl https://sh.rustup.rs -sSf | sh`, then `rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios`.
 4. From the repo root: `scripts/build-ios-core.sh`. It builds the static libraries, regenerates `ios/Offlinka/Generated/` and writes `ios/Frameworks/OfflinkaCore.xcframework`.
 5. `ios/tools/sync-design.sh` (app icon, `Str.swift`; harmless to re-run).
 6. `cd ios && xcodegen` → `Offlinka.xcodeproj`.
-7. Build for the simulator: `xcodebuild -project Offlinka.xcodeproj -scheme Offlinka -destination 'platform=iOS Simulator,name=iPhone 15' build`.
-8. Unit + UI tests: `xcodebuild test -project Offlinka.xcodeproj -scheme Offlinka -destination 'platform=iOS Simulator,name=iPhone 15'`. For the real-core tests copy `offlinka_cs_prirucky.zim` and `offlinka_mul_hry.zim` (from `/srv/offlinka/drive/release/<edition>/files/Knihovna/`) into `ios/OfflinkaTests/Fixtures/` and run `xcodegen` again; without them `CoreContentSourceTests` are skipped.
+7. Build for the simulator: `xcodebuild -project Offlinka.xcodeproj -scheme Offlinka -destination 'platform=iOS Simulator,name=iPhone 17' build`.
+8. Unit + UI tests: `xcodebuild test -project Offlinka.xcodeproj -scheme Offlinka -destination 'platform=iOS Simulator,name=iPhone 17'`. Core tests: copy `android/app/src/main/assets/offlinka_cs_prirucky.zim` into `ios/OfflinkaTests/Fixtures/` and run `xcodegen` again (else skipped). UI tests on real books: `TEST_RUNNER_OFFLINKA_FIXTURE_DRIVE=<unzipped review sample>/OFFLINKA`.
 9. Run without hardware (debug builds only): `-demo-drive` (fake books; optional `-demo-language sk`, `-demo-theme dark`), or `-fixture-drive <folder>` (real core; Connect opens `<folder>` with `Knihovna/*.zim` instead of the Files sheet; no folder = the bundled guides).
 10. Device: set your team (`OFFLINKA_TEAM_ID=XXXXXXXXXX xcodegen`, or in Xcode Signing), plug the drive into the iPhone, run, pick `OFFLINKA` in the Files sheet. Then work through `UI-SMOKE-TESTS.md`.
 
@@ -53,4 +53,4 @@ Re-run after changes: `flock /tmp/claude-1000/offlinka-app-build.lock nice -n 10
 - Every file parses; the whole app + generated bindings + Brand.swift type-check in Swift 5 and 6 modes against hand-written stand-ins for SwiftUI/UIKit/WebKit (consistency only, not Apple's real signatures).
 - Unit tests of scanner, URL scheme, responder, search model, store, catalog, and `CoreContentSourceTests` against the core built from `main` (Linux `libofflinka_core.so` + the committed bindings) on the real guides and games ZIMs.
 - `project.yml` generates with XcodeGen 2.42.0 (built on Linux); build phases and Info.plist checked.
-- Not compiled with the real SDKs, not run on a simulator or device: see `UNVERIFIED.md`.
+- Real SDK builds, simulator tests and what is still unverified on a device: CI above and `UNVERIFIED.md`.

@@ -196,6 +196,26 @@ final class ShelfTests: XCTestCase {
         XCTAssertNoThrow(try guides.resource(bookId: "offlinka_cs_prirucky", path: BookCatalog.firstAidPath))
     }
 
+    /// Without guides on the drive, the bundled ones get a search index too („prvni pomoc“ needs it).
+    func testBundledGuidesGetASearchIndex() async throws {
+        let list = books(indexed: true, withGuides: false)
+        let engine = engine(list)
+        let shelf = shelf(engine, indexes: true)
+        _ = await shelf.load(scan: scan(list))
+        await waitUntil("guides indexed") {
+            shelf.tiles.first { $0.id == "offlinka_cs_prirucky" }?.record?.hasIndex == true && !shelf.isIndexing
+        }
+        XCTAssertTrue(engine.buildLog.contains("offlinka_cs_prirucky"))
+        XCTAssertEqual(shelf.builtinGuides?.hasIndex, true)
+
+        // The next drive does not build or attach it again.
+        let builds = engine.buildLog.count
+        _ = await shelf.load(scan: scan(list))
+        await waitUntil("idle") { shelf.tiles.allSatisfy { $0.state == .open } && !shelf.isIndexing }
+        XCTAssertEqual(engine.buildLog.count, builds)
+        XCTAssertEqual(shelf.tiles.first { $0.id == "offlinka_cs_prirucky" }?.record?.hasIndex, true)
+    }
+
     func testDriveGuidesWinOverTheBundledCopy() async {
         let list = books(indexed: true)
         let shelf = shelf(engine(list))

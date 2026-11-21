@@ -125,7 +125,7 @@ public struct AnyTransition { public static let opacity = AnyTransition() }
 public enum ContentMode { case fit, fill }
 public enum TextCase { case uppercase, lowercase }
 public struct AccessibilityTraits: OptionSet, Sendable { public let rawValue: Int; public init(rawValue: Int) { self.rawValue = rawValue }
-    public static let isHeader = AccessibilityTraits(rawValue: 1), updatesFrequently = AccessibilityTraits(rawValue: 2), isSelected = AccessibilityTraits(rawValue: 4) }
+    public static let isHeader = AccessibilityTraits(rawValue: 1), updatesFrequently = AccessibilityTraits(rawValue: 2), isSelected = AccessibilityTraits(rawValue: 4), isLink = AccessibilityTraits(rawValue: 8) }
 public struct AccessibilityChildBehavior { public static let combine = AccessibilityChildBehavior(), ignore = AccessibilityChildBehavior(), contain = AccessibilityChildBehavior() }
 public struct SubmitLabel { public static let search = SubmitLabel() }
 public struct TextInputAutocapitalization { public static let never = TextInputAutocapitalization() }

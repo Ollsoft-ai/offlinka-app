@@ -1,32 +1,35 @@
-# iOS: what has not been compiled or tested (0.2.0, build 2)
+# iOS: what is verified and what is not (0.2.0, build 2)
 
-Written on Linux. **Checked here** (`tools/linux-check/check.sh`, Swift 6.4.3 Linux toolchain): every file parses; the whole app, the generated bindings and `design/out/ios/Brand.swift` type-check in Swift 5 and Swift 6 language modes against **hand-written stand-ins for SwiftUI, UIKit, WebKit, Combine and UniformTypeIdentifiers** (consistency with the API as I believe it to be, not Apple's real signatures); the Foundation-only layer runs its unit tests: scanner, URL scheme, responder, search, store, catalog, the `Shelf` on a fake engine (open order, failed tiles and retry, publish-then-close, index building, cancel, pause, folder cleanup), and `CoreEngineTests` on the real round-2 core with the real guides and games ZIMs (`buildIndex`, cancel, `closeFile`, `trimMemory`, the whole Shelf). `project.yml` generates with XcodeGen. **Not checked:** real Apple SDKs, Xcode build, asset and string catalogs, signing, simulator, devices. Ranked by risk.
+## Verified on real Xcode (GitHub Actions, `macos-26`, Xcode 26.6, iOS 26.5 simulator)
 
-## High
+- **Compiles** with the real SDK in Swift 5 mode: Debug for the simulator, Release **unsigned archive for devices** (arm64, `CODE_SIGNING_ALLOWED=NO`). No debug launch argument in the Release binary.
+- **Core links**: `scripts/build-ios-core.sh` builds the XCFramework (static lib with C `libzstd`) on macOS; no extra linker flags needed. The committed bindings match what the core generates.
+- **102 unit tests pass** on the simulator, including `CoreEngineTests` on the real core (open, ranges, index build, cancel, `closeFile`) and `LocalizationTests` (every key in cs, sk, en from the compiled string catalog).
+- **Real core in the app** (`FixtureDriveUITests`, review sample drive: Czech Wikipedia mini + index, Slovak map, games): Connect → Home with the tiles → search „prvni pomoc“ → article → Back with the query kept.
+- **WKURLSchemeHandler**: pages, reader CSS/JS, fonts and images through `offlinka://`; internal links; external links show the offline notice. Reads take 0–60 ms.
+- **Bundled guides** open from inside the app bundle (stand in when the drive has none) and now get a search index like drive books.
+- **Demo-drive smoke** (`SmokeUITests`): search, reader, save, Saved, Library, Settings, Slovak order, external link notice.
+- **Store screenshots** on iPhone 17 Pro Max, 17 Pro and iPad Pro 13" in cs, sk and en.
+- Linux check (`tools/linux-check/check.sh`) still runs for quick type-checks without a Mac.
 
-1. **Security-scoped access to the USB drive.** Assumes `.fileImporter(allowedContentTypes: [.folder])` returns the drive root, `startAccessingSecurityScopedResource()` on it lets the Rust core `open()`/`pread()` files below it by POSIX path for the session, and the bookmark (`bookmarkData(options: [])`) resolves again after unplug and replug. A pick is adopted (bookmark replaced) only after it scanned fine, so a wrong folder picked from Settings keeps the books open and the old bookmark.
-2. **Linking the core.** Assumes `scripts/build-ios-core.sh` yields `ios/Frameworks/OfflinkaCore.xcframework` with `Headers/module.modulemap` for `offlinka_coreFFI`, and that `Generated/OfflinkaCore.swift` compiles in the app module. The static library contains C `libzstd` (built by `zstd-sys` via `cc`, needs the Xcode command line tools). If symbols are missing at link time: `cargo rustc --release --lib -p offlinka-core --target aarch64-apple-ios --crate-type staticlib -- --print native-static-libs`, then add them to `OTHER_LDFLAGS`.
-3. **WKURLSchemeHandler behaviour.** Assumes a real origin per host (`offlinka://wikipedia_cs_all`: `localStorage` for games, same-scheme `fetch`/XHR), `206` replies playing media, `Range` in `allHTTPHeaderFields`, Web Worker requests (MapLibre in the maps ZIM) reaching the handler, hosts with `_` accepted. ZIM redirects use a `location.replace` page. A book still opening answers `503` „Otevírám…“ and the reader reloads when it opens. Test on a device: maps pan and zoom, a game keeps its score, a guide PDF opens.
-4. **SwiftUI/WebKit code never compiled for real.** Likely first-build errors, all in views: `@Bindable var router = app.router` in a `body`; `.safeAreaInset(edge: .bottom)` with a conditional view; `.presentationBackgroundInteraction(.enabled(upThrough:))`; `.brandText(...)` on `Button`s; `ToolbarItem(placement: .topBarLeading)` holding a button + `HStack`; `.sheet(item:)` with `ShelfTile`; `ForEach(options.indices …)` with a local `let`; `List`/`Section` builders with local `let`s.
+## Not verified (ranked by risk)
 
-## Medium
+### High
 
-5. **Index building in the foreground only.** Builds start only while the app is active; going to the background wraps a running build in `beginBackgroundTask`; when that time expires the build is told to stop (`isCancelled` → `CoreError.Cancelled`, the core deletes the `.part`) and the task is ended in the expiration handler. If the app is suspended before the core polls the flag, the build thread just freezes and goes on when the app returns. `isIdleTimerDisabled` keeps the screen on while building in the foreground (English top1m takes ~10 minutes). Check on a device: build, lock the phone, unlock.
-6. **IndexBuildListener callbacks.** The core calls `onProgress`/`isCancelled` from its build thread; the Swift listener forwards progress to the main actor with `Task { @MainActor … }` and reads a lock-protected flag. Assumes UniFFI callback interfaces work from any thread (they do on Android with JNA).
-7. **Closing books.** A rescan or unplug publishes the new state first, then `closeFile()` runs in a detached task (it waits for reads in progress, which can hang on a pulled drive). Books opened for a state that is already gone are closed the same way. UniFFI frees the Swift objects when no reference remains; there is no `destroy()` in Swift.
-8. **WebKit delegates and actor isolation.** Plain `NSObject` delegates wrap their bodies in `MainActor.assumeIsolated`. Watch for a "nearly matches optional requirement" warning on `decidePolicyFor … decisionHandler:`; if it appears, external links are only blocked by the content rules, without the notice.
-9. **Strings.** `tr()` loads the `.lproj` Xcode compiles from design's `Localizable.xcstrings` (now with non-breaking spaces); plurals through `String(format:locale:arguments:)`. `LocalizationTests` (skipped on Linux) checks all 234 keys in cs, sk and en. Labels that design is still changing (`reader_bar_save`, „Zastavit přípravu“, the index notes) use existing keys for now: the bar's save button says `reader_save`, the stop button `action_cancel`.
-10. **Bundled guides.** `offlinka_cs_prirucky.zim` (393 KB, the same file as Android's asset) is a bundle resource opened by path from `Bundle.main`; assumes the core can `open()` a file inside the app bundle (read-only). It stands in when the drive has no guides and opens from the connect and unplugged screens.
-11. **Privacy manifest.** File timestamp `3B52.1` (the core's `fstat` on the picked ZIMs) and Disk space `E174.1` (`volumeAvailableCapacityForImportantUsage` before building an index). If `nm -u` on the binary shows `mach_absolute_time`, add System boot time `35F9.1`.
-12. **Memory.** `setClusterCacheBudget` 48 MB, 32 MB under 3 GB of `physicalMemory`; `trimMemory()` on `didReceiveMemoryWarningNotification`, off the main thread. The top1m offer needs 3 GB or more.
-13. **Theme and text size.** `ThemeApplier` sets `overrideUserInterfaceStyle` on every window. Article text = the app's size × the phone's Dynamic Type (`UIFontMetrics(forTextStyle: .body)`), passed to `inject.js`; assumes the CSS scales with `--ofl-scale` only on Wikimedia pages.
-14. **Drive monitoring.** Every 2 s in the foreground `FileManager.fileExists` on the drive root; read errors also trigger a check. A read error while building one book's index fails only that book while the drive is still there.
+1. **The real USB drive.** CI opens a folder through `-fixture-drive`, not the Files sheet. Untested: `.fileImporter` returning the drive root, `startAccessingSecurityScopedResource()` letting the core `pread` files below it, the bookmark surviving unplug and replug, and exFAT over the external file provider. Needs an iPhone with the drive (`UI-SMOKE-TESTS.md`).
+2. **Speed and memory on a device.** Opening a 10 GB Wikipedia, suggestions per keystroke, the cluster cache (48/32 MB), `trimMemory` on memory warnings and building the Czech Wikipedia index (minutes) in the foreground were measured only on Linux and the simulator.
+3. **First page after launch.** On the CI simulator WebKit takes 3–9 s to start its processes before the first request reaches the scheme handler. Expected well under a second on a device; if not, prewarm a web view at launch.
+4. **Signing, TestFlight, App Store processing.** No Apple account yet: no signed build, no upload checks (entitlements, privacy manifest validation, export compliance).
 
-## Low
+### Medium
 
-15. **iPad.** Same layout, tiles widen, one window. One tile column only at large text on iPhone.
-16. **Find in page** uses the system find bar; maps get a floating „Zpět“ pill instead of the bar, games no find and no text size.
-17. **Performance.** Main page under 2 s and suggestions under 100 ms per keystroke depend on `pread` over the external exFAT file provider; index build times measured only on Linux (core README).
-18. **UI tests.** `SmokeUITests` rely on accessibility identifiers and Czech/Slovak labels on the demo drive; web content through `app.webViews`.
-19. **XcodeGen.** Generated on Linux with XcodeGen 2.42.0; not built by Xcode. `${OFFLINKA_TEAM_ID}` for signing.
-20. **fastlane.** Lanes not run (no Ruby here).
+5. **Background index builds.** A running build gets `beginBackgroundTask` time, then stops cleanly (`Cancelled`) and resumes on the next start. Check on a device: build, lock the phone, unlock.
+6. **Maps and games.** MapLibre (WebGL, web workers) and the games' `localStorage` per book origin run in the simulator only; check pan/zoom and a kept score on a device.
+7. **Privacy manifest.** FileTimestamp `3B52.1` and DiskSpace `E174.1` declared; the archive job lists the required-reason symbols actually linked; compare before the first upload.
+8. **Strings still pending in design.** „Zásady ochrany soukromí“ uses a fallback until `design/strings` has the key (`PendingStr`); „© 2026 Ollsoft s.r.o.“, `reader_bar_save`, „Zastavit přípravu“ and the index notes arrive with Android round 3.
+
+### Low
+
+9. **iPad and large text.** iPad layout is checked only in the store captures; largest Dynamic Type and VoiceOver are manual (`UI-SMOKE-TESTS.md`).
+10. **iOS 17–18.** CI runs iOS 26 only; the deployment target is 17.0 (the iOS 26 toolbar code has an iOS 17 path that no test runs).
+11. **fastlane.** Lanes not run (no Apple account).
