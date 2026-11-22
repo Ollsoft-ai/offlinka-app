@@ -32,6 +32,7 @@ final class FixtureDriveUITests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         dismissKeyboardTip(app, wait: 3)
         field.typeText("prvni pomoc")
+        dismissKeyboardTip(app)
         let hit = app.buttons["search.hit"].firstMatch
         XCTAssertTrue(hit.waitForExistence(timeout: 30), "no search result for „prvni pomoc“")
         keepScreenshot("fixture-3-search")
@@ -78,8 +79,10 @@ final class FixtureDriveUITests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         dismissKeyboardTip(app, wait: 3)
         pause(1)
-        for character in "cesky krumlov" {
+        for (index, character) in "cesky krumlov".enumerated() {
             field.typeText(String(character))
+            // The simulator's keyboard tip comes up with the first key, over the results.
+            if index == 0 { dismissKeyboardTip(app, wait: 2) }
             Thread.sleep(forTimeInterval: 0.12)
         }
         dismissKeyboardTip(app)

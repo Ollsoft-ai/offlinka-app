@@ -53,6 +53,7 @@ final class StoreScreenshotTests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 10), "[\(loc)] search did not open")
         dismissKeyboardTip(app, wait: 3)
         field.typeText("cesky krumlov")   // not return: that opens the top hit
+        dismissKeyboardTip(app, wait: 2)
         let hit = app.buttons["search.hit"].firstMatch
         XCTAssertTrue(hit.waitForExistence(timeout: 20), "[\(loc)] no search result")
         dismissKeyboard()
