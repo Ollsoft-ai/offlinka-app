@@ -144,3 +144,7 @@ Install: `adb install -r offlinka-<version>-universal.apk` (or from the drive's 
 - [ ] App access text, followed literally on a clean phone: download the review sample zip, unzip it into Download (creates OFFLINKA), Vybrat flashku → Vybrat znovu → Download → OFFLINKA → Použít tuto složku → Povolit: Home with the books. Also picking Download itself works.
 - [ ] About → Open-source libraries → Úplná znění licencí: a page with the licence texts (libzstd BSD, MPL for UniFFI, OFL for the font).
 - [ ] Quick chips on Home and the search scope chip are easy to hit (48 dp); the pre-launch report shows no touch-target warning.
+
+## 0.3.2
+
+- [ ] Connect screen without a drive (cs, then sk and en phone language): „Nemáte ještě Offlinku? Kupte ji zde“ under „Vybrat flashku“ opens the browser at offlinka.cz (sk: offlinka.sk) with `utm_source=app&utm_medium=android&utm_campaign=connect`; back returns to the app. After unplugging the drive the link is not shown.

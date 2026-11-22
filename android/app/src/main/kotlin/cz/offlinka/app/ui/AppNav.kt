@@ -479,7 +479,7 @@ fun GuidesReader(graph: AppGraph, controller: ReaderController, url: String?, on
     }
 }
 
-/** Hands [url] to the browser (privacy policy). Nothing happens when no browser is installed. */
+/** Hands [url] to the browser (privacy policy, shop). Without a browser a toast shows the address. */
 internal fun openInBrowser(context: Context, url: String) {
     try {
         context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

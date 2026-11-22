@@ -331,7 +331,12 @@ fun OutlineButton(
 
 /** Underlined text link in the brand's link colour. */
 @Composable
-fun TextLink(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun TextLink(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    textAlign: androidx.compose.ui.text.style.TextAlign? = null,
+) {
     val c = Offlinka.colors
     Box(
         modifier
@@ -345,6 +350,7 @@ fun TextLink(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
             text,
             style = Offlinka.type.subhead,
             color = c.link,
+            textAlign = textAlign,
             modifier = Modifier.drawBehind {
                 val y = size.height + 1.dp.toPx()
                 drawLine(c.linkUnderline, androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width, y), 2.dp.toPx())

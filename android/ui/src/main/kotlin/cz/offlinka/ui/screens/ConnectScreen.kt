@@ -66,6 +66,9 @@ import cz.offlinka.ui.theme.OfflinkaIcons
 
 enum class ConnectMode { PICK, SEARCHING, UNPLUGGED }
 
+/** utm_medium of the shop link (connect_buy_url); iOS passes "ios". */
+const val BUY_MEDIUM = "android"
+
 enum class ConnectProblem { NONE, NOT_FOUND, WRONG_FOLDER, NO_ACCESS }
 
 data class ConnectState(
@@ -86,6 +89,8 @@ fun ConnectScreen(
     onPick: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenGuides: () -> Unit = {},
+    /** Opens the shop in the browser at the given URL (people without a drive yet). */
+    onBuy: (String) -> Unit = {},
 ) {
     val c = Offlinka.colors
     var help by rememberSaveable { mutableStateOf(state.showHelp) }
@@ -138,6 +143,14 @@ fun ConnectScreen(
                 if (state.mode != ConnectMode.SEARCHING) {
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         TextLink(stringResource(R.string.connect_help_link), { help = true })
+                    }
+                    // For people who have no drive yet: the shop, in the browser. Not after an unplug.
+                    if (state.mode == ConnectMode.PICK) {
+                        val buyUrl = stringResource(R.string.connect_buy_url, BUY_MEDIUM)
+                        Spacer(Modifier.height(4.dp))
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            TextLink(stringResource(R.string.connect_buy), { onBuy(buyUrl) }, textAlign = TextAlign.Center)
+                        }
                     }
                     // First aid works without the drive (phones that cannot read it, a drive left at home).
                     if (state.canOpenGuides) {

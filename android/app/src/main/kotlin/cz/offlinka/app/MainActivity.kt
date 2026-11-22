@@ -51,6 +51,7 @@ import cz.offlinka.app.ui.AppNavHost
 import cz.offlinka.app.ui.GuidesReader
 import cz.offlinka.app.ui.LocalReaderController
 import cz.offlinka.app.ui.Routes
+import cz.offlinka.app.ui.openInBrowser
 import cz.offlinka.ui.R
 import cz.offlinka.ui.screens.ConnectMode
 import cz.offlinka.ui.screens.ConnectProblem
@@ -197,6 +198,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         },
                         onOpenGuides = { guides = firstAidUrl() },
+                        onBuy = { url -> openInBrowser(this@MainActivity, url) },
                     )
                 }
             }

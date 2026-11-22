@@ -102,6 +102,32 @@ class MainActivityTest {
         waitForText("Flashka je zapojená.")
     }
 
+    /** The shop link under „Vybrat flashku“ hands the shop for the UI language to the browser. */
+    private fun buyOpensTheShop(label: String, url: String) {
+        waitForText(label)
+        tap(label)
+        val started = shadowOf(compose.activity).nextStartedActivity
+        assertThat(started.action).isEqualTo(Intent.ACTION_VIEW)
+        assertThat(started.dataString).isEqualTo(url)
+    }
+
+    @Test fun `people without a drive can open the Czech shop in the browser`() = buyOpensTheShop(
+        "Nemáte ještě Offlinku? Kupte ji zde",
+        "https://offlinka.cz/?utm_source=app&utm_medium=android&utm_campaign=connect",
+    )
+
+    @Config(qualifiers = "sk")
+    @Test fun `the Slovak app links the Slovak shop`() = buyOpensTheShop(
+        "Ešte nemáte Offlinku? Kúpte si ju tu",
+        "https://offlinka.sk/?utm_source=app&utm_medium=android&utm_campaign=connect",
+    )
+
+    @Config(qualifiers = "en")
+    @Test fun `the English app links the Czech shop`() = buyOpensTheShop(
+        "Don't have Offlinka yet? Buy one here",
+        "https://offlinka.cz/?utm_source=app&utm_medium=android&utm_campaign=connect",
+    )
+
     @Test fun `the help opens as a sheet`() {
         waitForText("Zapojte flashku Offlinka")
         tap("Flashka se neukazuje?")

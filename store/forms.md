@@ -42,6 +42,7 @@ Answers for Google Play Console and App Store Connect, checked against the app o
   - Google: "'Collect' means transmitting data from your app off a user's device"; data "only processed locally on the user's device and not sent off device does not need to be disclosed".
   - The app cannot transmit anything: no INTERNET permission. Settings, history, saved articles and search indexes stay in app storage.
   - WebView: maps and games run JavaScript from the drive, but without network access nothing leaves the device.
+  - The shop link on Connect („Nemáte ještě Offlinku? Kupte ji zde“) and the privacy link only hand a fixed URL to the browser after a tap (`ACTION_VIEW`). The app sends nothing itself; the URL holds no user or device data, only `utm_source=app`, `utm_medium=android|ios` and `utm_campaign=connect`. The visit is the browser's and the shop's, under the shop's own policy, so the answer stays No.
   - Android backup is off (`allowBackup=false`, decided 2026-11-21): nothing from the app goes into a Google backup. On iOS the settings, saved articles and history may be in the user's own iCloud backup; the app never sends or reads it; the privacy policy discloses it (point 3.4).
 - Sources: https://support.google.com/googleplay/android-developer/answer/10787469
 
@@ -70,6 +71,7 @@ Answers for Google Play Console and App Store Connect, checked against the app o
 - "Do you or your third-party partners collect data from this app?" **No, we do not collect data from this app.** Label: **Data Not Collected**.
 - Consistent with `ios/Offlinka/Resources/PrivacyInfo.xcprivacy`: `NSPrivacyTracking` false, no tracking domains, no collected data types. Required-reason APIs declared: file timestamp (3B52.1) and disk space (E174.1).
 - Apple: "Data that is processed only on device is not 'collected'."
+- The shop link on Connect opens Safari with a fixed URL (`utm_medium=ios`) after a tap: no identifier, nothing sent by the app, so neither collection nor tracking.
 - **Privacy policy URL:** https://offlinka.cz/aplikace/soukromi (sk: https://offlinka.sk/aplikacia/sukromie, en: https://offlinka.cz/en/app/privacy). Already in `ios/fastlane/metadata/<locale>/privacy_url.txt`.
 - Source: https://developer.apple.com/app-store/app-privacy-details/
 
