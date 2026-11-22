@@ -371,6 +371,12 @@ jobs:
           xctestrun=$(ls build/Products/*.xctestrun | head -1)
           status=0
           IFS='|' read -r -a pairs <<< "$SHOT_DEVICES"
+          # Every simulator fully booted before the first test: a test next to a booting simulator failed to launch.
+          for pair in "${pairs[@]}"; do
+            folder="${pair##*:}"
+            if [ -n "${ONLY_SETS:-}" ] && [ "$ONLY_SETS" != all ] && [[ ",${ONLY_SETS// /}," != *",$folder,"* ]]; then continue; fi
+            xcrun simctl bootstatus "$(ios/tools/pick-simulator.py "${pair%%:*}")" -b >/dev/null || true
+          done
           for pair in "${pairs[@]}"; do
             device="${pair%%:*}"; folder="${pair##*:}"
             if [ -n "${ONLY_SETS:-}" ] && [ "$ONLY_SETS" != all ] && [[ ",${ONLY_SETS// /}," != *",$folder,"* ]]; then continue; fi
