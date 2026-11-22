@@ -87,13 +87,19 @@ final class StoreScreenshotTests: XCTestCase {
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Wiki")).firstMatch.waitForExistence(timeout: 10))
         try capture("ScreensTest_library[\(loc)-light]")
 
-        // Dark: Home and a Wikipedia page.
+        // Dark: Home and an article with pictures (Karlštejn; in Slovak the mountains of the Vysoké Tatry).
         app = launchApp(language: loc, theme: "dark")
         try capture("ScreensTest_home[\(loc)-dark]")
-        // The Wikipedia with pictures (in English the text-only English one leads Home).
-        let wikipedia = revealTile(in: app, loc == "sk" ? "wikipedia_sk" : "wikipedia_cs")
-        XCTAssertTrue(wikipedia.exists, "[\(loc)] no Wikipedia tile")
-        wikipedia.tap()
+        app.buttons["home.search"].tap()
+        let darkField = app.textFields["search.field"]
+        XCTAssertTrue(darkField.waitForExistence(timeout: 10), "[\(loc)] search did not open")
+        dismissKeyboardTip(app, wait: 2)
+        darkField.typeText(loc == "sk" ? "vysoke tatry" : "karlstejn")
+        dismissKeyboardTip(app, wait: 2)
+        let wanted = loc == "sk" ? "pohorie" : "Karlštejn"
+        let article = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@", "search.hit", wanted)).firstMatch
+        XCTAssertTrue(article.waitForExistence(timeout: 20), "[\(loc)] no hit for the dark article")
+        article.tap()
         XCTAssertTrue(app.webViews.firstMatch.staticTexts.firstMatch.waitForExistence(timeout: 60), "[\(loc)] dark article did not load")
         try capture("ScreensTest_reader[\(loc)-dark]", settle: 3)
     }
