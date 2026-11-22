@@ -313,7 +313,8 @@ jobs:
     timeout-minutes: 90
     env:
       # Store sizes: 6.9" 1320x2868, 6.3" 1206x2622, iPad 13" 2064x2752.
-      SHOT_DEVICES: "iPhone 17 Pro Max:iphone-69|iPhone 17 Pro:iphone-63|iPad Pro 13-inch (M5):ipad-13"
+      # The 6.9" goes last: right after three simulators boot, the first one was twice not yet a destination.
+      SHOT_DEVICES: "iPhone 17 Pro:iphone-63|iPad Pro 13-inch (M5):ipad-13|iPhone 17 Pro Max:iphone-69"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -377,13 +378,13 @@ jobs:
             ios/tools/sim-prepare.sh "$udid"
             # A simulator that has just finished booting is sometimes not yet a destination: try again.
             ok=0
-            for attempt in 1 2 3; do
+            for attempt in 1 2 3 4 5; do
               rm -rf "build/shots-$folder.xcresult"
               if xcodebuild test-without-building -xctestrun "$xctestrun" -destination "platform=iOS Simulator,id=$udid" \
                   -parallel-testing-enabled NO -only-testing:OfflinkaUITests/StoreScreenshotTests \
                   -resultBundlePath "build/shots-$folder.xcresult" | xcbeautify --renderer github-actions; then ok=1; break; fi
               [ -d "build/shots-$folder.xcresult" ] && break   # the tests ran and failed: no retry
-              echo "::warning::$device: no destination yet (attempt $attempt)"; sleep 30
+              echo "::warning::$device: no destination yet (attempt $attempt)"; sleep 60
             done
             [ $ok = 1 ] || status=1
             ios/tools/export-shots.py "build/shots-$folder.xcresult" "build/store-shots/$folder" --prefix cz.offlinka.ui_ || status=1
