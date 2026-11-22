@@ -6,6 +6,7 @@ Everything the Offlinka apps need for the stores, ready for the release session.
 - **`forms.md`**: answers for Data safety, IARC, target audience, health, App Privacy, age rating, export compliance.
 - **Play listing** (fastlane `supply` layout): `android/fastlane/metadata/android/{cs-CZ,sk,en-US}/`: title, short and full description, `changelogs/<versionCode>.txt`.
 - **App Store listing** (fastlane `deliver` layout): `ios/fastlane/metadata/{cs,sk,en-US}/`, categories, copyright, `review_information/notes.txt`.
+- **`review-sample-README.txt`**: the README inside the review sample zip (`RELEASE.md` step 0).
 - **`privacy/{cs,sk,en}.html`**: the apps' privacy policy, standalone pages for offlinka.cz (URLs in `RELEASE.md` step 0).
 - **`screenshots/`**: store frames, feature graphic and Play icon from the current UI, see below.
 

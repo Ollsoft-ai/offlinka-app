@@ -18,7 +18,7 @@ Answers for Google Play Console and App Store Connect, checked against the app o
 - **Privacy policy:** https://offlinka.cz/aplikace/soukromi
 - **Ads:** No, the app contains no ads.
 - **App access:** "All or some functionality is restricted". Instruction name "Without the Offlinka drive", text:
-  - `The app reads the Offlinka USB-C flash drive. Without it: 1) the emergency guides are built in: on the first screen tap "Otevřít první pomoc" (English: "Open first aid"). 2) Sample library: download https://github.com/Ollsoft-ai/offlinka-app/releases/download/review-sample-2026-11/offlinka-review-sample.zip, unzip it into Download/OFFLINKA, tap "Vybrat flashku" ("Choose drive"), then "Vybrat znovu" if the drive is not found, pick the folder OFFLINKA and tap "Use this folder" and "Allow". 3) Video with the real drive: [VIDEO URL]. No login is needed.`
+  - `The app reads the Offlinka USB-C flash drive. Without it: 1) the emergency guides are built in: on the first screen tap "Otevřít první pomoc" (English: "Open first aid"). 2) Sample library: download https://github.com/Ollsoft-ai/offlinka-app/releases/download/review-sample-2026-11/offlinka-review-sample.zip and unzip it into Download (this creates the folder OFFLINKA). Tap "Vybrat flashku" ("Choose drive"), then "Vybrat znovu" ("Choose again") if the drive is not found, open Download, pick the folder OFFLINKA that contains Knihovna and Telefon, tap "Use this folder" and "Allow". 3) Video with the real drive: [VIDEO URL]. No login is needed.`
 - **Content rating:** see IARC below.
 - **Target audience:** **13–15, 16–17, 18 and over.** Not under 13 (reasons below).
   - "Could your store listing unintentionally appeal to children?" **No.** The screenshots show Wikipedia, maps and first aid, no characters or kid imagery.
@@ -51,7 +51,7 @@ Answers for Google Play Console and App Store Connect, checked against the app o
 - Google does not publish the question list (it is visible only in the Console), so these are the rules for answering:
   - Answer **Yes** where a question covers **factual or educational references** that Wikipedia contains: violence (wars, crimes), sexuality (sex education, anatomy, nude art), drugs, alcohol and tobacco, crude language (articles about words), and historical extremist symbols (Nazi flags in history articles). Say "in an encyclopedic context" wherever there is a choice.
   - Answer **No** to gratuitous or realistic depictions meant to entertain, to user interaction or user-generated content, to sharing location, to digital purchases, to gambling and to unrestricted internet access.
-  - Games: 2048 (number puzzle) and draughts (board game). No violence, no gambling, no purchases.
+  - Games (10, checked in the drive's `offlinka_mul_hry.zim`): chess, draughts, five in a row and battleships against the computer; sudoku, minesweeper, solitaire (Klondike), memory, 2048 and Hextris alone. Abstract boards, grids and cards: battleships and minesweeper show no explosions or weapons, solitaire has no stakes, money or betting. No chat, no multiplayer, no network, no purchases. So the answers above stay: no violence, no gambling or simulated gambling, no user interaction.
 - Expect a teen-level rating (for example PEGI 12) because of the encyclopedic answers. That is fine and matches the 13+ target audience.
 - Sources: https://support.google.com/googleplay/android-developer/answer/188189
 
@@ -100,7 +100,7 @@ Answers for Google Play Console and App Store Connect, checked against the app o
 
 ### Other App Store Connect answers
 
-- **Content Rights:** "Does your app contain, show, or access third-party content?" **Yes.** "Do you have all necessary rights?" **Yes**: Wikipedia CC BY-SA 4.0, OpenStreetMap ODbL, fonts SIL OFL 1.1, games MIT, all credited in Settings → About.
+- **Content Rights:** "Does your app contain, show, or access third-party content?" **Yes.** "Do you have all necessary rights?" **Yes**: Wikipedia CC BY-SA 4.0, OpenStreetMap ODbL, fonts SIL OFL 1.1, games MIT (Hextris GPL-3.0), all credited in Settings → About.
 - **Advertising Identifier (IDFA):** No.
 - **Categories:** primary Reference, secondary Education (`primary_category.txt`, `secondary_category.txt`).
 - **Copyright:** `2026 Ollsoft s.r.o.` (`copyright.txt`).

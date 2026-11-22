@@ -1,0 +1,1 @@
+První vydání aplikace Offlinka. Otevře flashku Offlinka přímo v telefonu: českou a slovenskou Wikipedii s obrázky, mapy Česka a Slovenska, knihy a 10 her. Nouzové příručky (první pomoc, výpadek proudu) jsou přímo v aplikaci a fungují i bez flashky. Všechno bez internetu.

@@ -14,3 +14,12 @@ ios/Frameworks/*.xcframework
 .idea/
 *.iml
 out/
+# Secrets never enter the repo (signing keys, store API keys, env files).
+*.p8
+*.env
+.env*
+signing.env
+*service-account*.json
+keystore.properties
+*.pepk
+*.zip.enc

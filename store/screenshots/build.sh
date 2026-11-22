@@ -53,7 +53,12 @@ for t in "${TARGETS[@]}"; do
     *) rm -f out/appstore/*/*-"$t".png ;;
   esac
   echo "== $t"
-  if [ "$t" = graphics ]; then atd-render timeout 120 node render.cjs graphics
+  if [ "$t" = graphics ]; then
+    atd-render timeout 120 node render.cjs graphics
+    # Chromium writes an opaque screenshot as RGB; Play asks for a 32-bit PNG icon.
+    for i in out/play/*/images/icon.png; do
+      ffmpeg -loglevel error -y -i "$i" -pix_fmt rgba "$i.tmp.png" && mv "$i.tmp.png" "$i"
+    done
   else atd-render timeout 120 node render.cjs frames "$t"; fi
 done
 

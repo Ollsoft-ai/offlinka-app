@@ -1,16 +1,16 @@
 Offlinka opens the Offlinka USB-C drive right on your phone. Czech and Slovak Wikipedia with pictures, maps of Czechia and Slovakia, first aid, books and games. Everything works without the internet: at the cottage, in the mountains, when travelling or when the network is down.
 
 What is inside:
-• The complete Czech and Slovak Wikipedia with pictures.
+• Czech and Slovak Wikipedia with pictures.
 • The one million most-read articles of English Wikipedia (text only) and the English medical articles.
 • Maps of Czechia and Slovakia, down to every street.
 • Emergency guides in Czech: first aid and power cuts. They are built into the app, so they work even without the drive.
 • Czech Wikibooks, Wikiquote, Wikisource, Wikiversity and Wiktionary, and the English Wikivoyage guide to Europe.
-• The games 2048 and draughts.
+• 10 games: chess, draughts, five in a row, sudoku, minesweeper, solitaire, memory, battleships, 2048 and Hextris.
 
 How it works:
 • Plug the drive into the USB-C port and pick it once. Next time, just plug it in.
-• The app reads the books straight from the drive. Nothing is copied to your phone and nothing on the drive changes.
+• The app reads the books straight from the drive. The books stay on the drive; the phone only builds a search index. Nothing on the drive changes.
 • One search covers every book. You can type without accents. The first time, search needs a little while to get ready.
 • Save articles, and find what you read in your history.
 • Choose the text size and dark mode.
@@ -21,5 +21,7 @@ The app has no internet access and sends nothing. It collects no data and has no
 What you need:
 • An Offlinka drive, sold at offlinka.cz.
 • iPhone 15 or later, or an iPad with a USB-C port, running iOS 17 or later. Older iPhones with a Lightning port do not work.
+
+Offlinka is not a medical device and does not diagnose, treat, cure, or prevent any medical condition.
 
 Wikipedia texts are by their authors and shared under the CC BY-SA 4.0 licence. Map data © OpenStreetMap contributors. Offlinka is not affiliated with the Wikimedia Foundation.

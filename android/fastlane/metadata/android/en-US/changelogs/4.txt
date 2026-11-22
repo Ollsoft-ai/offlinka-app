@@ -1,0 +1,1 @@
+First release of Offlinka. It opens the Offlinka drive right on your phone: Czech and Slovak Wikipedia with pictures, maps of Czechia and Slovakia, books and 10 games. The emergency guides (first aid and power cuts, in Czech) are built into the app and work even without the drive. All without the internet.

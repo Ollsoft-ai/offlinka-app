@@ -1,0 +1,1 @@
+Prvé vydanie aplikácie Offlinka. Otvorí USB kľúč Offlinka priamo v telefóne: slovenskú a českú Wikipédiu s obrázkami, mapy Slovenska a Česka, knihy a 10 hier. Núdzové príručky (po česky: prvá pomoc, výpadok prúdu) sú priamo v aplikácii a fungujú aj bez USB kľúča. Všetko bez internetu.

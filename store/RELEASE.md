@@ -15,10 +15,10 @@ For the session with the founders. Work top to bottom and tick the boxes. Rules 
 ## 0. Before the session (agents and Kryštof)
 
 - [ ] **0.3 merged** on `main`, device checklist `docs/DEVICE-TESTS.md` passed on two phones.
-- [ ] **Release notes** `android/fastlane/metadata/android/*/changelogs/3.txt` still match what 0.3 really does (written from the work in progress on 2026-11-21).
+- [ ] **Release notes** `android/fastlane/metadata/android/*/changelogs/4.txt` (0.3.1, versionCode 4) are a launch note for the first Play release. A later build needs `changelogs/<its versionCode>.txt`.
 - [ ] **Fixes that reviewers would hit:** the first four items of "Rejection risks" below.
 - [ ] **Privacy pages published** from `store/privacy/` at https://offlinka.cz/aplikace/soukromi, https://offlinka.sk/aplikacia/sukromie and https://offlinka.cz/en/app/privacy (Kryštof).
-- [x] **Review sample** published (https://github.com/Ollsoft-ai/offlinka-app/releases/download/review-sample-2026-11/offlinka-review-sample.zip, 1.5 GB, also has Knihovna/maps_en_slovakia and the cs mini .offidx; guides left out, the app bundles them): a zip with one folder `OFFLINKA/Telefon/` holding `wikipedia_cs_all_mini-…zim` (870 MB), `offlinka_cs_prirucky.zim` and `offlinka_mul_hry.zim`. Put its URL into `ios/fastlane/metadata/review_information/notes.txt` and the Play "App access" text.
+- [x] **Review sample** published; its README text is `store/review-sample-README.txt` (use it when the sample is rebuilt; the 2026-11 zip still has the older text) (https://github.com/Ollsoft-ai/offlinka-app/releases/download/review-sample-2026-11/offlinka-review-sample.zip, 1.5 GB, also has Knihovna/maps_en_slovakia and the cs mini .offidx; guides left out, the app bundles them): a zip with one folder `OFFLINKA/Telefon/` holding `wikipedia_cs_all_mini-…zim` (870 MB), `offlinka_cs_prirucky.zim` and `offlinka_mul_hry.zim`. Put its URL into `ios/fastlane/metadata/review_information/notes.txt` and the Play "App access" text.
 - [ ] **Demo video** (made by us, not the founders; founders 2026-11-21) (1–2 min, iPhone 15 screen recording with the real drive): plug in, choose the drive, search „cesky krumlov“, open an article, the map, unplug and plug back. The same video on a phone with Android for Play (unlisted YouTube link is fine).
 - [ ] **Screenshots:** re-record Paparazzi (`:ui:recordPaparazziDebug`), then `store/screenshots/build.sh --fastlane`. Look at `store/screenshots/out/index.html`. The build lists missing app states; the iPhone and iPad sets must come from the iOS simulator before the App Store submission (step 3).
 - [x] **Public phone number:** **+420 728 374 741**, the same as on offlinka.cz (founders, 2026-11-21). Used as the developer phone on both stores; it confirms by a one-time code.
@@ -47,6 +47,9 @@ For the session with the founders. Work top to bottom and tick the boxes. Rules 
 ## 2. Google Play: the Offlinka app
 
 - [ ] **Create app:** name `Offlinka`, default language Czech (cs-CZ), App, Free. Accept the declarations.
+- **Which key signs which file** (both only from `signing.env`, never in the repo):
+  - **AAB → Play: upload key** `_secrets/android/offlinka-upload.jks` (`OFFLINKA_UPLOAD_*`), CN=Offlinka upload, RSA 4096, valid to 2057-01-02. Certificate SHA-256 `A8:ED:90:80:EA:0E:41:D5:A1:01:46:60:C1:2B:18:50:2A:09:0D:03:52:65:B5:75:22:90:90:0D:91:9E:A5:4E`.
+  - **APK → the drive: app signing key** `_secrets/android/offlinka-app-signing.jks` (`OFFLINKA_SIGNING_*`), CN=Offlinka. Certificate SHA-256 `68:B2:3A:D7:CD:94:A3:81:EC:9D:6E:23:A9:DB:11:02:5D:AD:E1:17:34:A2:0F:B4:B8:35:1A:97:0F:4C:30:CB`. The same key is uploaded to Play below, so Play updates install over the drive APK.
 - [ ] **App signing with our own key, BEFORE the first release.** Play's default is now Google-generated keys; once a release is rolled out it cannot be changed. Source: https://support.google.com/googleplay/android-developer/answer/9842756
   - Test and release → App integrity → Play app signing → **Change app signing key** → "Export and upload a key from Java keystore".
   - Download the PEPK tool and the encryption key from that page.
