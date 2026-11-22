@@ -5,7 +5,7 @@ The app has no network access at all: no accounts, no ads, no analytics, no in-a
 HOW TO REVIEW WITHOUT THE DRIVE
 1. Built-in content: the emergency guides (first aid, power cuts; in Czech) are bundled in the app. On the first screen tap "Otevřít první pomoc" ("Open first aid" when the device language is English).
 2. Sample library: we provide the same files as on the drive at https://github.com/Ollsoft-ai/offlinka-app/releases/download/review-sample-2026-11/offlinka-review-sample.zip. In Safari download the zip into Downloads and tap it in the Files app to unzip it there. This creates the folder "OFFLINKA", which contains the folders "Knihovna" and "Telefon". Then in Offlinka tap "Vybrat flashku" ("Choose drive" in English), open Downloads, choose the folder "OFFLINKA" and tap Open. The app then shows the library as with the real drive: Czech Wikipedia (phone edition), the emergency guides and the games.
-3. Demo video: the attached video shows an iPhone 15 with the real drive: picking the drive, searching without accents, reading an article, the offline map, unplugging and plugging the drive back.
+3. Demo video: the attached video (1:39) shows the app in the iOS Simulator with the same files as on the drive: choosing the drive, searching without accents, an article, the offline map, a game and the built-in first-aid guides. On an iPhone the drive is plugged in and picked once in the Files picker.
 We are happy to send a physical drive to App Review on request.
 
 Requirements: iPhone 15 or later, or an iPad with USB-C, iOS 17+. Lightning iPhones cannot connect the drive.
