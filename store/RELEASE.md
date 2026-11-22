@@ -15,7 +15,7 @@ For the session with the founders. Work top to bottom and tick the boxes. Rules 
 ## 0. Before the session (agents and Kryštof)
 
 - [ ] **0.3 merged** on `main`, device checklist `docs/DEVICE-TESTS.md` passed on two phones.
-- [ ] **Release notes** `android/fastlane/metadata/android/*/changelogs/4.txt` (0.3.1, versionCode 4) are a launch note for the first Play release. A later build needs `changelogs/<its versionCode>.txt`.
+- [ ] **Release notes** `android/fastlane/metadata/android/*/changelogs/5.txt` (0.3.2, versionCode 5) are a launch note for the first Play release. A later build needs `changelogs/<its versionCode>.txt`.
 - [ ] **Fixes that reviewers would hit:** the first four items of "Rejection risks" below.
 - [ ] **Privacy pages published** from `store/privacy/` at https://offlinka.cz/aplikace/soukromi, https://offlinka.sk/aplikacia/sukromie and https://offlinka.cz/en/app/privacy (Kryštof).
 - [x] **Review sample** published; its README text is `store/review-sample-README.txt` (use it when the sample is rebuilt; the 2026-11 zip's README still says 32 GB and "2048, draughts") (https://github.com/Ollsoft-ai/offlinka-app/releases/download/review-sample-2026-11/offlinka-review-sample.zip, 1.5 GB): one folder `OFFLINKA/` with `Telefon/` (`wikipedia_cs_all_mini-…zim`, 870 MB, text only, and its `.offidx`; `offlinka_mul_hry.zim`) and `Knihovna/maps_en_slovakia…zim`. The guides are left out: the apps bundle them. Put its URL into `ios/fastlane/metadata/review_information/notes.txt` and the Play "App access" text.
