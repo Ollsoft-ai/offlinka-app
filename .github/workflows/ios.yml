@@ -393,9 +393,14 @@ jobs:
               rm -rf "build/shots-$folder.xcresult"
               if xcodebuild test-without-building -xctestrun "$xctestrun" -destination "platform=iOS Simulator,id=$udid" \
                   -parallel-testing-enabled NO -only-testing:OfflinkaUITests/StoreScreenshotTests \
-                  -resultBundlePath "build/shots-$folder.xcresult" | xcbeautify --renderer github-actions; then ok=1; break; fi
-              [ -d "build/shots-$folder.xcresult" ] && break   # the tests ran and failed: no retry
-              echo "::warning::$device: no destination yet (attempt $attempt)"; sleep 60
+                  -resultBundlePath "build/shots-$folder.xcresult" 2> >(tee "build/shots-$folder.err" >&2) \
+                  | xcbeautify --renderer github-actions; then ok=1; break; fi
+              # The tests ran and failed: no retry. A lost destination also leaves a result bundle behind.
+              if [ -d "build/shots-$folder.xcresult" ] && ! grep -q 'Unable to find a device matching' "build/shots-$folder.err"; then break; fi
+              echo "::warning::$device: no destination yet (attempt $attempt), rebooting it"
+              xcrun simctl shutdown "$udid" >/dev/null 2>&1 || true
+              ios/tools/sim-prepare.sh "$udid" || true
+              sleep 30
             done
             [ $ok = 1 ] || status=1
             ios/tools/export-shots.py "build/shots-$folder.xcresult" "build/store-shots/$folder" --prefix cz.offlinka.ui_ || status=1
