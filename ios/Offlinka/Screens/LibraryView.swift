@@ -12,16 +12,17 @@ struct LibraryView: View {
 
     var body: some View {
         List {
+            // In the header, not a row: a row's rounded corners (large on iOS 26) cut into the subtitle's
+            // first letter and the card's corners.
             Section {
+            } header: {
                 VStack(alignment: .leading, spacing: BrandSpace.l) {
                     Text(tr(.librarySubtitle))
                         .brandText(.body)
                         .foregroundStyle(Color.brandInk2)
-                        // The row clips at its edge: room for the overhang of Archivo's V and E.
-                        .padding(.leading, 2)
                     DriveCard()
                 }
-                .listRowBackground(Color.clear)
+                .textCase(nil)
                 .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: BrandSpace.s, trailing: 0))
             }
 
