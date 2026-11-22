@@ -600,6 +600,53 @@
         }
       }
     },
+    "connect_buy": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nemáte ještě Offlinku? Kupte ji zde"
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ešte nemáte Offlinku? Kúpte si ju tu"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Don't have Offlinka yet? Buy one here"
+          }
+        }
+      }
+    },
+    "connect_buy_url": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "https://offlinka.cz/?utm_source=app&utm_medium=%1$@&utm_campaign=connect"
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "https://offlinka.sk/?utm_source=app&utm_medium=%1$@&utm_campaign=connect"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "https://offlinka.cz/?utm_source=app&utm_medium=%1$@&utm_campaign=connect"
+          }
+        }
+      },
+      "comment": "Shop for people without a drive, opened in the browser. {medium} = android or ios (utm_medium)."
+    },
     "connect_searching": {
       "extractionState": "manual",
       "localizations": {

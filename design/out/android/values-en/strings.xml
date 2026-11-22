@@ -27,6 +27,8 @@
     <string name="connect_button">Choose drive</string>
     <string name="connect_remember">The app remembers the drive. Next time, just plug it in.</string>
     <string name="connect_help_link">Drive not showing up?</string>
+    <string name="connect_buy">Don\'t have Offlinka yet? Buy one here</string>
+    <string name="connect_buy_url">https://offlinka.cz/?utm_source=app&amp;utm_medium=%1$s&amp;utm_campaign=connect</string>
     <string name="connect_searching">Looking for books on the drive…</string>
     <string name="connect_err_notfound_title">No drive found</string>
     <string name="connect_err_notfound_body">Push it all the way into the port and wait a few seconds. Unplugging and plugging it back in also helps.</string>

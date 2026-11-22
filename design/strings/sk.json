@@ -26,6 +26,8 @@
   "connect_button": "Vybrať USB kľúč",
   "connect_remember": "Aplikácia si USB kľúč zapamätá. Nabudúce ho stačí zapojiť.",
   "connect_help_link": "USB kľúč sa nezobrazuje?",
+  "connect_buy": "Ešte nemáte Offlinku? Kúpte si ju tu",
+  "connect_buy_url": "https://offlinka.sk/?utm_source=app&utm_medium={medium}&utm_campaign=connect",
   "connect_searching": "Hľadám knihy na USB kľúči…",
   "connect_err_notfound_title": "USB kľúč nevidím",
   "connect_err_notfound_body": "Zasuňte ho celý do konektora a počkajte pár sekúnd. Pomôže aj vytiahnuť ho a zapojiť znova.",

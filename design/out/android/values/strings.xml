@@ -27,6 +27,8 @@
     <string name="connect_button">Vybrat flashku</string>
     <string name="connect_remember">Aplikace si flashku zapamatuje. Příště ji stačí zapojit.</string>
     <string name="connect_help_link">Flashka se neukazuje?</string>
+    <string name="connect_buy">Nemáte ještě Offlinku? Kupte ji zde</string>
+    <string name="connect_buy_url">https://offlinka.cz/?utm_source=app&amp;utm_medium=%1$s&amp;utm_campaign=connect</string>
     <string name="connect_searching">Hledám knihy na flashce…</string>
     <string name="connect_err_notfound_title">Flashku nevidím</string>
     <string name="connect_err_notfound_body">Zasuňte ji celou do konektoru a počkejte pár vteřin. Pomůže i vytáhnout ji a zapojit znovu.</string>

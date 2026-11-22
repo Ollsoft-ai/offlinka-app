@@ -26,6 +26,8 @@
   "connect_button": "Choose drive",
   "connect_remember": "The app remembers the drive. Next time, just plug it in.",
   "connect_help_link": "Drive not showing up?",
+  "connect_buy": "Don't have Offlinka yet? Buy one here",
+  "connect_buy_url": "https://offlinka.cz/?utm_source=app&utm_medium={medium}&utm_campaign=connect",
   "connect_searching": "Looking for books on the drive…",
   "connect_err_notfound_title": "No drive found",
   "connect_err_notfound_body": "Push it all the way into the port and wait a few seconds. Unplugging and plugging it back in also helps.",
