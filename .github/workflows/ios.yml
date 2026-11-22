@@ -38,6 +38,10 @@ on:
         description: "Screenshot sets to capture: all, or some of iphone-69,iphone-63,ipad-13"
         type: string
         default: all
+      shot_langs:
+        description: "Screenshot languages (comma-separated)"
+        type: string
+        default: cs,sk,en
       demo_video:
         description: "App Review demo video (simulator recording of the demo walk), after the tests"
         type: boolean
@@ -355,7 +359,7 @@ jobs:
         env:
           ONLY_SETS: ${{ inputs.shot_devices }}
           TEST_RUNNER_OFFLINKA_STORE_SHOTS: "1"
-          TEST_RUNNER_OFFLINKA_STORE_LANGS: cs,sk,en
+          TEST_RUNNER_OFFLINKA_STORE_LANGS: ${{ inputs.shot_langs || 'cs,sk,en' }}
           TEST_RUNNER_OFFLINKA_FIXTURE_DRIVE: ${{ github.workspace }}/store-shots/OFFLINKA
           TEST_RUNNER_OFFLINKA_FIXTURE_SIZES: ${{ github.workspace }}/store-shots/sizes.json
           # Prague's old town at street level (as in store/screenshots/frames.json)

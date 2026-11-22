@@ -161,7 +161,10 @@ struct SchemeResponder: Sendable {
             }
             let mime = MimeTypes.withCharset(resource.mimeType.isEmpty ? MimeTypes.forPath(resource.path) : resource.mimeType)
             var body = resource.data
-            if let readerHead, readerHead.bookIds.contains(book.id), MimeTypes.isHTML(mime) {
+            // Decided per book: one opened after the reader engine was made (most books, which open
+            // after the first one) gets the stylesheet too.
+            if let readerHead, readerHead.bookIds.contains(book.id) || BookKind.of(name: book.name).usesReaderStyle,
+               MimeTypes.isHTML(mime) {
                 body = readerHead.inject(into: body)
             }
             return SchemeReply(statusCode: 200, headers: baseHeaders(mime: mime, length: body.count), body: body)

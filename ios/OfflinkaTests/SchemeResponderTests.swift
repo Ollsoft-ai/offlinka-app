@@ -174,6 +174,15 @@ final class SchemeResponderTests: XCTestCase {
         XCTAssertFalse(svg.contains("offlinka-reader-css"))
     }
 
+    /// Books that open after the reader engine was made (the English UI's Czech Wikipedia) are styled too.
+    func testReaderHeadFollowsTheBookNotTheListAtStart() throws {
+        responder.readerHead = ReaderHead(bookIds: [], theme: "light", scale: 1)
+        let article = String(decoding: try reply("offlinka://wikipedia_cs_all/Praha").body, as: UTF8.self)
+        XCTAssertTrue(article.contains("offlinka-reader-css"), article)
+        let game = String(decoding: try reply("offlinka://offlinka_mul_hry/index.html").body, as: UTF8.self)
+        XCTAssertFalse(game.contains("offlinka-reader-css"))
+    }
+
     func testReaderHeadLeavesPagesWithoutHeadAlone() {
         let head = ReaderHead(bookIds: [], theme: "system", scale: 1)
         let html = Data("<p>no head</p>".utf8)
