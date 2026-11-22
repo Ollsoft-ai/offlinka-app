@@ -27,7 +27,7 @@
 5. **Background index builds.** A running build gets `beginBackgroundTask` time, then stops cleanly (`Cancelled`) and resumes on the next start. Check on a device: build, lock the phone, unlock.
 6. **Maps and games on a device.** The map draws in the simulator (slowly on CI: up to ~20 s for the first tiles); games open, but a kept score (`localStorage` per book origin) is untested. Check pan/zoom and a score on a device.
 7. **Privacy manifest.** FileTimestamp `3B52.1` and DiskSpace `E174.1` declared; the archive job lists the required-reason symbols actually linked; compare before the first upload.
-8. **Round-3 strings not wired yet.** The privacy link and „© 2026 Ollsoft s.r.o.“ come from `design/strings`; the other new keys (`reader_bar_save`, `index_stop`, the index and „try“ notes) are generated in `Str.swift` but not used until the copy pass.
+8. **Round-3 behaviour ported from Android, checked in tests and screenshots only:** „Vyzkoušejte hned“ on Home, the search note („Hledání se připravuje… / je připravené“), index phases in book details (Ve frontě, Málo místa, Zastavit přípravu), „Uložit / Uloženo“ in the reader bar, help in two groups.
 
 ### Low
 

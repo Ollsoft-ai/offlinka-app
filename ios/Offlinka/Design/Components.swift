@@ -313,6 +313,72 @@ struct InfoNote<Trailing: View>: View {
     }
 }
 
+/// The calm note about accent-free search (Android `SearchNoteBox`): „Hledání se připravuje (40 %)…“ and
+/// „Nechte aplikaci otevřenou.“ with a 4 pt bar along its bottom edge, or „Hledání je připravené“.
+/// The X only hides it. `onHero`: inside Home's forest header.
+struct SearchNoteBox: View {
+    let note: SearchNote
+    var onHero = false
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: BrandSpace.m) {
+                BrandIconView(icon: note == .ready ? .check : .info, size: BrandSize.iconSmall)
+                    .foregroundStyle(secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    switch note {
+                    case .building(let percent):
+                        Text(tr(.searchIndexBuilding, percent))
+                            .brandText(.bodySmall)
+                            .foregroundStyle(primary)
+                        Text(tr(.indexKeepOpen))
+                            .brandText(.bodySmall)
+                            .foregroundStyle(secondary)
+                    case .ready:
+                        Text(tr(.searchReady))
+                            .brandText(.bodySmall)
+                            .foregroundStyle(primary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityElement(children: .combine)
+                Button(action: onDismiss) {
+                    BrandIconView(icon: .close, size: BrandSize.iconSmall)
+                        .foregroundStyle(secondary)
+                        .frame(width: BrandSize.touch, height: BrandSize.touch)
+                }
+                .accessibilityLabel(tr(.actionClose))
+            }
+            .padding(.leading, BrandSpace.m)
+            .padding(.vertical, BrandSpace.xxs)
+            if case .building(let percent) = note {
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Rectangle().fill(onHero ? Color.brandHeroLine : Color.brandLine)
+                        Rectangle().fill(Color.brandPrimary)
+                            .frame(width: geometry.size.width * CGFloat(min(max(percent, 0), 100)) / 100)
+                    }
+                }
+                .frame(height: 4)
+                .accessibilityHidden(true)
+            }
+        }
+        .background(onHero ? Color.brandHeroDeep : Color.brandSurfaceMuted)
+        .clipShape(RoundedRectangle(cornerRadius: BrandRadius.m, style: .continuous))
+        .overlay {
+            if onHero {
+                RoundedRectangle(cornerRadius: BrandRadius.m, style: .continuous).strokeBorder(Color.brandHeroLine, lineWidth: 1)
+            }
+        }
+        .accessibilityIdentifier("search.note")
+    }
+
+    private var primary: Color { onHero ? .brandOnHero : .brandInk }
+    private var secondary: Color { onHero ? .brandOnHero2 : .brandInk2 }
+}
+
 /// Short message at the bottom of the screen, with an optional action (design: toast spec).
 struct ToastView: View {
     let toast: Toast

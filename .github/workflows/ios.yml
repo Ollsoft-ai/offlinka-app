@@ -68,6 +68,12 @@ env:
   SAMPLE_KEY: offlinka-review-sample-2026-11
   SAMPLE_URL: https://github.com/Ollsoft-ai/offlinka-app/releases/download/review-sample-2026-11/offlinka-review-sample.zip
   SAMPLE_SHA256: ead728a157a3b843914e4882984aff6ae5001a906b393955aa4137feb28eb6cc
+  # The store screenshots' drive (public release asset): the real drive's books trimmed to the pages the
+  # frames show (Czech and Slovak Wikipedia with pictures, the whole map of Czechia), plus sizes.json with
+  # the real file sizes. Reviewers and the demo video keep the review sample above.
+  SHOTS_KEY: offlinka-store-shots-2026-11
+  SHOTS_URL: https://github.com/Ollsoft-ai/offlinka-app/releases/download/store-shots-2026-11/offlinka-store-shots.zip
+  SHOTS_SHA256: 3e616406d09de6da3f8b96539cdc1efab7f28f502bcd22a64dc39b48628dff34
 
 jobs:
   core:
@@ -325,31 +331,34 @@ jobs:
           name: ios-test-products
           path: build
 
-      - name: Restore review sample drive
-        id: sample
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Restore store-shots drive
+        id: shots
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         env:
-          SEGMENT_DOWNLOAD_TIMEOUT_MINS: "3"   # a stalled restore falls back to the release asset sooner
+          SEGMENT_DOWNLOAD_TIMEOUT_MINS: "3"
         with:
-          path: review-sample
-          key: ${{ env.SAMPLE_KEY }}
-          enableCrossOsArchive: true
+          path: store-shots
+          key: ${{ env.SHOTS_KEY }}
 
-      - name: Download review sample drive (cache miss)
-        if: steps.sample.outputs.cache-hit != 'true'
+      - name: Download store-shots drive (cache miss)
+        if: steps.shots.outputs.cache-hit != 'true'
         run: |
-          rm -rf review-sample
-          curl -fsSL --retry 3 -o "$RUNNER_TEMP/sample.zip" "$SAMPLE_URL"
-          echo "$SAMPLE_SHA256  $RUNNER_TEMP/sample.zip" | shasum -a 256 -c -
-          unzip -q "$RUNNER_TEMP/sample.zip" -d review-sample
-          rm "$RUNNER_TEMP/sample.zip"
+          rm -rf store-shots
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/shots.zip" "$SHOTS_URL"
+          echo "$SHOTS_SHA256  $RUNNER_TEMP/shots.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/shots.zip" -d store-shots
+          rm "$RUNNER_TEMP/shots.zip"
+          ls store-shots
 
       - name: Capture
         env:
           ONLY_SETS: ${{ inputs.shot_devices }}
           TEST_RUNNER_OFFLINKA_STORE_SHOTS: "1"
           TEST_RUNNER_OFFLINKA_STORE_LANGS: cs,sk,en
-          TEST_RUNNER_OFFLINKA_FIXTURE_DRIVE: ${{ github.workspace }}/review-sample/OFFLINKA
+          TEST_RUNNER_OFFLINKA_FIXTURE_DRIVE: ${{ github.workspace }}/store-shots/OFFLINKA
+          TEST_RUNNER_OFFLINKA_FIXTURE_SIZES: ${{ github.workspace }}/store-shots/sizes.json
+          # Prague's old town at street level (as in store/screenshots/frames.json)
+          TEST_RUNNER_OFFLINKA_MAP_VIEW: "50.0868,14.4163,15"
         run: |
           set -o pipefail
           tar -C build -xf build/products.tar
@@ -522,7 +531,7 @@ jobs:
           test -f "$APP/PrivacyInfo.xcprivacy"
           lipo -info "$APP/Offlinka"
           # Test-only launch arguments must not ship.
-          if strings "$APP/Offlinka" | grep -E -- '-(demo|fixture)-drive'; then echo "::error::debug launch arguments in the Release binary"; exit 1; fi
+          if strings "$APP/Offlinka" | grep -E -- '-(demo|fixture)-(drive|sizes|map-view|language|theme)'; then echo "::error::debug launch arguments in the Release binary"; exit 1; fi
           {
             echo "### Unsigned Release archive"
             echo "- version: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist") ($(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist"))"

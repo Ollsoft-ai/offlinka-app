@@ -18,6 +18,13 @@ struct HomeView: View {
                             app.router.open(ReaderTarget(bookId: last.book.id, path: last.article.path))
                         }
                     }
+                    if !app.tryNow.isEmpty {
+                        TryNowCard(items: app.tryNow, books: app.books) { item in
+                            app.router.open(ReaderTarget(bookId: item.bookId, path: item.path))
+                        } onDismiss: {
+                            app.dismissTryNow()
+                        }
+                    }
                     SectionTitle(text: tr(.homeBooksTitle), trailing: tr(.libraryBooksCount, app.shelf.tiles.count))
                     // The first book (the UI-language Wikipedia) gets a wide tile.
                     if let first = app.shelf.tiles.first {
@@ -27,12 +34,6 @@ struct HomeView: View {
                         ForEach(app.shelf.tiles.dropFirst()) { tile in
                             BookTile(tile: tile) { failedTile = tile }
                         }
-                    }
-                    if let progress = app.shelf.indexing {
-                        Text(tr(.searchIndexBuilding, progress.percent))
-                            .brandText(.label)
-                            .foregroundStyle(Color.brandInk2)
-                            .accessibilityAddTraits(.updatesFrequently)
                     }
                 }
                 .padding(.horizontal, BrandSize.gutter)
@@ -48,6 +49,12 @@ struct HomeView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .retryAlert(tile: $failedTile)
+        // The card's links are checked against the books open now: again as more books open.
+        .onChange(of: tryNowKey, initial: true) { _, _ in app.refreshTryNow() }
+    }
+
+    private var tryNowKey: String {
+        "\(app.shelf.tiles.filter { $0.state == .open }.count)/\(app.store.settings.tryNowDismissed)/\(L10n.languageCode)"
     }
 
     /// One column at large text sizes, so expanded titles never break mid-word (UX review r2).
@@ -88,6 +95,10 @@ struct HomeView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(tr(.homeSearchPlaceholder))
             .accessibilityIdentifier("home.search")
+
+            if let note = app.searchNote {
+                SearchNoteBox(note: note, onHero: true) { app.dismissSearchNote() }
+            }
 
             quickLinks
         }
@@ -366,6 +377,83 @@ struct ContinueCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// „Vyzkoušejte hned“: four links that work right away (first run, until closed; Android `TryNowCard`).
+struct TryNowCard: View {
+    let items: [TryNowItem]
+    let books: [BookRecord]
+    let open: (TryNowItem) -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(tr(.tryTitle))
+                    .brandText(.title)
+                    .foregroundStyle(Color.brandInk)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 0)
+                Button(action: onDismiss) {
+                    BrandIconView(icon: .close, size: BrandSize.iconSmall)
+                        .foregroundStyle(Color.brandInk2)
+                        .frame(width: BrandSize.touch, height: BrandSize.touch)
+                }
+                .accessibilityLabel(tr(.actionClose))
+            }
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                if index > 0 {
+                    Rectangle().fill(Color.brandLineSoft).frame(height: 1)
+                        .padding(.leading, BrandSize.bookIconBoxSmall + BrandSpace.l)
+                        .padding(.trailing, BrandSpace.m)
+                }
+                Button {
+                    open(item)
+                } label: {
+                    HStack(spacing: BrandSpace.l) {
+                        BookIconBox(kind: kind(of: item), box: BrandSize.bookIconBoxSmall)
+                        Text(label(of: item))
+                            .brandText(.subhead)
+                            .foregroundStyle(Color.brandInk)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        BrandIconView(icon: .chevronRight, size: BrandSize.iconSmall)
+                            .foregroundStyle(Color.brandInk2)
+                    }
+                    .padding(.trailing, BrandSpace.s)
+                    .frame(minHeight: 52)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("home.try.\(String(describing: item.kind))")
+            }
+        }
+        .padding(.leading, BrandSpace.l)
+        .padding(.trailing, BrandSpace.xs)
+        .padding(.top, BrandSpace.xs)
+        .padding(.bottom, BrandSpace.s)
+        .background(RoundedRectangle(cornerRadius: BrandRadius.m, style: .continuous).fill(Color.brandSurface))
+        .overlay(RoundedRectangle(cornerRadius: BrandRadius.m, style: .continuous).strokeBorder(Color.brandLine, lineWidth: BrandSize.outline))
+    }
+
+    private func label(of item: TryNowItem) -> String {
+        switch item.kind {
+        case .article: return item.label
+        case .map: return tr(.tryMap)
+        case .firstAid: return tr(.tryFirstAid)
+        case .game: return tr(.tryGame)
+        }
+    }
+
+    /// The badge of the book the link opens (Wikipedia, map, guides, games).
+    private func kind(of item: TryNowItem) -> BookKind {
+        if let book = books.first(where: { $0.id == item.bookId }) { return BookCatalog.kind(of: book) }
+        switch item.kind {
+        case .article: return .wikipediaCs
+        case .map: return .mapsCz
+        case .firstAid: return .guides
+        case .game: return .games
+        }
     }
 }
 

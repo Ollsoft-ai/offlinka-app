@@ -311,6 +311,45 @@ final class ShelfTests: XCTestCase {
         XCTAssertEqual(shelf.tiles.first { $0.id == "maps_en_czech-republic" }?.record?.hasIndex, true, "indexing went on after the failed book")
     }
 
+    /// Book details (Android `indexInfo`): the book being built shows its progress, the others „Ve frontě“,
+    /// and „Zastavit přípravu“ empties the queue.
+    func testBookDetailsShowBuildingAndQueuedUntilStopped() async throws {
+        let list = books(indexed: false)
+        let engine = engine(list)
+        engine.setBuildDelay(2)
+        let shelf = shelf(engine, indexes: true)
+        _ = await shelf.load(scan: scan(list))
+        await waitUntil("building") { shelf.buildingBookId != nil && !shelf.indexQueue.isEmpty }
+        let records = shelf.tiles.compactMap(\.record)
+        let building = try XCTUnwrap(records.first { $0.id == shelf.buildingBookId })
+        guard case .building = shelf.indexPhase(of: building) else {
+            return XCTFail("expected building, got \(String(describing: shelf.indexPhase(of: building)))")
+        }
+        let waiting = records.filter { $0.id != building.id && !$0.hasIndex }
+        XCTAssertFalse(waiting.isEmpty)
+        for record in waiting {
+            XCTAssertEqual(shelf.indexPhase(of: record), .queued, record.id)
+        }
+        shelf.cancelIndexing(building)
+        XCTAssertTrue(shelf.indexQueue.isEmpty)
+        await waitUntil("stopped") { !shelf.isIndexing }
+        XCTAssertNil(shelf.indexPhase(of: waiting[0]))
+    }
+
+    /// No room for an index: every book still to do says „Málo místa“ and offers to try again.
+    func testLowSpaceMarksTheBooksStillToDo() async {
+        let list = books(indexed: false)
+        let engine = engine(list)
+        let shelf = shelf(engine, indexes: true)
+        shelf.freeSpace = { _ in 1024 }
+        _ = await shelf.load(scan: scan(list))
+        await waitUntil("pass ended") { shelf.indexLowSpace && !shelf.isIndexing }
+        XCTAssertTrue(engine.buildLog.isEmpty)
+        for record in shelf.tiles.compactMap(\.record) where !record.hasIndex {
+            XCTAssertEqual(shelf.indexPhase(of: record), .lowSpace, record.id)
+        }
+    }
+
     func testEnglishTop1mOnlyOnRequest() async throws {
         let list = books(indexed: false, extra: [Self.top1m])
         let engine = engine(list)

@@ -246,6 +246,7 @@ extension FakeContentSource {
                 "Hlavná_stránka": .html("Wikipédia", "<p>Vitajte v offline Wikipédii.</p><p><a href=\"Bratislava\">Bratislava</a></p>"),
                 "Bratislava": .html("Bratislava", "<p>Hlavné mesto Slovenska.</p>"),
                 "Praha": .html("Praha", "<p>Hlavné mesto Česka.</p>"),
+                "Vysoké_Tatry": .html("Vysoké Tatry", "<p>Najvyššie pohorie Slovenska.</p>"),
             ]
         )
         let guides = FakeBook(
@@ -266,6 +267,7 @@ extension FakeContentSource {
                 <p id="n">0</p><button onclick="var n=+(localStorage.n||0)+1;localStorage.n=n;\
                 document.getElementById('n').textContent=n">+1</button>
                 """),
+                "2048/index.html": .html("2048", "<p>Spojujte dlaždice se stejným číslem.</p>"),
             ]
         )
         let maps = FakeBook(

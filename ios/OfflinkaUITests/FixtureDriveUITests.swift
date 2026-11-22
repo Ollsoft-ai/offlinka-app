@@ -151,6 +151,14 @@ extension XCTestCase {
         let fixture = drive != nil || !connect
         app.launchArguments = fixture ? ["-fixture-drive", drive ?? "bundled"] : ["-demo-drive"]
         app.launchArguments += ["-demo-language", language, "-demo-theme", theme]
+        // Store screenshots: the real drive's file sizes for the trimmed fixture, and the map's view.
+        let environment = ProcessInfo.processInfo.environment
+        if fixture, let sizes = environment["OFFLINKA_FIXTURE_SIZES"], !sizes.isEmpty {
+            app.launchArguments += ["-fixture-sizes", sizes]
+        }
+        if let view = environment["OFFLINKA_MAP_VIEW"], !view.isEmpty {
+            app.launchArguments += ["-fixture-map-view", view]
+        }
         app.launch()
         if connect {
             if fixture {

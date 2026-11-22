@@ -3,8 +3,10 @@ import XCTest
 /// App Store screenshots from the simulator. Runs only with `OFFLINKA_STORE_SHOTS=1` (CI:
 /// `TEST_RUNNER_OFFLINKA_STORE_SHOTS=1`); languages from `OFFLINKA_STORE_LANGS` (default `cs,sk,en`).
 ///
-/// The drive: `OFFLINKA_FIXTURE_DRIVE` (CI: the review sample, real Wikipedia, map and games, opened through
-/// `-fixture-drive` and the Connect button), else the demo drive (`-demo-drive`, fake pages).
+/// The drive: `OFFLINKA_FIXTURE_DRIVE` (CI: the store-shots fixture, trimmed copies of the real drive's
+/// books with their real names, metadata and pictures, opened through `-fixture-drive` and the Connect
+/// button; `OFFLINKA_FIXTURE_SIZES` gives the real file sizes, `OFFLINKA_MAP_VIEW` the map's view), else the
+/// demo drive (`-demo-drive`, fake pages).
 /// Every capture is a result-bundle attachment named like the Paparazzi golden it replaces
 /// (`ScreensTest_home[cs-light]`), so `ios/tools/export-shots.py` + `store/screenshots/build.sh`
 /// (`SNAPSHOTS=<folder>`) frame them. Status bar: `simctl status_bar` (CI, `ios/tools/sim-prepare.sh`).
@@ -87,7 +89,8 @@ final class StoreScreenshotTests: XCTestCase {
         // Dark: Home and a Wikipedia page.
         app = launchApp(language: loc, theme: "dark")
         try capture("ScreensTest_home[\(loc)-dark]")
-        let wikipedia = tile(in: app, "wikipedia_")
+        // The Wikipedia with pictures (in English the text-only English one leads Home).
+        let wikipedia = tile(in: app, loc == "sk" ? "wikipedia_sk" : "wikipedia_cs")
         XCTAssertTrue(wikipedia.waitForExistence(timeout: 10), "[\(loc)] no Wikipedia tile")
         wikipedia.tap()
         XCTAssertTrue(app.webViews.firstMatch.staticTexts.firstMatch.waitForExistence(timeout: 60), "[\(loc)] dark article did not load")

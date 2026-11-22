@@ -20,6 +20,17 @@ struct ShelfTile: Identifiable, Equatable, Sendable {
 }
 
 /// A search index being built on the phone.
+/// Book details: the state of a book's own search index (Android `IndexPhase`).
+enum IndexPhase: Equatable, Sendable {
+    /// English top1m: not automatic, offered on request.
+    case offer
+    /// Waiting for other books.
+    case queued
+    case building(percent: Int)
+    /// Not enough free space on the phone to build it.
+    case lowSpace
+}
+
 struct IndexProgress: Equatable, Sendable {
     let bookId: String
     let fraction: Double
@@ -103,6 +114,12 @@ final class Shelf {
     private(set) var isIndexing = false
     /// The book whose index is being built now.
     private(set) var buildingBookId: String?
+    /// Progress of the build running now, any book (book details).
+    private(set) var buildProgress: IndexProgress?
+    /// Books waiting for their index in this pass (book details: „Ve frontě“).
+    private(set) var indexQueue: Set<String> = []
+    /// The pass stopped because the phone is low on space (book details: „Málo místa“).
+    private(set) var indexLowSpace = false
     /// The guides bundled with the app, once opened.
     private(set) var builtinGuides: BookRecord?
 
@@ -118,6 +135,8 @@ final class Shelf {
     @ObservationIgnored var driveReachable: () -> Bool = { true }
     /// Building started or stopped (the app keeps the screen on meanwhile).
     @ObservationIgnored var onIndexingChange: ((Bool) -> Void)?
+    /// A book got its search index during this run (Home: „Hledání je připravené“).
+    @ObservationIgnored var onIndexed: ((BookRecord) -> Void)?
     /// English top1m needs about 460 MB while its index is built: offered on 3 GB+ phones only.
     @ObservationIgnored var heavyIndexAllowed = true
     @ObservationIgnored var freeSpace: (URL) -> Int64? = Shelf.availableCapacity
@@ -396,6 +415,7 @@ final class Shelf {
             guard let self else { return }
             self.indexTask = nil
             self.buildingBookId = nil
+            self.buildProgress = nil
             self.indexing = nil
             self.isIndexing = false
             self.onIndexingChange?(false)
@@ -413,6 +433,7 @@ final class Shelf {
     /// forgotten so the next start does not begin again (code review r2).
     func cancelIndexing(_ record: BookRecord? = nil) {
         control.stop()
+        indexQueue = []
         if let record {
             removeIndexRequest(record.name)
         }
@@ -423,6 +444,18 @@ final class Shelf {
         requestIndex(record.name)
         control.clearStop()
         startIndexing()
+    }
+
+    /// What book details show about a book's own index (Android `AppGraph.indexInfo`): nil when there is
+    /// nothing to show (indexed, bundled, or nothing planned).
+    func indexPhase(of record: BookRecord) -> IndexPhase? {
+        if record.hasIndex || (content?.isBuiltin(record.id) ?? false) { return nil }
+        if buildingBookId == record.id {
+            return .building(percent: buildProgress?.bookId == record.id ? buildProgress?.percent ?? 0 : 0)
+        }
+        if indexQueue.contains(record.id) { return indexLowSpace ? .lowSpace : .queued }
+        if canBuildOnDemand(record) { return .offer }
+        return nil
     }
 
     func canBuildOnDemand(_ record: BookRecord) -> Bool {
@@ -479,11 +512,20 @@ final class Shelf {
             indexEntry(of: tile).flatMap { $0.indexURL == nil ? BookCatalog.indexFileName(zimFileName: $0.url.lastPathComponent, size: $0.sizeBytes) : nil }
         })
         Self.prepareIndexDirectory(directory, keep: current)
+        indexLowSpace = false
+        defer { if !indexLowSpace { indexQueue = [] } }
         while gen == generation, foreground, !control.shouldStop(gen), let target = nextIndexTarget() {
             let file = directory.appendingPathComponent(BookCatalog.indexFileName(zimFileName: target.record.fileName, size: target.entry.sizeBytes))
+            indexQueue = Set(indexCandidates().map(\.record.id)).subtracting([target.record.id])
             if !FileManager.default.fileExists(atPath: file.path) {
-                if let free = freeSpace(directory), free < minFreeForIndex { return }
+                if let free = freeSpace(directory), free < minFreeForIndex {
+                    // Not enough room: everything still to do waits for space (book details say so).
+                    indexQueue.insert(target.record.id)
+                    indexLowSpace = true
+                    return
+                }
                 buildingBookId = target.record.id
+                buildProgress = IndexProgress(bookId: target.record.id, fraction: 0)
                 if isPrimaryWikipedia(target.record) {
                     indexing = IndexProgress(bookId: target.record.id, fraction: 0)
                 }
@@ -491,6 +533,7 @@ final class Shelf {
                 let outcome = await build(target.book, to: file, bookId: target.record.id, gen: gen)
                 DebugLog.note("index \(target.record.id): \(outcome) in \(DebugLog.ms(since: buildStart)) ms")
                 buildingBookId = nil
+                buildProgress = nil
                 switch outcome {
                 case .built:
                     Self.removeOtherEditions(in: directory, bookKey: target.entry.name.baseKey, keep: file)
@@ -546,8 +589,11 @@ final class Shelf {
     }
 
     private func reportProgress(bookId: String, fraction: Double, gen: Int) {
-        guard gen == generation, buildingBookId == bookId, indexing?.bookId == bookId else { return }
-        indexing = IndexProgress(bookId: bookId, fraction: fraction)
+        guard gen == generation, buildingBookId == bookId else { return }
+        buildProgress = IndexProgress(bookId: bookId, fraction: fraction)
+        if indexing?.bookId == bookId {
+            indexing = IndexProgress(bookId: bookId, fraction: fraction)
+        }
     }
 
     private func isPrimaryWikipedia(_ record: BookRecord) -> Bool {
@@ -564,23 +610,30 @@ final class Shelf {
         if let index = tiles.firstIndex(where: { $0.record?.id == record.id }) {
             tiles[index].record = updated
         }
+        onIndexed?(updated)
     }
 
     /// The next book to index: automatic ones by priority (then smaller first), then requested ones.
     private func nextIndexTarget() -> (record: BookRecord, entry: DriveEntry, book: ContentBook)? {
-        guard let content else { return nil }
+        indexCandidates().first
+    }
+
+    /// Every book that still needs its index, in build order.
+    private func indexCandidates() -> [(record: BookRecord, entry: DriveEntry, book: ContentBook)] {
+        guard let content else { return [] }
         let ui = uiLanguage()
         let asked = indexRequests()
-        var best: (record: BookRecord, entry: DriveEntry, book: ContentBook, priority: Int)?
+        var found: [(record: BookRecord, entry: DriveEntry, book: ContentBook, priority: Int)] = []
         for tile in tiles {
             guard tile.state == .open, let record = tile.record, let entry = indexEntry(of: tile), !record.hasIndex,
                   !failedIndex.contains(record.fileName), let book = content.handle(id: record.id),
                   let priority = BookCatalog.indexPriority(name: record.name, uiLanguage: ui, requested: asked.contains(record.name))
             else { continue }
-            if let current = best, (current.priority, current.entry.sizeBytes) <= (priority, entry.sizeBytes) { continue }
-            best = (record, entry, book, priority)
+            found.append((record, entry, book, priority))
         }
-        return best.map { ($0.record, $0.entry, $0.book) }
+        return found
+            .sorted { ($0.priority, $0.entry.sizeBytes) < ($1.priority, $1.entry.sizeBytes) }
+            .map { ($0.record, $0.entry, $0.book) }
     }
 
     // MARK: - Index files

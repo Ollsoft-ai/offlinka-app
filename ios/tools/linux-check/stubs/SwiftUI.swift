@@ -197,6 +197,8 @@ public struct Spacer: View { public init(minLength: CGFloat? = nil) {}; public v
 public struct Divider: View { public init() {}; public var body: Never { fatalError() } }
 public struct VStack<C: View>: View { public init(alignment: HorizontalAlignment = .center, spacing: CGFloat? = nil, @ViewBuilder content: () -> C) {}; public var body: Never { fatalError() } }
 public struct HStack<C: View>: View { public init(alignment: VerticalAlignment = .center, spacing: CGFloat? = nil, @ViewBuilder content: () -> C) {}; public var body: Never { fatalError() } }
+public struct GeometryProxy { public var size: CGSize { .zero } }
+public struct GeometryReader<C: View>: View { public init(@ViewBuilder content: @escaping (GeometryProxy) -> C) {}; public var body: Never { fatalError() } }
 public struct ZStack<C: View>: View { public init(alignment: Alignment = .center, @ViewBuilder content: () -> C) {}; public var body: Never { fatalError() } }
 public struct Group<C: View>: View { public init(@ViewBuilder content: () -> C) {}; public var body: Never { fatalError() } }
 public struct ScrollView<C: View>: View { public init(_ axes: Axis.Set = .vertical, showsIndicators: Bool = true, @ViewBuilder content: () -> C) {}; public var body: Never { fatalError() } }
@@ -287,6 +289,7 @@ extension View {
     public func offset(x: CGFloat = 0, y: CGFloat = 0) -> some View { _Mod<Self>() }
     public func shadow(color: Color = .clear, radius: CGFloat, x: CGFloat = 0, y: CGFloat = 0) -> some View { _Mod<Self>() }
     public func compositingGroup() -> some View { _Mod<Self>() }
+    public func clipShape<S: Shape>(_ shape: S) -> some View { _Mod<Self>() }
     public func tint(_ c: Color?) -> some View { _Mod<Self>() }
     public func disabled(_ d: Bool) -> some View { _Mod<Self>() }
     public func contentShape<S: Shape>(_ s: S) -> some View { _Mod<Self>() }
@@ -329,6 +332,7 @@ extension View {
     public func minimumScaleFactor(_ f: CGFloat) -> some View { _Mod<Self>() }
     public func listRowSeparator(_ v: Visibility) -> some View { _Mod<Self>() }
     public func task(priority: TaskPriority = .userInitiated, _ action: @escaping @Sendable () async -> Void) -> some View { _Mod<Self>() }
+    public func task<T: Equatable>(id: T, priority: TaskPriority = .userInitiated, _ action: @escaping @Sendable () async -> Void) -> some View { _Mod<Self>() }
     public func alert<S: StringProtocol, A: View, M: View, T>(_ t: S, isPresented: Binding<Bool>, presenting: T?, @ViewBuilder actions: (T) -> A, @ViewBuilder message: (T) -> M) -> some View { _Mod<Self>() }
     public func confirmationDialog<S: StringProtocol, A: View, M: View>(_ t: S, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, @ViewBuilder actions: () -> A, @ViewBuilder message: () -> M) -> some View { _Mod<Self>() }
     public func confirmationDialog<S: StringProtocol, A: View>(_ t: S, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, @ViewBuilder actions: () -> A) -> some View { _Mod<Self>() }

@@ -161,7 +161,8 @@ extension BookRecord {
             articleCount: info.articleCount,
             mediaCount: info.mediaCount,
             mainPath: info.mainPath,
-            sizeBytes: info.sizeBytes > 0 ? info.sizeBytes : fileSize,
+            // The file's size on the drive (what the scan saw); the core's figure when there is none.
+            sizeBytes: fileSize > 0 ? fileSize : info.sizeBytes,
             hasIndex: info.hasIndex,
             fileName: fileName,
             folder: folder

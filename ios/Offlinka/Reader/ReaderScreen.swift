@@ -372,16 +372,22 @@ private struct ReaderBottomBar: View {
                 item(.findInPage, tr(.readerBarFind), enabled: true) { model.showFind() }
                 item(.textSize, tr(.readerBarText), enabled: true, action: showTextSize)
             }
-            item(model.isSaved ? .bookmarkFilled : .bookmark, tr(.readerSave), enabled: model.canSave, action: toggleSaved)
-                .accessibilityValue(model.isSaved ? tr(.cdSavedOn) : tr(.cdSavedOff))
-                .accessibilityIdentifier("reader.save")
+            // Like Android: „Uložit“ / „Uloženo“ in the accent colour; books that are apps (maps, games) have none.
+            if model.canSave {
+                item(model.isSaved ? .bookmarkFilled : .bookmark, model.isSaved ? tr(.readerBarSaved) : tr(.readerBarSave),
+                     enabled: true, tint: model.isSaved ? .brandAccent : nil, action: toggleSaved)
+                    .accessibilityLabel(model.isSaved ? tr(.readerUnsave) : tr(.readerSave))
+                    .accessibilityValue(model.isSaved ? tr(.cdSavedOn) : tr(.cdSavedOff))
+                    .accessibilityIdentifier("reader.save")
+            }
         }
         .padding(.top, BrandSpace.xs)
         .background(Color.brandSurface.ignoresSafeArea(edges: .bottom))
         .overlay(alignment: .top) { Rectangle().fill(Color.brandLine).frame(height: 1) }
     }
 
-    private func item(_ icon: BrandIcon, _ label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+    private func item(_ icon: BrandIcon, _ label: String, enabled: Bool, tint: Color? = nil,
+                      action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 3) {
                 BrandIconView(icon: icon)
@@ -391,7 +397,7 @@ private struct ReaderBottomBar: View {
                     .minimumScaleFactor(0.7)
                     .multilineTextAlignment(.center)
             }
-            .foregroundStyle(enabled ? Color.brandInk : Color.brandInk3)
+            .foregroundStyle(enabled ? (tint ?? Color.brandInk) : Color.brandInk3)
             .frame(maxWidth: .infinity, minHeight: BrandSize.touch)
             .contentShape(Rectangle())
         }

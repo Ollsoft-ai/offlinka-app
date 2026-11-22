@@ -5,7 +5,6 @@ import SwiftUI
 struct SearchView: View {
     @Environment(AppModel.self) private var app
     @State private var model: SearchModel
-    @State private var noteHidden = false
     @FocusState private var focused: Bool
 
     init(source: ContentSource, scopeBookId: String?) {
@@ -18,20 +17,11 @@ struct SearchView: View {
                 .padding(.horizontal, BrandSize.gutter)
                 .padding(.vertical, BrandSpace.s)
             Divider().overlay(Color.brandLineSoft)
-            if let progress = app.shelf.indexing, !noteHidden {
+            if let note = app.searchNote {
                 // The X only hides the note; stopping is in the book's details (UX review r2).
-                InfoNote(text: tr(.searchIndexBuilding, progress.percent)) {
-                    Button {
-                        noteHidden = true
-                    } label: {
-                        BrandIconView(icon: .close, size: BrandSize.iconSmall)
-                            .foregroundStyle(Color.brandInk2)
-                            .frame(width: BrandSize.touch, height: BrandSize.touch)
-                    }
-                    .accessibilityLabel(tr(.actionClose))
-                }
-                .padding(.horizontal, BrandSize.gutter)
-                .padding(.top, BrandSpace.m)
+                SearchNoteBox(note: note) { app.dismissSearchNote() }
+                    .padding(.horizontal, BrandSize.gutter)
+                    .padding(.top, BrandSpace.m)
             }
             results
         }
@@ -90,7 +80,9 @@ struct SearchView: View {
         case .idle:
             recent
         case .empty:
-            EmptyStateView(icon: .search, title: tr(.searchNoResultsTitle), message: tr(.searchNoResultsBody))
+            // Until the UI-language Wikipedia has its index, only words typed with accents are found.
+            EmptyStateView(icon: .search, title: tr(.searchNoResultsTitle),
+                           message: app.shelf.primaryWikipediaIndexed ? tr(.searchNoResultsBody) : tr(.searchNoResultsIndexing))
             Spacer()
         case .searching where model.groups.isEmpty:
             ProgressView()

@@ -100,6 +100,11 @@ final class ReaderModel {
         location != nil && book != nil && !(location?.path.isEmpty ?? true)
     }
 
+    #if DEBUG
+    /// Store screenshots (`-fixture-map-view lat,lon,zoom`, debug builds): maps open at this view.
+    nonisolated(unsafe) static var fixtureMapView: String?
+    #endif
+
     var isMap: Bool {
         guard let book else { return false }
         switch BookKind.of(name: book.name) {
@@ -229,6 +234,11 @@ final class ReaderModel {
     func didFinishNavigation() {
         headings = []
         recordVisit()
+        #if DEBUG
+        if isMap, let view = Self.fixtureMapView {
+            webView.evaluateJavaScript(ReaderScripts.jumpMap(view), completionHandler: nil)
+        }
+        #endif
         // The page's book was still opening ("Otevírám…"): reload once it is open.
         if let location, engine.content.book(id: location.bookId) == nil, engine.content.isPending(bookId: location.bookId) {
             waitingForBook = location.bookId

@@ -23,6 +23,8 @@ struct AppSettings: Codable, Equatable, Sendable {
     var textScale: Double = 1.0
     /// Settings > "Ukládat historii".
     var saveHistory = true
+    /// Home's first-run card „Vyzkoušejte hned“ was closed.
+    var tryNowDismissed = false
 
     /// design/reader/inject.js range: 0.8 … 1.6 (1 = 17 px body text).
     static let textScales: [Double] = [0.8, 0.9, 1.0, 1.15, 1.3, 1.45, 1.6]
@@ -35,6 +37,7 @@ struct AppSettings: Codable, Equatable, Sendable {
         theme = (try? container.decodeIfPresent(AppTheme.self, forKey: .theme)) ?? .system
         textScale = (try? container.decodeIfPresent(Double.self, forKey: .textScale)) ?? 1.0
         saveHistory = (try? container.decodeIfPresent(Bool.self, forKey: .saveHistory)) ?? true
+        tryNowDismissed = (try? container.decodeIfPresent(Bool.self, forKey: .tryNowDismissed)) ?? false
     }
 
     /// Next larger (`step` 1) or smaller (`step` -1) text scale.

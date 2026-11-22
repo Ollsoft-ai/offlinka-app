@@ -146,7 +146,7 @@ private struct DriveCard: View {
                         .brandText(.bodySmall)
                         .foregroundStyle(Color.brandOnHero2)
                 }
-                Text(tr(.libraryBooksCount, driveTiles.count) + ", " + tr(.librarySize, BookCatalog.gigabytes(totalBytes, significantDigits: 2)))
+                Text(tr(.libraryBooksCount, driveTiles.count) + ", " + BookCatalog.formatSize(totalBytes))
                     .brandText(.bodySmall)
                     .foregroundStyle(Color.brandOnHero2)
             }
@@ -223,7 +223,7 @@ private struct ShadowedRow: View {
                 Text(BookCatalog.title(ofEntry: entry))
                     .brandText(.titleSmall)
                     .foregroundStyle(Color.brandInk)
-                Text(tr(.librarySize, BookCatalog.gigabytes(entry.sizeBytes)))
+                Text(BookCatalog.formatSizeShort(entry.sizeBytes))
                     .brandText(.caption)
                     .foregroundStyle(Color.brandInk2)
                 TagView(text: tr(.libraryReplaced))
@@ -273,38 +273,14 @@ struct BookDetailView: View {
                 if book.mediaCount > 0 {
                     detail(.libraryDetailMedia, BookCatalog.formattedCount(book.mediaCount))
                 }
-                detail(.libraryDetailSize, tr(.librarySize, BookCatalog.gigabytes(book.sizeBytes)))
+                detail(.libraryDetailSize, BookCatalog.formatSize(book.sizeBytes))
                 detail(.libraryDetailDate, ContentDate.monthYear(book.date))
                 detail(.libraryDetailLanguage, BookCatalog.languageName(book.language))
             }
             .listRowBackground(Color.brandSurface)
 
-            if indexOffered(book) {
-                Section(tr(.libraryIndexOfferTitle)) {
-                    if app.shelf.buildingBookId == book.id {
-                        if let progress = app.shelf.indexing, progress.bookId == book.id {
-                            Text(tr(.searchIndexBuilding, progress.percent))
-                                .brandText(.body)
-                                .foregroundStyle(Color.brandInk2)
-                        } else {
-                            ProgressView()
-                        }
-                        // „Zastavit přípravu“ (the final label comes with design's next strings).
-                        Button(tr(.actionCancel)) {
-                            app.shelf.cancelIndexing(book)
-                        }
-                        .buttonStyle(SecondaryButtonStyle())
-                    } else {
-                        Text(tr(.libraryIndexOfferBody))
-                            .brandText(.bodySmall)
-                            .foregroundStyle(Color.brandInk2)
-                        Button(tr(.libraryIndexOfferButton)) {
-                            app.shelf.buildIndexNow(book)
-                        }
-                        .buttonStyle(SecondaryButtonStyle())
-                    }
-                }
-                .listRowBackground(Color.brandSurface)
+            if let phase = app.shelf.indexPhase(of: book) {
+                indexSection(book, phase: phase)
             }
 
             // Things only support needs, folded away (UX review).
@@ -355,12 +331,53 @@ struct BookDetailView: View {
         }
     }
 
-    /// English top1m: offered on request only (3 GB+ phones), or shown while its index is built.
-    /// The index section: English top1m's offer (on request only, 3 GB+ phones), or any book whose
-    /// index is being built now, with „Zastavit přípravu“.
-    private func indexOffered(_ book: BookRecord) -> Bool {
-        guard !book.hasIndex else { return false }
-        return app.shelf.buildingBookId == book.id || app.shelf.canBuildOnDemand(book)
+    /// The book's own search index (Android `IndexBlock`): the heavy-book offer, queued, preparing with
+    /// „Zastavit přípravu“, or low space.
+    @ViewBuilder
+    private func indexSection(_ book: BookRecord, phase: IndexPhase) -> some View {
+        Section(tr(.libraryIndexOfferTitle)) {
+            VStack(alignment: .leading, spacing: BrandSpace.m) {
+                Text(indexBody(phase))
+                    .brandText(.body)
+                    .foregroundStyle(phase == .lowSpace ? Color.brandWarnInk : Color.brandInk2)
+                    .fixedSize(horizontal: false, vertical: true)
+                if case .building(let percent) = phase {
+                    GeometryReader { geometry in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.brandLine)
+                            Capsule().fill(Color.brandPrimary)
+                                .frame(width: geometry.size.width * CGFloat(min(max(percent, 0), 100)) / 100)
+                        }
+                    }
+                    .frame(height: 4)
+                    .accessibilityHidden(true)
+                }
+                switch phase {
+                case .offer, .lowSpace:
+                    Button(tr(.libraryIndexOfferButton)) {
+                        app.shelf.buildIndexNow(book)
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                case .queued, .building:
+                    Button(tr(.indexStop)) {
+                        app.shelf.cancelIndexing(book)
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .accessibilityIdentifier("library.indexStop")
+                }
+            }
+            .padding(.vertical, BrandSpace.xs)
+        }
+        .listRowBackground(Color.brandSurface)
+    }
+
+    private func indexBody(_ phase: IndexPhase) -> String {
+        switch phase {
+        case .offer: return tr(.libraryIndexOfferBody)
+        case .queued: return tr(.indexQueued) + ". " + tr(.indexQueuedBody)
+        case .building(let percent): return tr(.settingsTextSizeValue, percent) + " · " + tr(.indexKeepOpen)
+        case .lowSpace: return tr(.indexLowSpaceBody)
+        }
     }
 
     private func detail(_ label: Str, _ value: String) -> some View {

@@ -309,17 +309,43 @@ enum BookCatalog {
         books.map { String($0.date.prefix(7)) }.filter { $0.count == 7 }.max()
     }
 
-    /// The number for the `library_size` (`{size} GB`) string in the UI locale, with
-    /// `significantDigits` digits and no trailing zeros: 9,96 · 3,5 · 17,1 · 0,54 (design mockups).
-    static func gigabytes(_ bytes: Int64, significantDigits: Int = 3) -> String {
+    /// A size as on Android (`BookVisuals.formatSize`): GB from 1 GB (2 decimals under 10 GB, else 1),
+    /// MB from 1 MB, else kB; the UI locale's decimal comma, a no-break space before the unit.
+    /// „9,96 GB“ · „17,1 GB“ · „540 MB“ · „394 kB“. Drive total and book details.
+    static func formatSize(_ bytes: Int64) -> String {
+        if bytes >= 1_000_000_000 {
+            let gigabytes = Double(bytes) / 1e9
+            return number(gigabytes, fractionDigits: gigabytes < 10 ? 2 : 1) + "\u{00A0}GB"
+        }
+        if bytes >= 1_000_000 {
+            return number(Double(bytes) / 1e6, fractionDigits: 0) + "\u{00A0}MB"
+        }
+        return number(max(1, Double(bytes) / 1e3), fractionDigits: 0) + "\u{00A0}kB"
+    }
+
+    /// Rounded for list lines (`BookVisuals.formatSizeShort`): „10 GB“, „3,5 GB“, „393 MB“.
+    static func formatSizeShort(_ bytes: Int64) -> String {
+        if bytes >= 9_500_000_000 {
+            return number(Double(bytes) / 1e9, fractionDigits: 0) + "\u{00A0}GB"
+        }
+        if bytes >= 1_000_000_000 {
+            return number(Double(bytes) / 1e9, fractionDigits: 1) + "\u{00A0}GB"
+        }
+        if bytes >= 1_000_000 {
+            return number(Double(bytes) / 1e6, fractionDigits: 0) + "\u{00A0}MB"
+        }
+        return number(max(1, Double(bytes) / 1e3), fractionDigits: 0) + "\u{00A0}kB"
+    }
+
+    /// At most `fractionDigits` decimals, no trailing zeros, the UI locale's separators.
+    private static func number(_ value: Double, fractionDigits: Int) -> String {
         let formatter = NumberFormatter()
         formatter.locale = L10n.locale
         formatter.numberStyle = .decimal
-        formatter.usesSignificantDigits = true
-        formatter.minimumSignificantDigits = 1
-        formatter.maximumSignificantDigits = significantDigits
-        let value = Double(bytes) / 1_000_000_000
-        return formatter.string(from: NSNumber(value: value)) ?? String(format: "%.2f", value)
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = fractionDigits
+        formatter.roundingMode = .halfEven
+        return formatter.string(from: NSNumber(value: value)) ?? String(format: "%.\(fractionDigits)f", value)
     }
 
     /// Language tag on the tiles (the Wikipedias, and the English-only Medicína and Wikivoyage).
@@ -338,7 +364,7 @@ enum BookCatalog {
 
     /// "září 2026, čeština, 9,96 GB": the meta line of a library row.
     static func metaLine(of book: BookRecord) -> String {
-        [ContentDate.monthYear(book.date), languageName(book.language), tr(.librarySize, gigabytes(book.sizeBytes))]
+        [ContentDate.monthYear(book.date), languageName(book.language), formatSizeShort(book.sizeBytes)]
             .filter { !$0.isEmpty }
             .joined(separator: ", ")
     }

@@ -79,14 +79,32 @@ final class BookCatalogTests: XCTestCase {
         XCTAssertNil(BookCatalog.edition(of: []))
     }
 
-    func testSizesUseThreeSignificantDigits() {
-        L10n.apply(.cs)
+    /// Like Android's formatSize / formatSizeShort: GB ≥ 1 GB, else MB, kB for tiny books (the guides were
+    /// „0,000109 GB“), decimal comma in cs/sk, a no-break space before the unit.
+    func testSizesLikeAndroid() {
         defer { L10n.apply(.system) }
-        XCTAssertEqual(BookCatalog.gigabytes(9_958_167_476), "9,96")
-        XCTAssertEqual(BookCatalog.gigabytes(3_501_486_592), "3,5")
-        XCTAssertEqual(BookCatalog.gigabytes(17_134_155_148), "17,1")
-        XCTAssertEqual(BookCatalog.gigabytes(539_516_304), "0,54")
-        XCTAssertEqual(BookCatalog.gigabytes(32_400_000_000, significantDigits: 2), "32")
+        func plain(_ text: String) -> String { text.replacingOccurrences(of: "\u{00A0}", with: " ") }
+
+        L10n.apply(.cs)
+        XCTAssertEqual(BookCatalog.formatSize(9_958_167_476), "9,96\u{00A0}GB")
+        XCTAssertEqual(plain(BookCatalog.formatSize(17_134_155_148)), "17,1 GB")
+        XCTAssertEqual(plain(BookCatalog.formatSize(3_501_486_592)), "3,5 GB")
+        XCTAssertEqual(plain(BookCatalog.formatSize(539_516_304)), "540 MB")
+        XCTAssertEqual(plain(BookCatalog.formatSize(108_905)), "109 kB")
+        XCTAssertEqual(plain(BookCatalog.formatSize(300)), "1 kB")
+
+        XCTAssertEqual(plain(BookCatalog.formatSizeShort(9_958_167_476)), "10 GB")
+        XCTAssertEqual(plain(BookCatalog.formatSizeShort(17_134_155_148)), "17 GB")
+        XCTAssertEqual(plain(BookCatalog.formatSizeShort(3_501_486_592)), "3,5 GB")
+        XCTAssertEqual(plain(BookCatalog.formatSizeShort(1_065_265_251)), "1,1 GB")
+        XCTAssertEqual(plain(BookCatalog.formatSizeShort(539_516_304)), "540 MB")
+        XCTAssertEqual(BookCatalog.formatSizeShort(108_905), "109\u{00A0}kB")
+
+        L10n.apply(.sk)
+        XCTAssertEqual(plain(BookCatalog.formatSize(3_501_486_592)), "3,5 GB")
+        L10n.apply(.en)
+        XCTAssertEqual(plain(BookCatalog.formatSize(9_958_167_476)), "9.96 GB")
+        XCTAssertEqual(plain(BookCatalog.formatSizeShort(1_065_265_251)), "1.1 GB")
     }
 
     func testLanguageTagsOnWikipediasAndEnglishOnlyBooks() {

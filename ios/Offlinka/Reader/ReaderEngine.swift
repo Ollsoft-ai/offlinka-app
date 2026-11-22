@@ -118,6 +118,22 @@ final class ReaderEngine {
 
 /// JavaScript the reader evaluates in the page on demand.
 enum ReaderScripts {
+    #if DEBUG
+    /// Moves the map of an openZIM maps book (`window.__openzim_map`, MapLibre) to `lat,lon,zoom` once its
+    /// style has loaded. Store screenshots only.
+    static func jumpMap(_ view: String) -> String {
+        let parts = view.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+        guard parts.count == 3 else { return "" }
+        return """
+        (function go(n) {
+          var m = window.__openzim_map;
+          if (m && m.isStyleLoaded && m.isStyleLoaded()) { m.jumpTo({center: [\(parts[1]), \(parts[0])], zoom: \(parts[2])}); }
+          else if (n > 0) { setTimeout(function () { go(n - 1); }, 500); }
+        })(120);
+        """
+    }
+    #endif
+
     /// JSON list of the h2/h3 headings (ids added where missing) for the contents sheet.
     static let headings = """
     (function () {

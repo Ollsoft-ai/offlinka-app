@@ -86,6 +86,14 @@ final class AppModel {
     /// UI tests only (`-fixture-drive`): the folder the Connect button opens instead of the Files sheet.
     @ObservationIgnored private(set) var fixtureDrive: URL?
 
+    /// Home's first-run card „Vyzkoušejte hned“ (empty once closed).
+    private(set) var tryNow: [TryNowItem] = []
+    @ObservationIgnored private var tryNowTask: Task<Void, Never>?
+    /// The UI-language Wikipedia got its index during this run: „Hledání je připravené“ until closed.
+    private(set) var searchJustReady = false
+    /// X on the „preparing“ note: hidden for the rest of this run (preparing goes on).
+    private(set) var searchNoteHidden = false
+
     static let lowMemoryLimit: UInt64 = 3 * 1024 * 1024 * 1024
 
     init(store: UserStore, access: DriveAccess, engine: ContentEngine,
@@ -108,6 +116,7 @@ final class AppModel {
         shelf.removeIndexRequest = { [store] name in store.removeIndexRequest(name) }
         shelf.driveReachable = { [access] in access.isCurrentReachable() }
         shelf.onIndexingChange = { [weak self] building in self?.updateIdleTimer(building: building) }
+        shelf.onIndexed = { [weak self] record in self?.bookIndexed(record) }
         shelf.onContentChange = { [weak self] content in self?.contentChanged(content) }
         shelf.onDriveFailure = { [weak self] in self?.reportDriveFailure() }
     }
@@ -127,8 +136,9 @@ final class AppModel {
             if let theme = value("-demo-theme").flatMap(AppTheme.init(rawValue:)) {
                 store.settings.theme = theme
             }
+            ReaderModel.fixtureMapView = value("-fixture-map-view")
             if arguments.contains("-fixture-drive") {
-                return fixture(drive: value("-fixture-drive"), store: store)
+                return fixture(drive: value("-fixture-drive"), sizes: value("-fixture-sizes"), store: store)
             }
             return demo(store: store)
         }
@@ -155,7 +165,7 @@ final class AppModel {
     /// Connect button opens `<folder>` instead of the Files sheet. Nothing is remembered between
     /// launches. Without a folder (or with `bundled`) the drive is a temporary folder holding the
     /// guides bundled with the app.
-    static func fixture(drive path: String?, store: UserStore) -> AppModel {
+    static func fixture(drive path: String?, sizes sizesPath: String? = nil, store: UserStore) -> AppModel {
         let files = FileManager.default
         let scratch = files.temporaryDirectory.appendingPathComponent("OfflinkaFixture", isDirectory: true)
         let indexes = scratch.appendingPathComponent("Indexes", isDirectory: true)
@@ -173,8 +183,12 @@ final class AppModel {
                 try? files.copyItem(atPath: bundled, toPath: guides.path)
             }
         }
+        // Store screenshots: the fixture's ZIMs are trimmed copies, so the real drive's file sizes stand in
+        // (`-fixture-sizes <sizes.json>`: {"<file name>": bytes}).
+        let sizes = sizesPath.flatMap { try? Data(contentsOf: URL(fileURLWithPath: $0)) }
+            .flatMap { try? JSONDecoder().decode([String: Int64].self, from: $0) } ?? [:]
         let model = AppModel(store: store, access: DriveAccess(bookmarkFile: nil), engine: CoreContentEngine(),
-                             scanner: { try DriveScanner().scan(root: $0) }, indexDirectory: indexes,
+                             scanner: { try DriveScanner().scan(root: $0).replacingSizes(sizes) }, indexDirectory: indexes,
                              bundledGuidesPath: bundled)
         model.fixtureDrive = root
         return model
@@ -335,6 +349,51 @@ final class AppModel {
             try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled else { return }
             self?.toast = nil
+        }
+    }
+
+    // MARK: - Search note and first-run card (Android parity)
+
+    /// The note under the search field (Home, Search): one percentage, for the UI-language Wikipedia only.
+    var searchNote: SearchNote? {
+        if searchJustReady { return .ready }
+        if searchNoteHidden { return nil }
+        if let progress = shelf.indexing { return .building(percent: progress.percent) }
+        return nil
+    }
+
+    func dismissSearchNote() {
+        if searchJustReady {
+            searchJustReady = false
+        } else {
+            searchNoteHidden = true
+        }
+    }
+
+    /// Recomputes „Vyzkoušejte hned“ from the books open now (reads them, off the main thread).
+    func refreshTryNow() {
+        tryNowTask?.cancel()
+        guard !store.settings.tryNowDismissed, phase == .ready, let content = shelf.content else {
+            tryNow = []
+            return
+        }
+        let language = L10n.languageCode
+        tryNowTask = Task { [weak self] in
+            let items = await Task.detached(priority: .utility) { TryNow.items(content: content, uiLanguage: language) }.value
+            guard !Task.isCancelled, let self, self.shelf.content === content, !self.store.settings.tryNowDismissed else { return }
+            self.tryNow = items
+        }
+    }
+
+    func dismissTryNow() {
+        store.settings.tryNowDismissed = true
+        tryNowTask?.cancel()
+        tryNow = []
+    }
+
+    private func bookIndexed(_ record: BookRecord) {
+        if BookCatalog.primaryWikipedia(in: books, languageCode: L10n.languageCode)?.id == record.id {
+            searchJustReady = true
         }
     }
 
@@ -522,6 +581,20 @@ extension AppModel {
             model.phase = phase
         }
         return model
+    }
+}
+#endif
+
+#if DEBUG
+extension DriveScan {
+    /// The scan with other file sizes (store-screenshot fixture: the real drive's sizes for trimmed files).
+    func replacingSizes(_ sizes: [String: Int64]) -> DriveScan {
+        guard !sizes.isEmpty else { return self }
+        func resized(_ entry: DriveEntry) -> DriveEntry {
+            guard let size = sizes[entry.url.lastPathComponent] else { return entry }
+            return DriveEntry(url: entry.url, folder: entry.folder, name: entry.name, indexURL: entry.indexURL, sizeBytes: size)
+        }
+        return DriveScan(root: root, books: books.map(resized), shadowed: shadowed.map(resized))
     }
 }
 #endif

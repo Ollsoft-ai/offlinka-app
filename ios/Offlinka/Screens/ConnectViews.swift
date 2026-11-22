@@ -158,16 +158,10 @@ struct HelpSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: BrandSpace.l) {
-                    ForEach([Str.help1, .help2, .helpPickFolder, .help4Ios, .help5], id: \.self) { key in
-                        HStack(alignment: .firstTextBaseline, spacing: BrandSpace.m) {
-                            Circle().fill(Color.brandPrimary).frame(width: 8, height: 8)
-                            Text(tr(key))
-                                .brandText(.body)
-                                .foregroundStyle(Color.brandInk)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
+                // Two groups like Android: the phone does not see the drive / the window shows something else.
+                VStack(alignment: .leading, spacing: BrandSpace.xl) {
+                    group(.helpGroupNotSeen, [.help1, .help5, .help2, .help4Ios])
+                    group(.helpGroupWrongWindow, [.helpPickFolder])
                 }
                 .padding(BrandSize.gutter)
             }
@@ -181,6 +175,24 @@ struct HelpSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    private func group(_ title: Str, _ items: [Str]) -> some View {
+        VStack(alignment: .leading, spacing: BrandSpace.l) {
+            Text(tr(title))
+                .brandText(.subhead)
+                .foregroundStyle(Color.brandInk)
+                .accessibilityAddTraits(.isHeader)
+            ForEach(items, id: \.self) { key in
+                HStack(alignment: .firstTextBaseline, spacing: BrandSpace.m) {
+                    Circle().fill(Color.brandPrimary).frame(width: 8, height: 8)
+                    Text(tr(key))
+                        .brandText(.body)
+                        .foregroundStyle(Color.brandInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
     }
 }
 
