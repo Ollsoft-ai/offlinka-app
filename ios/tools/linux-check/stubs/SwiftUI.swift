@@ -154,6 +154,7 @@ public struct Text: View, Equatable {
     public func monospacedDigit() -> Text { self }
     public func font(_ f: Font?) -> Text { self }
     public func foregroundColor(_ c: Color?) -> Text { self }
+    public func underline(_ isActive: Bool = true, color: Color? = nil) -> Text { self }
     public static func + (lhs: Text, rhs: Text) -> Text { lhs }
     public var body: Never { fatalError() }
 }

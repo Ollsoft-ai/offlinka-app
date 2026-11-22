@@ -18,6 +18,11 @@ final class FixtureDriveUITests: XCTestCase {
         app = launchApp(language: "cs", theme: "light", connect: false)
         let connect = app.buttons["connect.pick"]
         XCTAssertTrue(connect.waitForExistence(timeout: 30), "connect screen did not appear")
+        // The shop link for people without a drive sits under the main button (opens Safari; not tapped here).
+        let buy = app.buttons["connect.buy"]
+        XCTAssertTrue(buy.exists, "no shop link on Connect")
+        XCTAssertEqual(buy.label, "Nemáte ještě Offlinku? Kupte ji zde")
+        XCTAssertGreaterThan(buy.frame.minY, connect.frame.maxY, "the shop link is under „Vybrat flashku“")
         keepScreenshot("fixture-1-connect")
         connect.tap()
 

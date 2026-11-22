@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 @MainActor
 struct ConnectView: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.openURL) private var openURL
     let problem: AppModel.ConnectProblem?
 
     @State private var showPicker = false
@@ -82,6 +83,22 @@ struct ConnectView: View {
                     .brandText(.bodySmall)
                     .foregroundStyle(Color.brandInk2)
                     .multilineTextAlignment(.center)
+
+                // For people without a drive yet: the shop in Safari, a plain link under the main button.
+                Button {
+                    openURL(WebLinks.shop())
+                } label: {
+                    Text(tr(.connectBuy))
+                        .underline(true, color: .brandLinkUnderline)
+                        .brandText(.bodyStrong)
+                        .foregroundStyle(Color.brandLink)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, minHeight: BrandSize.touch)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(.isLink)
+                .accessibilityIdentifier("connect.buy")
             }
         }
         .fileImporter(isPresented: $showPicker, allowedContentTypes: [.folder]) { result in

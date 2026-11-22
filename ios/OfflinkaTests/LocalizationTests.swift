@@ -42,6 +42,28 @@ final class LocalizationTests: XCTestCase {
         XCTAssertEqual(WebLinks.privacyPolicy(language: "en").absoluteString, "https://offlinka.cz/en/app/privacy")
     }
 
+    /// Connect's shop link: offlinka.cz for Czech and English, offlinka.sk for Slovak, utm_medium=ios.
+    func testShopLinkFollowsTheUILanguage() {
+        XCTAssertEqual(WebLinks.shop(language: "cs").absoluteString,
+                       "https://offlinka.cz/?utm_source=app&utm_medium=ios&utm_campaign=connect")
+        XCTAssertEqual(WebLinks.shop(language: "en").absoluteString,
+                       "https://offlinka.cz/?utm_source=app&utm_medium=ios&utm_campaign=connect")
+        XCTAssertEqual(WebLinks.shop(language: "sk").absoluteString,
+                       "https://offlinka.sk/?utm_source=app&utm_medium=ios&utm_campaign=connect")
+    }
+
+    /// design/strings (`connect_buy_url` with {medium} = ios) builds the same links, with no price in the text.
+    func testShopLinkFromDesignMatchesTheFallback() throws {
+        try XCTSkipIf(Bundle.main.path(forResource: "cs", ofType: "lproj") == nil, "strings are not compiled into this bundle")
+        defer { L10n.apply(.system) }
+        for language in [AppLanguage.cs, .sk, .en] {
+            L10n.apply(language)
+            XCTAssertEqual(WebLinks.shop(), WebLinks.shop(language: language.rawValue))
+            XCTAssertFalse(tr(.connectBuy).isEmpty)
+            XCTAssertNil(tr(.connectBuy).range(of: #"\d|Kč|€|EUR|CZK"#, options: .regularExpression), "no price on the button")
+        }
+    }
+
     /// design/strings (`about_privacy_url`) and the built-in fallback point at the same pages.
     func testPrivacyPolicyLinkFromDesignMatchesTheFallback() throws {
         try XCTSkipIf(Bundle.main.path(forResource: "cs", ofType: "lproj") == nil, "strings are not compiled into this bundle")

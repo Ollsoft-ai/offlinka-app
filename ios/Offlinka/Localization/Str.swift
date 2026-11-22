@@ -29,6 +29,8 @@ enum Str: String, CaseIterable, Sendable {
     case connectButton = "connect_button"
     case connectRemember = "connect_remember"
     case connectHelpLink = "connect_help_link"
+    case connectBuy = "connect_buy"
+    case connectBuyUrl = "connect_buy_url"
     case connectSearching = "connect_searching"
     case connectErrNotfoundTitle = "connect_err_notfound_title"
     case connectErrNotfoundBody = "connect_err_notfound_body"

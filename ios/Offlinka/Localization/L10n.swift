@@ -58,8 +58,27 @@ func tr(_ key: Str, _ arguments: CVarArg...) -> String {
     String(format: L10n.string(key), locale: L10n.locale, arguments: arguments)
 }
 
-/// Pages on the web the app links to (only from About; everything else stays inside the app).
+/// Pages on the web the app links to (About's privacy policy, Connect's shop link); everything else stays inside
+/// the app. Both open in Safari.
 enum WebLinks {
+    /// `utm_medium` of the shop link from this app (Android passes `android`).
+    static let medium = "ios"
+
+    /// The shop for people without a drive yet (`connect_buy_url`): offlinka.sk in Slovak, offlinka.cz otherwise.
+    /// A physical product sold on the web (App Review 3.1.5(a)); no price in the app.
+    static func shop() -> URL {
+        if let url = URL(string: tr(.connectBuyUrl, medium)), url.scheme == "https", url.query?.contains("utm_medium=\(medium)") == true {
+            return url
+        }
+        return shop(language: L10n.languageCode)
+    }
+
+    /// The same link without the string catalog (unit tests on Linux, a missing translation).
+    static func shop(language: String) -> URL {
+        let host = language == "sk" ? "offlinka.sk" : "offlinka.cz"
+        return URL(string: "https://\(host)/?utm_source=app&utm_medium=\(medium)&utm_campaign=connect")!
+    }
+
     /// The privacy policy in the UI language (`about_privacy_url`); the store listings link the same pages.
     static func privacyPolicy() -> URL {
         if let url = URL(string: tr(.aboutPrivacyUrl)), url.scheme == "https" {
