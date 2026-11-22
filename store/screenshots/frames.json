@@ -32,7 +32,7 @@
       "headline": { "cs": "Hledejte i bez háčků a čárek", "sk": "Hľadajte aj bez mäkčeňov a dĺžňov", "en": "Search without typing accents" } },
     { "id": "article", "stores": ["play", "appstore"],
       "screen": [{ "snap": "ScreensTest_reader[{loc}-light]", "content": "article" }, { "snap": "LocaleAndFontTest_reader[{loc}-light]", "content": "article" }],
-      "headline": { "cs": "Celá česká Wikipedie s obrázky", "sk": "Česká aj slovenská Wikipédia s obrázkami", "en": "Czech and Slovak Wikipedia with pictures" } },
+      "headline": { "cs": "Česká Wikipedie s obrázky", "sk": "Česká aj slovenská Wikipédia s obrázkami", "en": "Czech and Slovak Wikipedia with pictures" } },
     { "id": "map", "stores": ["play", "appstore"],
       "screen": [{ "snap": "ScreenStatesTest_readerMap[{loc}-light]", "content": "map" }, { "content": "map" }],
       "headline": { "cs": "Mapy Česka a Slovenska až po ulice", "sk": "Mapy Slovenska a Česka až po ulice", "en": "Street maps of Czechia and Slovakia" } },

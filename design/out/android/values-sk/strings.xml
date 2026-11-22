@@ -20,7 +20,7 @@
     <string name="status_offline">Funguje bez internetu</string>
     <string name="status_drive_connected">USB kľúč je zapojený.</string>
     <string name="connect_title">Zapojte USB kľúč Offlinka</string>
-    <string name="connect_body">Aplikácia číta Wikipédiu, mapy a príručky priamo z USB kľúča. Nič sa nekopíruje a internet nepotrebujete.</string>
+    <string name="connect_body">Aplikácia číta Wikipédiu, mapy a príručky priamo z USB kľúča. Knihy zostávajú na USB kľúči a internet nepotrebujete.</string>
     <string name="connect_step_plug">Zasuňte USB kľúč do konektora USB-C.</string>
     <string name="connect_step_pick_android">V ďalšom okne ťuknite dole na „Použiť tento priečinok“ a potom na „Povoliť“. Aplikácia z USB kľúča len číta.</string>
     <string name="connect_step_pick_ios">V ďalšom okne vyberte OFFLINKA a ťuknite na Otvoriť.</string>
@@ -66,7 +66,7 @@
     <string name="book_wikiversity">Wikiverzita</string>
     <string name="book_wiktionary">Wikislovník</string>
     <string name="book_wikivoyage">Wikivoyage</string>
-    <string name="book_wikipedia_full_desc">Celá, s obrázkami</string>
+    <string name="book_wikipedia_full_desc">Články s obrázkami</string>
     <string name="book_wikipedia_mini_desc">Úvody článkov, bez obrázkov</string>
     <string name="book_wikipedia_en_desc">Milión najčítanejších článkov, len text</string>
     <string name="book_medicine_desc">Lekárske články, po anglicky</string>

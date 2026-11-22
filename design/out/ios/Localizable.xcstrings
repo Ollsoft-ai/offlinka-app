@@ -445,19 +445,19 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aplikace čte Wikipedii, mapy a příručky přímo z flashky. Nic se nekopíruje a internet nepotřebujete."
+            "value": "Aplikace čte Wikipedii, mapy a příručky přímo z flashky. Knihy zůstávají na flashce a internet nepotřebujete."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aplikácia číta Wikipédiu, mapy a príručky priamo z USB kľúča. Nič sa nekopíruje a internet nepotrebujete."
+            "value": "Aplikácia číta Wikipédiu, mapy a príručky priamo z USB kľúča. Knihy zostávajú na USB kľúči a internet nepotrebujete."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The app reads Wikipedia, maps and guides straight from the drive. Nothing is copied and you need no internet."
+            "value": "The app reads Wikipedia, maps and guides straight from the drive. The books stay on the drive and you need no internet."
           }
         }
       }
@@ -1503,19 +1503,19 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "Celá, s obrázky"
+            "value": "Články s obrázky"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Celá, s obrázkami"
+            "value": "Články s obrázkami"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Complete, with pictures"
+            "value": "Articles with pictures"
           }
         }
       }

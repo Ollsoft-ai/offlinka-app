@@ -20,7 +20,7 @@
     <string name="status_offline">Works without internet</string>
     <string name="status_drive_connected">The drive is plugged in.</string>
     <string name="connect_title">Plug in your Offlinka drive</string>
-    <string name="connect_body">The app reads Wikipedia, maps and guides straight from the drive. Nothing is copied and you need no internet.</string>
+    <string name="connect_body">The app reads Wikipedia, maps and guides straight from the drive. The books stay on the drive and you need no internet.</string>
     <string name="connect_step_plug">Plug the drive into the USB-C port.</string>
     <string name="connect_step_pick_android">On the next screen, tap “Use this folder” at the bottom, then “Allow”. The app only reads the drive.</string>
     <string name="connect_step_pick_ios">On the next screen, pick OFFLINKA and tap Open.</string>
@@ -66,7 +66,7 @@
     <string name="book_wikiversity">Wikiversity</string>
     <string name="book_wiktionary">Wiktionary</string>
     <string name="book_wikivoyage">Wikivoyage</string>
-    <string name="book_wikipedia_full_desc">Complete, with pictures</string>
+    <string name="book_wikipedia_full_desc">Articles with pictures</string>
     <string name="book_wikipedia_mini_desc">Article intros, no pictures</string>
     <string name="book_wikipedia_en_desc">The million most-read articles, text only</string>
     <string name="book_medicine_desc">Medical articles, in English</string>
