@@ -17,6 +17,8 @@ struct LibraryView: View {
                     Text(tr(.librarySubtitle))
                         .brandText(.body)
                         .foregroundStyle(Color.brandInk2)
+                        // The row clips at its edge: room for the overhang of Archivo's V and E.
+                        .padding(.leading, 2)
                     DriveCard()
                 }
                 .listRowBackground(Color.clear)
