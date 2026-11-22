@@ -34,7 +34,8 @@ extension ReaderTexts {
             noBookBody: tr(.readerNotFoundBody),
             errorTitle: tr(.errorTitle),
             errorBody: tr(.errorBody),
-            openingTitle: tr(.libraryOpening)
+            openingTitle: tr(.libraryOpening),
+            fileTooBig: tr(.readerFileTooBig)
         )
     }
 }

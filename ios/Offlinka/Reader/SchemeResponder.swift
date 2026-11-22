@@ -37,6 +37,8 @@ struct ReaderTexts: Sendable, Equatable {
     var errorBody = ""
     /// The book is still being opened ("Otevírám…"); the reader reloads once it is open.
     var openingTitle = ""
+    /// „Soubor je na otevření v telefonu příliš velký.“
+    var fileTooBig = ""
 }
 
 /// The app's own reader assets served at `offlinka://app.offlinka/<name>` (stylesheet, fonts).
@@ -111,6 +113,9 @@ struct SchemeResponder: Sendable {
     var readerHead: ReaderHead? = nil
     /// Largest body of one range reply. Media elements ask again for the rest.
     var maxRangeLength: Int64 = 8 * 1024 * 1024
+    /// Largest file served whole (a request without Range reads it all into memory): bigger ones get a
+    /// calm page, like Android's 50 MB limit for opening a file. Media elements always ask by range.
+    var maxWholeLength: Int64 = 50 * 1024 * 1024
 
     func reply(to request: SchemeRequest) -> SchemeReply {
         guard let parsed = OfflinkaURL.parse(request.url) else {
@@ -152,6 +157,9 @@ struct SchemeResponder: Sendable {
                 }
             }
 
+            if let length = try? source.contentLength(bookId: book.id, path: parsed.path), length > maxWholeLength {
+                return page(status: 413, title: texts.fileTooBig, body: "")
+            }
             let resource = try source.resource(bookId: book.id, path: parsed.path)
             let target = Self.normalized(resource.path)
             if target != Self.normalized(parsed.path), !target.isEmpty, MimeTypes.isHTML(resource.mimeType) {

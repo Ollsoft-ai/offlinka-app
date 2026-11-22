@@ -14,6 +14,7 @@ SwiftUI app (iOS 17+, iPhone 15+ and USB-C iPads) that reads the Offlinka flash 
 - Bundled guides: `android/app/src/main/assets/offlinka_cs_prirucky.zim`, the one file both apps ship (first aid works without the drive), referenced from `project.yml`.
 - Used straight from `design/`: `Brand.swift`, `Localizable.xcstrings`, `fonts/*.ttf`, `Icons.xcassets`, `reader/offlinka-reader.css` + `reader/inject.js`. The app icon is copied by `tools/sync-design.sh` (an icon set must sit inside an asset catalog).
 - `tools/gen-str.py`: regenerates `Str.swift` from `design/strings/cs.json` after design adds a key. `tools/linux-check/`: type-check against SDK stand-ins + unit tests on Linux.
+- `tools/gen-licences.py`: regenerates `Offlinka/Resources/licences.html` (About → Úplná znění licencí) from the core's crates for iOS, reusing `scripts/gen-licences.py`; run after a dependency change.
 - `tools/pick-simulator.py`, `tools/sim-prepare.sh` (boot, 9:41 status bar), `tools/export-shots.py` (screenshots out of an `.xcresult`): used by CI, work on any Mac.
 
 ## Build on macOS (first time)

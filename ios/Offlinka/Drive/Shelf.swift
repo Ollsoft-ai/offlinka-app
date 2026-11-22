@@ -120,6 +120,9 @@ final class Shelf {
     private(set) var indexQueue: Set<String> = []
     /// The pass stopped because the phone is low on space (book details: „Málo místa“).
     private(set) var indexLowSpace = false
+    /// Every ZIM file on the drive (both folders, other editions and the drive's guides too), like Android's
+    /// drive card total.
+    private(set) var driveBytes: Int64 = 0
     /// The guides bundled with the app, once opened.
     private(set) var builtinGuides: BookRecord?
 
@@ -230,12 +233,14 @@ final class Shelf {
         guard gen == generation else { return .superseded }
 
         let ui = uiLanguage()
+        let allFiles = scan.books + scan.shadowed
         // The app always shows its own guides (Android 0.3.1): the drive's copy still explains the Kiwix
         // apps until the store launch, so it is left out of the shelf, Home, Library and search.
         let driveBooks = scan.books.filter { BookKind.of(name: $0.name.baseKey) != .guides || builtinBook == nil }
         if driveBooks.isEmpty, let builtinBook, let builtinGuides {
             let onlyGuides = ShelfContent(library: engine.newLibrary(), coreVersion: engine.version, uiLanguage: ui)
             onlyGuides.add(builtinBook, record: builtinGuides, builtin: true)
+            driveBytes = allFiles.reduce(0) { $0 + $1.sizeBytes }
             publish(onlyGuides, tiles: [ShelfTile(id: builtinGuides.id, entry: nil, record: builtinGuides, state: .open)],
                     shadowed: scan.shadowed)
             startIndexing()
@@ -283,6 +288,7 @@ final class Shelf {
             }
         }
         newContent.setPending(Set(newTiles.filter { $0.state == .opening }.map(\.id)))
+        driveBytes = allFiles.reduce(0) { $0 + $1.sizeBytes }
         publish(newContent, tiles: newTiles, shadowed: scan.shadowed)
 
         let rest = newTiles.filter { $0.state == .opening }.compactMap(\.entry)
@@ -299,6 +305,7 @@ final class Shelf {
         control.setGeneration(generation)
         openTask?.cancel()
         openTask = nil
+        driveBytes = 0
         publish(nil, tiles: [], shadowed: [])
     }
 
@@ -549,6 +556,13 @@ final class Shelf {
                 case .built:
                     Self.removeOtherEditions(in: directory, bookKey: target.entry.name.baseKey, keep: file)
                 case .stopped:
+                    return
+                case .driveFailed where (freeSpace(directory) ?? .max) < minFreeForIndex,
+                     .failed where (freeSpace(directory) ?? .max) < minFreeForIndex:
+                    // The phone filled up while building: wait for space like before a build (book details
+                    // say „Málo místa“), never count the book as broken.
+                    indexQueue.insert(target.record.id)
+                    indexLowSpace = true
                     return
                 case .driveFailed:
                     if driveReachable() {

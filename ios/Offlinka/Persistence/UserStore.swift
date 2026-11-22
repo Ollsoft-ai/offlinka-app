@@ -83,11 +83,20 @@ final class UserStore {
 
     private let fileURL: URL?
     private let writer = DispatchQueue(label: "cz.offlinka.app.userstore", qos: .utility)
+    private let write: @Sendable (Data, URL) throws -> Void
 
-    /// `fileURL` nil keeps everything in memory (previews, UI tests).
-    init(fileURL: URL?) {
+    /// `fileURL` nil keeps everything in memory (previews, UI tests). `write` is injectable so tests can
+    /// stand in a full disk.
+    init(fileURL: URL?, write: @escaping @Sendable (Data, URL) throws -> Void = UserStore.atomicWrite) {
         self.fileURL = fileURL
+        self.write = write
         self.data = Self.load(from: fileURL)
+    }
+
+    /// Writes a new file and swaps it in, so a failed write (a full phone) leaves the old file whole.
+    nonisolated static func atomicWrite(_ data: Data, to url: URL) throws {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: url, options: .atomic)
     }
 
     static func defaultFileURL() -> URL {
@@ -216,10 +225,15 @@ final class UserStore {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         guard let encoded = try? encoder.encode(data) else { return }
+        let write = self.write
         writer.async {
-            let directory = fileURL.deletingLastPathComponent()
-            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try? encoded.write(to: fileURL, options: .atomic)
+            // A full phone: the write fails quietly, the previous file stays whole, and everything is
+            // still in memory; the next change writes it all again (Android: guarded Room writes).
+            do {
+                try write(encoded, fileURL)
+            } catch {
+                DebugLog.note("user data not saved: \(error.localizedDescription)")
+            }
         }
     }
 

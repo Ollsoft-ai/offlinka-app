@@ -34,6 +34,9 @@ final class ReaderModel {
     private(set) var titleScrolledAway = false
     /// A tapped link that needs the internet; the view shows a notice.
     var externalLink: URL?
+    /// The page's content process died twice in a row: the view shows a calm message with „Zkusit znovu“.
+    private(set) var contentFailed = false
+    @ObservationIgnored private var recovery = ContentProcessRecovery()
 
     private let engine: ReaderEngine
     private let store: UserStore
@@ -233,6 +236,8 @@ final class ReaderModel {
 
     func didFinishNavigation() {
         headings = []
+        recovery.reset()
+        contentFailed = false
         recordVisit()
         #if DEBUG
         if isMap, let view = Self.fixtureMapView {
@@ -258,7 +263,22 @@ final class ReaderModel {
         webView.load(request)
     }
 
+    /// The web content process died: reload once, then give up calmly (never a reload loop).
     func contentProcessTerminated() {
+        switch recovery.processTerminated() {
+        case .reload:
+            DebugLog.note("reader: content process ended, reloading")
+            webView.reload()
+        case .giveUp:
+            DebugLog.note("reader: content process ended again, giving up")
+            contentFailed = true
+        }
+    }
+
+    /// „Zkusit znovu“ after the content process failed twice.
+    func retryAfterContentFailure() {
+        recovery.reset()
+        contentFailed = false
         webView.reload()
     }
 

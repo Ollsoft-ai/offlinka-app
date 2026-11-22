@@ -42,7 +42,7 @@ P="$WORK/pkg"; mkdir -p "$P/Sources/Offlinka" "$P/Sources/offlinka_coreFFI" "$P/
 cp "$WORK/ffi/"* "$P/Sources/offlinka_coreFFI/"
 for f in Core/ContentSource.swift Core/ContentEngine.swift Core/FakeContentSource.swift Core/FakeContentEngine.swift \
          Core/CoreContentEngine.swift Drive/DriveScanner.swift Drive/Shelf.swift Drive/ShelfContent.swift \
-         Reader/OfflinkaURL.swift Reader/ByteRange.swift Reader/SchemeResponder.swift Localization/L10n.swift \
+         Reader/OfflinkaURL.swift Reader/ByteRange.swift Reader/SchemeResponder.swift Reader/ContentProcessRecovery.swift Localization/L10n.swift \
          Localization/Str.swift Library/BookCatalog.swift Library/TryNow.swift Design/BrandIcon.swift Persistence/UserStore.swift \
          Search/SearchModel.swift App/DebugLog.swift Generated/OfflinkaCore.swift; do
   ln -sf "$ROOT/ios/Offlinka/$f" "$P/Sources/Offlinka/$(basename "$f")"

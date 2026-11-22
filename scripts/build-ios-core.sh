@@ -14,6 +14,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 [ "$(uname -s)" = Darwin ] || { echo "build-ios-core.sh runs on macOS (Xcode) only" >&2; exit 1; }
 rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios >/dev/null
 export IPHONEOS_DEPLOYMENT_TARGET=17.0
+# No build-machine paths in the shipped library (panic messages carry source paths), like Android's script.
+export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME/.cargo/registry/src=/cargo --remap-path-prefix=$HOME/.cargo=/cargo --remap-path-prefix=$HOME/.rustup=/rustup --remap-path-prefix=$ROOT=/offlinka"
 cd "$ROOT/core"
 for T in aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios; do
   cargo rustc --release --lib -p offlinka-core --target "$T" --crate-type staticlib

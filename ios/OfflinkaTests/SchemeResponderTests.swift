@@ -78,7 +78,7 @@ final class SchemeResponderTests: XCTestCase {
         source = FakeContentSource.demo()
         let texts = ReaderTexts(languageCode: "cs", missingTitle: "missing", missingBody: "missing body",
                                 driveTitle: "drive", driveBody: "drive body", noBookTitle: "nobook", noBookBody: "nobook body",
-                                errorTitle: "error", errorBody: "error body")
+                                errorTitle: "error", errorBody: "error body", fileTooBig: "too big")
         let assets = AppAssets { name in
             ["offlinka-reader.css": "body{}", "inject.js": "x()", "archivo_regular.ttf": "ttf"][name].map { Data($0.utf8) }
         }
@@ -181,6 +181,19 @@ final class SchemeResponderTests: XCTestCase {
         XCTAssertTrue(article.contains("offlinka-reader-css"), article)
         let game = String(decoding: try reply("offlinka://offlinka_mul_hry/index.html").body, as: UTF8.self)
         XCTAssertFalse(game.contains("offlinka-reader-css"))
+    }
+
+    /// Like Android's 50 MB limit: a file too big to read whole gets a calm page; media still stream by range.
+    func testAFileTooBigToReadWholeGetsACalmPage() throws {
+        responder.maxWholeLength = 1024
+        let whole = try reply("offlinka://wikipedia_cs_all/media/ukazka.bin")
+        XCTAssertEqual(whole.statusCode, 413)
+        XCTAssertTrue(String(decoding: whole.body, as: UTF8.self).contains("too big"))
+        let ranged = try reply("offlinka://wikipedia_cs_all/media/ukazka.bin", headers: ["Range": "bytes=0-99"])
+        XCTAssertEqual(ranged.statusCode, 206)
+        XCTAssertEqual(ranged.body.count, 100)
+        // Pages are never that big; they are served as before.
+        XCTAssertEqual(try reply("offlinka://wikipedia_cs_all/Praha").statusCode, 200)
     }
 
     func testReaderHeadLeavesPagesWithoutHeadAlone() {

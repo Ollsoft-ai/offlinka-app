@@ -366,6 +366,36 @@ final class ShelfTests: XCTestCase {
         }
     }
 
+    /// The phone fills up during a build (injected write failure): the book waits for space („Málo místa“)
+    /// instead of being marked broken, and builds once there is room again.
+    func testAPhoneThatFillsUpWhileBuildingWaitsForSpace() async throws {
+        let list = books(indexed: false)
+        let engine = engine(list)
+        engine.failBuilds(["wikipedia_cs_all"])
+        let shelf = shelf(engine, indexes: true)
+        shelf.freeSpace = { _ in engine.failedBuildLog.isEmpty ? nil : 1024 }
+        _ = await shelf.load(scan: scan(list))
+        await waitUntil("stopped for space") { shelf.indexLowSpace && !shelf.isIndexing }
+        let wikipedia = try XCTUnwrap(shelf.tiles.first { $0.id == "wikipedia_cs_all" }?.record)
+        XCTAssertEqual(shelf.indexPhase(of: wikipedia), .lowSpace)
+
+        engine.failBuilds([])
+        shelf.freeSpace = { _ in nil }
+        shelf.startIndexing()
+        await waitUntil("built after space came back") { engine.buildLog.contains("wikipedia_cs_all") && !shelf.isIndexing }
+        XCTAssertEqual(shelf.tiles.first { $0.id == "wikipedia_cs_all" }?.record?.hasIndex, true)
+    }
+
+    /// Like Android's drive card: every ZIM on the drive, other editions included.
+    func testDriveBytesCountEveryFileOnTheDrive() async {
+        let list = books(indexed: true)
+        let shelf = shelf(engine(list))
+        _ = await shelf.load(scan: scan(list))
+        XCTAssertEqual(shelf.driveBytes, list.reduce(0) { $0 + $1.record.sizeBytes })
+        shelf.retire()
+        XCTAssertEqual(shelf.driveBytes, 0)
+    }
+
     func testEnglishTop1mOnlyOnRequest() async throws {
         let list = books(indexed: false, extra: [Self.top1m])
         let engine = engine(list)

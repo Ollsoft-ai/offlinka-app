@@ -52,6 +52,7 @@ public final class WKContentRuleList: @unchecked Sendable {}
     public var findInteraction: UIFindInteraction? { nil }
     public var scrollView = UIScrollView()
     public var isInspectable = false
+    @discardableResult public func loadFileURL(_ url: URL, allowingReadAccessTo readAccessURL: URL) -> WKNavigation? { nil }
     public weak var navigationDelegate: (any WKNavigationDelegate)?
     public weak var uiDelegate: (any WKUIDelegate)?
     public var title: String? { nil }

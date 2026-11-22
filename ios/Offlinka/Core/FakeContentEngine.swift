@@ -15,6 +15,9 @@ final class FakeContentEngine: ContentEngine, @unchecked Sendable {
     private var budget: Int64 = 0
     private var openDelay: TimeInterval = 0
     private var buildDelay: TimeInterval = 0
+    /// Builds of these book ids fail like a write to a full phone.
+    private var failingBuilds: Set<String> = []
+    private var failedBuilds: [String] = []
 
     /// `books` keyed by file name (`wikipedia_cs_all_maxi-offlinka_2026-09.zim`).
     init(books: [String: FakeContentSource.FakeBook]) {
@@ -77,6 +80,20 @@ final class FakeContentEngine: ContentEngine, @unchecked Sendable {
         lock.unlock()
     }
 
+    /// Book ids whose build failed (`failBuilds`), in order.
+    var failedBuildLog: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return failedBuilds
+    }
+
+    /// Makes the index builds of `bookIds` fail with an I/O error (no space left).
+    func failBuilds(_ bookIds: Set<String>) {
+        lock.lock()
+        failingBuilds = bookIds
+        lock.unlock()
+    }
+
     func setBuildDelay(_ seconds: TimeInterval) {
         lock.lock()
         buildDelay = seconds
@@ -133,7 +150,14 @@ final class FakeContentEngine: ContentEngine, @unchecked Sendable {
         let steps = 5
         lock.lock()
         let delay = buildDelay
+        let fails = failingBuilds.contains(book.info.id)
         lock.unlock()
+        if fails {
+            lock.lock()
+            failedBuilds.append(book.info.id)
+            lock.unlock()
+            throw ContentError.io("No space left on device")
+        }
         let part = outPath + ".part"
         FileManager.default.createFile(atPath: part, contents: Data("partial".utf8))
         for step in 1...steps {

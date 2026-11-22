@@ -18,6 +18,37 @@ final class UserStoreTests: XCTestCase {
         ArticleRef(bookName: book, path: path, title: title ?? path, date: Date(timeIntervalSinceReferenceDate: 1000))
     }
 
+    /// A full phone (injected write failure): saving, history and searches go on in memory, nothing crashes,
+    /// the file on disk stays whole, and the next write after space is back stores everything.
+    func testAFullDiskNeverCrashesOrCorruptsTheFile() throws {
+        let first = UserStore(fileURL: file)
+        first.toggleSaved(article("Praha"))
+        first.flush()
+        let before = try Data(contentsOf: file)
+
+        let full = LockedFlag(true)
+        let store = UserStore(fileURL: file) { data, url in
+            if full.value { throw CocoaError(.fileWriteOutOfSpace) }
+            try UserStore.atomicWrite(data, to: url)
+        }
+        store.recordVisit(article("Sněžka"))
+        store.addRecentSearch("krkonose")
+        XCTAssertTrue(store.toggleSaved(article("Brno")))
+        store.flush()
+        XCTAssertEqual(try Data(contentsOf: file), before, "a failed write leaves the old file whole")
+        XCTAssertEqual(store.history.map(\.path), ["Sněžka"])
+        XCTAssertEqual(store.recentSearches, ["krkonose"])
+        XCTAssertTrue(store.isSaved(bookName: "wikipedia_cs_all", path: "Brno"))
+
+        full.value = false
+        store.addRecentSearch("praha")
+        store.flush()
+        let reloaded = UserStore(fileURL: file)
+        XCTAssertEqual(Set(reloaded.saved.map(\.path)), ["Praha", "Brno"])
+        XCTAssertEqual(reloaded.history.map(\.path), ["Sněžka"])
+        XCTAssertEqual(reloaded.recentSearches, ["praha", "krkonose"])
+    }
+
     func testSavedToggleAndPersistence() {
         let store = UserStore(fileURL: file)
         XCTAssertTrue(store.toggleSaved(article("Praha")))
@@ -141,5 +172,18 @@ final class UserStoreTests: XCTestCase {
         let store = UserStore(fileURL: file)
         XCTAssertTrue(store.saved.isEmpty)
         XCTAssertTrue(FileManager.default.fileExists(atPath: directory.appendingPathComponent("user-data.corrupt.json").path))
+    }
+}
+
+/// A flag a test flips while the store's writer thread reads it.
+final class LockedFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: Bool
+
+    init(_ value: Bool) { stored = value }
+
+    var value: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return stored }
+        set { lock.lock(); stored = newValue; lock.unlock() }
     }
 }

@@ -22,6 +22,8 @@
 3. **First page after launch.** On the CI simulator WebKit takes 3–9 s to start its processes before the first request reaches the scheme handler. Expected well under a second on a device; if not, prewarm a web view at launch.
 4. **Signing, TestFlight, App Store processing.** No Apple account yet: no signed build, no upload checks (entitlements, privacy manifest validation, export compliance).
 
+5a. **Hard failures, tested only by injection:** a dying web content process reloads the page once, then shows „Zkusit znovu“ (unit-tested; a real WebContent crash on a phone is untested). A full phone: user data writes fail quietly and leave the old file whole, an index build that fills the phone waits with „Málo místa“ (injected write failures). Files over 50 MB are refused with „Soubor je na otevření v telefonu příliš velký.“
+
 ### Medium
 
 5. **Background index builds.** A running build gets `beginBackgroundTask` time, then stops cleanly (`Cancelled`) and resumes on the next start. Check on a device: build, lock the phone, unlock.

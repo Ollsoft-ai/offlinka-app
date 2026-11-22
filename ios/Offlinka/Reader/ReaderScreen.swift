@@ -103,6 +103,27 @@ private struct ReaderContent: View {
                     .accessibilityIdentifier("reader.back")
                 }
             }
+            .overlay {
+                if model.contentFailed {
+                    // The page's content process died twice: calm message instead of a reload loop.
+                    VStack(spacing: BrandSpace.l) {
+                        BrandIconView(icon: .warning, size: BrandSize.icon)
+                            .foregroundStyle(Color.brandWarnInk)
+                        Text(tr(.errorTitle))
+                            .brandText(.title)
+                            .foregroundStyle(Color.brandInk)
+                            .multilineTextAlignment(.center)
+                        Button(tr(.actionRetry)) {
+                            model.retryAfterContentFailure()
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .accessibilityIdentifier("reader.retry")
+                    }
+                    .padding(BrandSpace.xl)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.brandBg)
+                }
+            }
             .alert(tr(.readerExternalTitle), isPresented: externalLinkShown, presenting: model.externalLink) { url in
                 Button(tr(.readerCopyLink)) {
                     UIPasteboard.general.string = url.absoluteString

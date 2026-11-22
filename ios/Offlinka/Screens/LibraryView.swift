@@ -146,7 +146,8 @@ private struct DriveCard: View {
                         .brandText(.bodySmall)
                         .foregroundStyle(Color.brandOnHero2)
                 }
-                Text(tr(.libraryBooksCount, driveTiles.count) + ", " + BookCatalog.formatSize(totalBytes))
+                // Like Android: every book in the library (Home counts the same), all ZIM files of the drive.
+                Text(tr(.libraryBooksCount, app.shelf.tiles.count) + ", " + BookCatalog.formatSize(app.shelf.driveBytes))
                     .brandText(.bodySmall)
                     .foregroundStyle(Color.brandOnHero2)
             }
@@ -160,13 +161,6 @@ private struct DriveCard: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var driveTiles: [ShelfTile] {
-        app.shelf.tiles.filter { !$0.isBuiltin }
-    }
-
-    private var totalBytes: Int64 {
-        driveTiles.reduce(0) { $0 + ($1.entry?.sizeBytes ?? 0) }
-    }
 }
 
 /// Icon box, name, description and "month year, language, size"; info button for the details.

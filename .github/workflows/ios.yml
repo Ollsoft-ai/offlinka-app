@@ -544,6 +544,9 @@ jobs:
           lipo -info "$APP/Offlinka"
           # Test-only launch arguments must not ship.
           if strings "$APP/Offlinka" | grep -E -- '-(demo|fixture)-(drive|sizes|map-view|language|theme)'; then echo "::error::debug launch arguments in the Release binary"; exit 1; fi
+          # Nothing logs pages or searches in Release (DebugLog is debug-only), and no build-machine paths.
+          if strings "$APP/Offlinka" | grep -E 'scheme #|reader open|user data not saved'; then echo "::error::debug log text in the Release binary"; exit 1; fi
+          if strings "$APP/Offlinka" | grep -E '/Users/[^/]+/\.(cargo|rustup)'; then echo "::error::build-machine paths in the Release binary"; exit 1; fi
           {
             echo "### Unsigned Release archive"
             echo "- version: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist") ($(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist"))"

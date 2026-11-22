@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import WebKit
 
 /// Version, drive edition, privacy, licences, open-source notices, contact (design mockup `about`).
 @MainActor
@@ -161,10 +162,6 @@ private struct NoticesView: View {
         Component(name: "Archivo (The Archivo Project Authors)", licence: "SIL OFL 1.1", source: "github.com/Omnibus-Type/Archivo"),
     ]
 
-    private static func bundledText(_ name: String) -> String? {
-        Bundle.main.url(forResource: name, withExtension: "txt").flatMap { try? String(contentsOf: $0, encoding: .utf8) }
-    }
-
     var body: some View {
         List {
             Section {
@@ -193,18 +190,21 @@ private struct NoticesView: View {
             }
             .listRowBackground(Color.brandSurface)
 
-            // BSD-3-Clause asks binary distributions to reproduce the notice.
-            if let zstdLicence = Self.bundledText("zstd-LICENSE") {
-                Section {
-                    Text(verbatim: zstdLicence)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(Color.brandInk2)
-                        .textSelection(.enabled)
-                } header: {
-                    Text(verbatim: "Zstandard")
+            // MIT, BSD and Zlib ask binary distributions to reproduce the notice and the licence text.
+            Section {
+                NavigationLink {
+                    LicenceTextsView()
+                        .background(Color.brandBg.ignoresSafeArea())
+                        .navigationTitle(tr(.aboutLicenceTexts))
+                        .navigationBarTitleDisplayMode(.inline)
+                } label: {
+                    Text(tr(.aboutLicenceTexts))
+                        .brandText(.bodyStrong)
+                        .foregroundStyle(Color.brandInk)
                 }
-                .listRowBackground(Color.brandSurface)
+                .accessibilityIdentifier("about.licenceTexts")
             }
+            .listRowBackground(Color.brandSurface)
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
@@ -220,3 +220,19 @@ private struct NoticesView: View {
         .environment(AppModel.preview())
 }
 #endif
+
+/// The full licence texts of everything in the app (`ios/tools/gen-licences.py` → `licences.html`), read
+/// from the app bundle; the page follows light and dark mode.
+private struct LicenceTextsView: UIViewRepresentable {
+    func makeUIView(context: Context) -> WKWebView {
+        let webView = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        webView.isOpaque = false
+        webView.backgroundColor = .clear
+        if let url = Bundle.main.url(forResource: "licences", withExtension: "html") {
+            webView.loadFileURL(url, allowingReadAccessTo: url)
+        }
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {}
+}
