@@ -105,38 +105,46 @@ final class FixtureDriveUITests: XCTestCase {
         XCTAssertTrue(search.waitForExistence(timeout: 10))
         pause()
 
-        // 6. The map.
-        let map = tile(in: app, "maps_")
-        XCTAssertTrue(map.waitForExistence(timeout: 10), "no map tile")
-        map.tap()
+        // 6. The map, 7. a game, 8. the first-aid cards: from „Vyzkoušejte hned“ on Home (first run), else
+        // from the tiles and the first-aid chip.
+        openFromHome(tryLink: "map", tilePrefix: "maps_")
         XCTAssertTrue(app.buttons["reader.back"].firstMatch.waitForExistence(timeout: 60), "map did not open")
         pause(20)   // MapLibre draws its first tiles slowly on a CI simulator
         app.buttons["reader.back"].firstMatch.tap()
         XCTAssertTrue(search.waitForExistence(timeout: 10))
         pause()
 
-        // 7. The games.
-        let games = tile(in: app, "offlinka_mul_hry")
-        XCTAssertTrue(games.waitForExistence(timeout: 10), "no games tile")
-        games.tap()
+        openFromHome(tryLink: "game", tilePrefix: "offlinka_mul_hry")
         XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 60), "games did not open")
         pause(4)
         app.buttons["reader.back"].firstMatch.tap()
         XCTAssertTrue(search.waitForExistence(timeout: 10))
         pause()
 
-        // 8. The first-aid guides (the chip is in the header: Home is still scrolled down from the games tile).
-        let firstAid = app.buttons["home.firstAid"]
-        XCTAssertTrue(firstAid.waitForExistence(timeout: 10), "no first-aid link")
-        // isHittable is true even under the bar: just scroll to the top (a swipe at the top only bounces).
-        app.swipeDown()
-        app.swipeDown()
-        pause(1)
-        firstAid.tap()
+        let tryFirstAid = app.buttons["home.try.firstAid"]
+        if tryFirstAid.exists {
+            tryFirstAid.tap()
+        } else {
+            // The chip is in the header: Home may still be scrolled down from a tile.
+            app.swipeDown()
+            app.swipeDown()
+            app.buttons["home.firstAid"].tap()
+        }
         XCTAssertTrue(app.webViews.firstMatch.staticTexts.firstMatch.waitForExistence(timeout: 60), "guide did not load")
         pause(3)
         app.webViews.firstMatch.swipeUp()
         pause(3)
+    }
+
+    private func openFromHome(tryLink: String, tilePrefix: String) {
+        let link = app.buttons["home.try.\(tryLink)"]
+        if link.waitForExistence(timeout: 3) {
+            link.tap()
+            return
+        }
+        let tile = revealTile(in: app, tilePrefix)
+        XCTAssertTrue(tile.exists, "no \(tilePrefix) tile")
+        tile.tap()
     }
 
     private func pause(_ seconds: TimeInterval = 1.5) {
@@ -177,6 +185,17 @@ extension XCTestCase {
     /// A Home tile by the start of its book key (`maps_`, `wikipedia_`, `offlinka_mul_hry`).
     func tile(in app: XCUIApplication, _ prefix: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "tile.\(prefix)")).firstMatch
+    }
+
+    /// A Home tile, scrolled into existence first: the grid is lazy, so tiles below the fold are not there yet.
+    func revealTile(in app: XCUIApplication, _ prefix: String, swipes: Int = 6) -> XCUIElement {
+        let element = tile(in: app, prefix)
+        var left = swipes
+        while !element.waitForExistence(timeout: 2) && left > 0 {
+            app.swipeUp()
+            left -= 1
+        }
+        return element
     }
 
     /// The simulator's one-time keyboard tip („Speed up your typing…“) covers half the screen.

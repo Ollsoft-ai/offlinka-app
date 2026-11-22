@@ -65,8 +65,8 @@ final class StoreScreenshotTests: XCTestCase {
 
         // The map (MapLibre draws its tiles after the page loaded).
         app = launchApp(language: loc, theme: "light")
-        let map = tile(in: app, "maps_")
-        XCTAssertTrue(map.waitForExistence(timeout: 10), "[\(loc)] no map tile")
+        let map = revealTile(in: app, "maps_en_czech")
+        XCTAssertTrue(map.exists, "[\(loc)] no map tile")
         map.tap()
         // No UI query on the map: its accessibility tree can time out XCUITest while MapLibre loads.
         try capture("ScreenStatesTest_readerMap[\(loc)-light]", settle: 25)
@@ -91,8 +91,8 @@ final class StoreScreenshotTests: XCTestCase {
         app = launchApp(language: loc, theme: "dark")
         try capture("ScreensTest_home[\(loc)-dark]")
         // The Wikipedia with pictures (in English the text-only English one leads Home).
-        let wikipedia = tile(in: app, loc == "sk" ? "wikipedia_sk" : "wikipedia_cs")
-        XCTAssertTrue(wikipedia.waitForExistence(timeout: 10), "[\(loc)] no Wikipedia tile")
+        let wikipedia = revealTile(in: app, loc == "sk" ? "wikipedia_sk" : "wikipedia_cs")
+        XCTAssertTrue(wikipedia.exists, "[\(loc)] no Wikipedia tile")
         wikipedia.tap()
         XCTAssertTrue(app.webViews.firstMatch.staticTexts.firstMatch.waitForExistence(timeout: 60), "[\(loc)] dark article did not load")
         try capture("ScreensTest_reader[\(loc)-dark]", settle: 3)
