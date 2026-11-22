@@ -7,7 +7,7 @@
 - **102 unit tests pass** on the simulator, including `CoreEngineTests` on the real core (open, ranges, index build, cancel, `closeFile`) and `LocalizationTests` (every key in cs, sk, en from the compiled string catalog).
 - **Real core in the app** (`FixtureDriveUITests`, review sample drive: Czech Wikipedia mini + index, Slovak map, games): Connect → Home with the tiles → search „prvni pomoc“ → article → Back with the query kept.
 - **WKURLSchemeHandler**: pages, reader CSS/JS, fonts and images through `offlinka://`; internal links; external links show the offline notice. Reads take 0–60 ms.
-- **Bundled guides** open from inside the app bundle (stand in when the drive has none) and now get a search index like drive books.
+- **Bundled guides** open from inside the app bundle and get a search index like drive books. As on Android 0.3.1 they always stand in for the drive's copy, which still explains the Kiwix apps.
 - **Demo-drive smoke** (`SmokeUITests`): search, reader, save, Saved, Library, Settings, Slovak order, external link notice.
 - **Maps**: MapLibre (WebGL, web workers, tiles through `offlinka://`) draws the Slovak map in the simulator.
 - **Store screenshots** on iPhone 17 Pro Max, 17 Pro and iPad Pro 13" in cs, sk and en, on the review sample drive.

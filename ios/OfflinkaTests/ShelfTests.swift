@@ -157,8 +157,9 @@ final class ShelfTests: XCTestCase {
         _ = await shelf.load(scan: scan(list))
         await waitUntil("all open") { shelf.tiles.allSatisfy { $0.state == .open } }
         let old = try XCTUnwrap(shelf.content)
-        let oldBooks = old.openBooks.compactMap { $0.book as? FakeContentBook }
-        XCTAssertEqual(oldBooks.count, 5)
+        // The drive's books (the bundled guides stay open across drives).
+        let oldBooks = old.openBooks.filter { !old.isBuiltin($0.record.id) }.compactMap { $0.book as? FakeContentBook }
+        XCTAssertEqual(oldBooks.count, 4)
 
         var closedWhenPublished: [Bool] = []
         var published: ShelfContent?
@@ -170,7 +171,7 @@ final class ShelfTests: XCTestCase {
 
         XCTAssertNotNil(published)
         XCTAssertFalse(published === old)
-        XCTAssertEqual(closedWhenPublished, Array(repeating: false, count: 5))
+        XCTAssertEqual(closedWhenPublished, Array(repeating: false, count: 4))
         // Closed afterwards, off the main actor (closing waits for reads in progress).
         await waitUntil("old books closed") { oldBooks.allSatisfy(\.isClosed) && old.isRetired }
         // A request still in flight on the old books gets an I/O error (503 page), never a crash.
@@ -218,14 +219,25 @@ final class ShelfTests: XCTestCase {
         XCTAssertEqual(shelf.tiles.first { $0.id == "offlinka_cs_prirucky" }?.record?.hasIndex, true)
     }
 
-    func testDriveGuidesWinOverTheBundledCopy() async {
+    /// Like Android 0.3.1: the drive's guides (which still explain the Kiwix apps) are left out; the app's own stand in.
+    func testTheBundledGuidesAlwaysStandInForTheDrivesCopy() async {
         let list = books(indexed: true)
         let shelf = shelf(engine(list))
         _ = await shelf.load(scan: scan(list))
         await waitUntil("all open") { shelf.tiles.allSatisfy { $0.state == .open } }
         let guides = shelf.tiles.filter { $0.id == "offlinka_cs_prirucky" }
         XCTAssertEqual(guides.count, 1)
-        XCTAssertFalse(guides.first?.isBuiltin ?? true)
+        XCTAssertEqual(guides.first?.isBuiltin, true)
+        XCTAssertEqual(guides.first?.record?.folder, .app)
+    }
+
+    func testADriveWithOnlyTheGuidesOpensTheBundledOnes() async {
+        let list = books(indexed: true).filter { $0.record.name == "offlinka_cs_prirucky" }
+        let shelf = shelf(engine(list))
+        let result = await shelf.load(scan: scan(list))
+        XCTAssertEqual(result, .ready)
+        XCTAssertEqual(shelf.tiles.map(\.id), ["offlinka_cs_prirucky"])
+        XCTAssertEqual(shelf.tiles.first?.isBuiltin, true)
     }
 
     // MARK: - Search indexes
@@ -319,8 +331,11 @@ final class ShelfTests: XCTestCase {
         engine.setBuildDelay(2)
         let shelf = shelf(engine, indexes: true)
         _ = await shelf.load(scan: scan(list))
-        await waitUntil("building") { shelf.buildingBookId != nil && !shelf.indexQueue.isEmpty }
-        let records = shelf.tiles.compactMap(\.record)
+        // The bundled guides go first and show nothing (like Android); then the drive's books.
+        await waitUntil("building a drive book", timeout: 15) {
+            shelf.buildingBookId != nil && shelf.buildingBookId != "offlinka_cs_prirucky" && !shelf.indexQueue.isEmpty
+        }
+        let records = shelf.tiles.filter { !$0.isBuiltin }.compactMap(\.record)
         let building = try XCTUnwrap(records.first { $0.id == shelf.buildingBookId })
         guard case .building = shelf.indexPhase(of: building) else {
             return XCTFail("expected building, got \(String(describing: shelf.indexPhase(of: building)))")
@@ -345,7 +360,8 @@ final class ShelfTests: XCTestCase {
         _ = await shelf.load(scan: scan(list))
         await waitUntil("pass ended") { shelf.indexLowSpace && !shelf.isIndexing }
         XCTAssertTrue(engine.buildLog.isEmpty)
-        for record in shelf.tiles.compactMap(\.record) where !record.hasIndex {
+        for tile in shelf.tiles where !tile.isBuiltin {
+            guard let record = tile.record, !record.hasIndex else { continue }
             XCTAssertEqual(shelf.indexPhase(of: record), .lowSpace, record.id)
         }
     }

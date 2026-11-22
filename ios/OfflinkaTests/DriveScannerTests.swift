@@ -159,4 +159,12 @@ final class DriveScannerTests: XCTestCase {
         let enumerator = FileManager.default.enumerator(atPath: root.path)
         return (enumerator?.allObjects as? [String] ?? []).sorted()
     }
+
+    /// Like Android 0.3.1: a folder that only holds OFFLINKA (the review sample unzipped into Downloads).
+    func testAFolderOneLevelAboveTheDriveReadsTheDrive() throws {
+        try makeFile("OFFLINKA/Knihovna/offlinka_cs_prirucky.zim")
+        let scan = try DriveScanner().scan(root: root)
+        XCTAssertEqual(scan.books.map(\.url.lastPathComponent), ["offlinka_cs_prirucky.zim"])
+        XCTAssertEqual(scan.root.lastPathComponent, "OFFLINKA")
+    }
 }

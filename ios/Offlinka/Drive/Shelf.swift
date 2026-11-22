@@ -230,7 +230,18 @@ final class Shelf {
         guard gen == generation else { return .superseded }
 
         let ui = uiLanguage()
-        let ordered = scan.books.sorted { lhs, rhs in
+        // The app always shows its own guides (Android 0.3.1): the drive's copy still explains the Kiwix
+        // apps until the store launch, so it is left out of the shelf, Home, Library and search.
+        let driveBooks = scan.books.filter { BookKind.of(name: $0.name.baseKey) != .guides || builtinBook == nil }
+        if driveBooks.isEmpty, let builtinBook, let builtinGuides {
+            let onlyGuides = ShelfContent(library: engine.newLibrary(), coreVersion: engine.version, uiLanguage: ui)
+            onlyGuides.add(builtinBook, record: builtinGuides, builtin: true)
+            publish(onlyGuides, tiles: [ShelfTile(id: builtinGuides.id, entry: nil, record: builtinGuides, state: .open)],
+                    shadowed: scan.shadowed)
+            startIndexing()
+            return .ready
+        }
+        let ordered = driveBooks.sorted { lhs, rhs in
             let left = BookKind.of(name: lhs.name.baseKey).homeOrder(uiLanguage: ui)
             let right = BookKind.of(name: rhs.name.baseKey).homeOrder(uiLanguage: ui)
             return left != right ? left < right : lhs.name.baseKey < rhs.name.baseKey
@@ -261,7 +272,7 @@ final class Shelf {
         case .failure:
             newTiles[primaryIndex].state = .failed
         }
-        // Without guides on the drive, the copy bundled with the app stands in.
+        // The guides bundled with the app (the drive's copy is left out above).
         if let builtinBook, let builtinGuides, !ordered.contains(where: { BookKind.of(name: $0.name.baseKey) == .guides }) {
             newContent.add(builtinBook, record: builtinGuides, builtin: true)
             newTiles.append(ShelfTile(id: builtinGuides.id, entry: nil, record: builtinGuides, state: .open))

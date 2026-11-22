@@ -118,6 +118,11 @@ struct DriveScanner {
             found += zims(in: root, folder: pickedFolder ?? .library)
         }
 
+        if found.isEmpty, !sawDriveFolders,
+           let drive = children.first(where: { Self.sameName($0.lastPathComponent, "OFFLINKA") && isDirectory($0) }) {
+            // Picked one level too high (the review sample unzipped into Downloads): read OFFLINKA itself.
+            return try scan(root: drive)
+        }
         guard !found.isEmpty else { throw DriveScanProblem.noBooks(sawDriveFolders: sawDriveFolders) }
         return Self.choose(found, root: root)
     }

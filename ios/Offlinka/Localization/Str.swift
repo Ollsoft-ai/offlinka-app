@@ -255,4 +255,6 @@ enum Str: String, CaseIterable, Sendable {
     case tryMap = "try_map"
     case tryFirstAid = "try_first_aid"
     case tryGame = "try_game"
+    case aboutLicenceTexts = "about_licence_texts"
+    case readerFileTooBig = "reader_file_too_big"
 }
