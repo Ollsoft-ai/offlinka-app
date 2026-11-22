@@ -114,6 +114,6 @@ final class StoreScreenshotTests: XCTestCase {
     /// Lets animations and web content settle, then keeps the screen as `name`.
     private func capture(_ name: String, settle: TimeInterval = 1.5) throws {
         Thread.sleep(forTimeInterval: settle)
-        keepScreenshot(name)
+        keepScreenshot(name, required: true)
     }
 }

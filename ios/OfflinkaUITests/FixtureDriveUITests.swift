@@ -207,10 +207,20 @@ extension XCTestCase {
     }
 
     /// A full-resolution PNG screenshot kept in the result bundle under `name` (also when the test passes).
-    func keepScreenshot(_ name: String) {
-        let png = XCUIScreen.main.screenshot().pngRepresentation
-        let attachment = XCTAttachment(uniformTypeIdentifier: "public.png", name: name, payload: png, userInfo: nil)
-        attachment.lifetime = .keepAlways
-        add(attachment)
+    /// Diagnostic shots may fail without failing the test: a busy CI simulator sometimes times out taking one.
+    func keepScreenshot(_ name: String, required: Bool = false) {
+        let shoot = {
+            let png = XCUIScreen.main.screenshot().pngRepresentation
+            let attachment = XCTAttachment(uniformTypeIdentifier: "public.png", name: name, payload: png, userInfo: nil)
+            attachment.lifetime = .keepAlways
+            self.add(attachment)
+        }
+        if required {
+            shoot()
+        } else {
+            let options = XCTExpectedFailure.Options()
+            options.isStrict = false
+            XCTExpectFailure("a busy CI simulator sometimes times out taking a screenshot", options: options, failingBlock: shoot)
+        }
     }
 }
