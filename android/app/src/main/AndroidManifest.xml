@@ -33,6 +33,14 @@
                 android:resource="@xml/shortcuts" />
         </activity>
 
+        <!-- All pages come from the drive: the WebView sends no usage metrics and makes no Safe Browsing lookups. -->
+        <meta-data
+            android:name="android.webkit.WebView.MetricsOptOut"
+            android:value="true" />
+        <meta-data
+            android:name="android.webkit.WebView.EnableSafeBrowsing"
+            android:value="false" />
+
         <!-- PDFs from the guides are copied to the app cache and shown in a PDF viewer. -->
         <provider
             android:name="androidx.core.content.FileProvider"

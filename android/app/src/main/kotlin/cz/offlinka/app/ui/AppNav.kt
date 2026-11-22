@@ -11,20 +11,28 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -35,12 +43,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.dialog
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.DialogWindowProvider
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.runtime.SideEffect
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.dialog
 import androidx.navigation.navArgument
 import cz.offlinka.app.AppGraph
 import cz.offlinka.app.BuildConfig
@@ -205,6 +209,8 @@ fun AppNavHost(
                     onBack = { nav.popBackStack() },
                     // A plain browser link: the app itself still has no INTERNET permission.
                     onPrivacy = { url -> openInBrowser(context, url) },
+                    // Licence texts ship inside the app (assets/reader/licences.html), shown in the reader.
+                    onLicences = { openReader(ReaderUrls.asset("licences.html")) },
                 )
             }
             dialog(
@@ -320,6 +326,7 @@ private fun ReaderDestination(graph: AppGraph, entry: NavBackStackEntry, nav: Na
     val removedMsg = stringResource(R.string.reader_removed_toast)
     val copiedMsg = stringResource(R.string.reader_link_copied)
     val cannotOpen = stringResource(R.string.error_unsupported)
+    val tooBig = stringResource(R.string.reader_file_too_big)
 
     // First visit of this entry: load its URL (unless the WebView already restored a page after recreation).
     LaunchedEffect(entry.id) {
@@ -346,6 +353,7 @@ private fun ReaderDestination(graph: AppGraph, entry: NavBackStackEntry, nav: Na
             when (e) {
                 is ReaderEvent.External -> external.value = e.url
                 ReaderEvent.CannotOpenFile -> snackbar.showSnackbar(cannotOpen)
+                ReaderEvent.FileTooBig -> snackbar.showSnackbar(tooBig)
             }
         }
     }
@@ -368,6 +376,8 @@ private fun ReaderDestination(graph: AppGraph, entry: NavBackStackEntry, nav: Na
             showTextPanel = panel,
             externalLink = external.value,
             isApp = article.isApp,
+            // Pages that are not a book's (the licence texts) cannot be saved.
+            canSave = article.book != null,
             showTitle = page.titleInBar,
             contents = toc.value,
             isMap = article.book?.kind == cz.offlinka.ui.model.BookKind.MAPS,
@@ -414,16 +424,7 @@ private fun ReaderDestination(graph: AppGraph, entry: NavBackStackEntry, nav: Na
         },
         snackbarHostState = snackbar,
     ) {
-        AndroidView(
-            factory = { ctx ->
-                FrameLayout(ctx).apply {
-                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                    addView(controller.detachedWebView())
-                }
-            },
-            onRelease = { it.removeAllViews() },
-            modifier = Modifier.fillMaxSize().background(cz.offlinka.ui.theme.Offlinka.colors.bg),
-        )
+        ReaderHost(controller, Modifier.fillMaxSize().background(cz.offlinka.ui.theme.Offlinka.colors.bg))
     }
 }
 
@@ -474,16 +475,7 @@ fun GuidesReader(graph: AppGraph, controller: ReaderController, url: String?, on
         onDismissExternal = {},
         onCopyLink = {},
     ) {
-        AndroidView(
-            factory = { ctx ->
-                FrameLayout(ctx).apply {
-                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                    addView(controller.detachedWebView())
-                }
-            },
-            onRelease = { it.removeAllViews() },
-            modifier = Modifier.fillMaxSize(),
-        )
+        ReaderHost(controller, Modifier.fillMaxSize())
     }
 }
 
@@ -493,5 +485,43 @@ internal fun openInBrowser(context: Context, url: String) {
         context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     } catch (e: android.content.ActivityNotFoundException) {
         android.widget.Toast.makeText(context, url, android.widget.Toast.LENGTH_LONG).show()
+    }
+}
+
+/**
+ * Hosts the controller's WebView. A new WebView (its renderer died) is attached again ([key] on the
+ * controller's generation); when the system WebView cannot be created at all, a retry is shown instead.
+ */
+@Composable
+internal fun ReaderHost(controller: ReaderController, modifier: Modifier = Modifier) {
+    val generation by controller.generation.collectAsStateWithLifecycle()
+    val unavailable by controller.unavailable.collectAsStateWithLifecycle()
+    if (unavailable) {
+        androidx.compose.foundation.layout.Column(
+            modifier.padding(24.dp),
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+        ) {
+            androidx.compose.material3.Text(
+                stringResource(R.string.error_title),
+                style = cz.offlinka.ui.theme.Offlinka.type.subhead,
+                color = cz.offlinka.ui.theme.Offlinka.colors.ink,
+            )
+            androidx.compose.foundation.layout.Spacer(Modifier.height(16.dp))
+            cz.offlinka.ui.components.OutlineButton(stringResource(R.string.action_retry), controller::retry)
+        }
+        return
+    }
+    key(generation) {
+        AndroidView(
+            factory = { ctx ->
+                FrameLayout(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    controller.detachedWebView()?.let { addView(it) }
+                }
+            },
+            onRelease = { it.removeAllViews() },
+            modifier = modifier,
+        )
     }
 }

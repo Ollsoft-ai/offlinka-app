@@ -95,6 +95,21 @@ class AppTest {
         assertThat(excluded).containsAtLeast("root", "file", "database", "sharedpref")
     }
 
+    @Test fun `the WebView sends nothing to Google - no metrics, no Safe Browsing lookups`() {
+        val info = app.packageManager.getApplicationInfo(app.packageName, android.content.pm.PackageManager.GET_META_DATA)
+        assertThat(info.metaData.getBoolean("android.webkit.WebView.MetricsOptOut")).isTrue()
+        assertThat(info.metaData.getBoolean("android.webkit.WebView.EnableSafeBrowsing", true)).isFalse()
+    }
+
+    @Test fun `the full licence texts ship inside the app`() {
+        val page = app.assets.open("reader/licences.html").use { it.readBytes().toString(Charsets.UTF_8) }
+        assertThat(page).contains("libzstd")
+        assertThat(page).contains("BSD")
+        assertThat(page).contains("Mozilla Public License")
+        assertThat(page).contains("lzma-rs")
+        assertThat(page).contains("SIL OPEN FONT LICENSE")
+    }
+
     @Test fun `the app icon offers the two guides as shortcuts`() {
         val parser = app.resources.getXml(R.xml.shortcuts)
         val paths = mutableListOf<String>()

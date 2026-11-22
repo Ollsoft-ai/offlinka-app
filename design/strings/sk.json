@@ -71,7 +71,7 @@
   "book_medicine_desc": "Lekárske články, po anglicky",
   "book_maps_desc": "Od celej krajiny po ulice",
   "book_guides_desc": "Prvá pomoc, výpadok prúdu, návody (po česky)",
-  "book_games_desc": "2048 a dáma",
+  "book_games_desc": "10 hier: šach, dáma, sudoku, míny…",
   "book_wikibooks_desc": "České učebnice a príručky",
   "book_wikiquote_desc": "Citáty a príslovia (po česky)",
   "book_wikisource_desc": "Česká klasika v celých textoch",
@@ -261,5 +261,7 @@
   "try_title": "Vyskúšajte hneď",
   "try_map": "Prezrite si mapu",
   "try_first_aid": "Prvá pomoc",
-  "try_game": "Zahrajte si 2048"
+  "try_game": "Zahrajte si 2048",
+  "about_licence_texts": "Úplné znenia licencií",
+  "reader_file_too_big": "Súbor je na otvorenie v telefóne príliš veľký."
 }

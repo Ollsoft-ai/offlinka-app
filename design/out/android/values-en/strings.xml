@@ -72,7 +72,7 @@
     <string name="book_medicine_desc">Medical articles, in English</string>
     <string name="book_maps_desc">From the whole country down to streets</string>
     <string name="book_guides_desc">First aid, power cuts, how-tos (in Czech)</string>
-    <string name="book_games_desc">2048 and draughts</string>
+    <string name="book_games_desc">10 games: chess, draughts, sudoku…</string>
     <string name="book_wikibooks_desc">Czech textbooks and manuals</string>
     <string name="book_wikiquote_desc">Quotes and proverbs (in Czech)</string>
     <string name="book_wikisource_desc">Czech classics in full text</string>
@@ -259,4 +259,6 @@
     <string name="try_map">Explore the map</string>
     <string name="try_first_aid">First aid</string>
     <string name="try_game">Play 2048</string>
+    <string name="about_licence_texts">Full licence texts</string>
+    <string name="reader_file_too_big">This file is too big to open on the phone.</string>
 </resources>

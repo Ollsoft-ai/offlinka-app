@@ -27,8 +27,8 @@ android {
         applicationId = "cz.offlinka.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.3.1"
         // Instrumented tests run the real app with a folder as the drive (src/androidTest: FixtureApp, FolderDrive).
         testInstrumentationRunner = "cz.offlinka.app.FixtureRunner"
         // Only the ABIs the Rust core is built for (scripts/build-android-core.sh). JNA would otherwise add
@@ -40,7 +40,7 @@ android {
         // Czech is the default (values/), plus Slovak and English. Drops other locales from libraries.
         localeFilters += listOf("cs", "sk", "en")
         generateLocaleConfig = true
-        // The bundled guides book is opened through a file descriptor of the asset.
+        // The bundled guides book is stored uncompressed and copied once per app version to noBackupFilesDir.
         noCompress += "zim"
     }
 

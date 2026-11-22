@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import cz.offlinka.app.AppGraph
 import cz.offlinka.app.content.ContentException
 import cz.offlinka.app.data.RecentSearch
+import cz.offlinka.app.data.safeWrite
 import cz.offlinka.app.drive.ShelfState
 import cz.offlinka.ui.model.BookKind
 import cz.offlinka.ui.model.SearchGroup
@@ -84,14 +85,16 @@ class SearchViewModel(
         val t = q.trim()
         if (t.isEmpty()) return
         viewModelScope.launch {
-            graph.db.searches().add(RecentSearch(t, System.currentTimeMillis()))
-            graph.db.searches().trim(RECENT_KEPT)
+            safeWrite("searches") {
+                graph.db.searches().add(RecentSearch(t, System.currentTimeMillis()))
+                graph.db.searches().trim(RECENT_KEPT)
+            }
         }
     }
 
-    fun removeRecent(q: String) = viewModelScope.launch { graph.db.searches().remove(q) }
+    fun removeRecent(q: String) = viewModelScope.launch { safeWrite("searches") { graph.db.searches().remove(q) } }
 
-    fun clearRecent() = viewModelScope.launch { graph.db.searches().clear() }
+    fun clearRecent() = viewModelScope.launch { safeWrite("searches") { graph.db.searches().clear() } }
 
     /** The note's X: hides it (preparing goes on; stopping lives in book details). */
     fun dismissNote() = graph.dismissSearchNote()

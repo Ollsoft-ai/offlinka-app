@@ -134,3 +134,13 @@ Install: `adb install -r offlinka-<version>-universal.apk` (or from the drive's 
 - [ ] Nastavení → O aplikaci → "Zásady ochrany soukromí" opens the browser at offlinka.cz/aplikace/soukromi (sk: offlinka.sk/aplikacia/sukromie, en: offlinka.cz/en/app/privacy); "Aplikace Offlinka © 2026 Ollsoft s.r.o." at the bottom.
 - [ ] Without a drive, "Otevřít první pomoc": the guides' main page offers only První pomoc, Výpadek proudu and Licence; nothing mentions Kiwix or "Jak to otevřít v mobilu".
 - [ ] Settings → System → Backup (or `adb shell bmgr list packages`): Offlinka is not backed up.
+
+## Round 4 (0.3.1)
+
+- [ ] Real drive: Home → Nouzové příručky, and the První pomoc / Výpadek proudu chips: the app's own guides (main page lists only První pomoc, Výpadek proudu, Licence); nothing mentions Kiwix or "Jak to otevřít v mobilu". Search „kiwix“ finds nothing in the guides.
+- [ ] Kill the WebView renderer while a map or a game is open (`adb shell ps -A | grep sandboxed_process`, then `adb shell kill <pid>`; or Developer options → stop the WebView process): the app stays open and the same page loads again in a moment.
+- [ ] Fill the phone to under 5 MB free (copy a big video, check Settings → Storage), then open an article, save it, search, clear history: no crash (saving may silently not stick).
+- [ ] Open a PDF from the guides: it opens in a PDF viewer; a file over 50 MB says it is too big instead of opening.
+- [ ] App access text, followed literally on a clean phone: download the review sample zip, unzip it into Download (creates OFFLINKA), Vybrat flashku → Vybrat znovu → Download → OFFLINKA → Použít tuto složku → Povolit: Home with the books. Also picking Download itself works.
+- [ ] About → Open-source libraries → Úplná znění licencí: a page with the licence texts (libzstd BSD, MPL for UniFFI, OFL for the font).
+- [ ] Quick chips on Home and the search scope chip are easy to hit (48 dp); the pre-launch report shows no touch-target warning.

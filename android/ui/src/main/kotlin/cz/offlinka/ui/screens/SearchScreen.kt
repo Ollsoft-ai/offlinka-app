@@ -27,6 +27,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -261,6 +262,7 @@ private fun ScopeChip(book: BookUi, onClear: () -> Unit) {
     Row(
         Modifier
             .padding(start = 16.dp, end = 16.dp, top = 14.dp)
+            .minimumInteractiveComponentSize()
             .clip(RoundedCornerShape(6.dp))
             .background(c.surface)
             .border(1.5.dp, c.outline, RoundedCornerShape(6.dp))

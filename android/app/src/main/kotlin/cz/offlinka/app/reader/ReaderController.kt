@@ -11,6 +11,7 @@ import android.os.SystemClock
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -58,6 +59,8 @@ data class PageInfo(
 sealed interface ReaderEvent {
     data class External(val url: String) : ReaderEvent
     data object CannotOpenFile : ReaderEvent
+    /** A file bigger than [FileCopy.MAX_BYTES]: not copied out of the book. */
+    data object FileTooBig : ReaderEvent
 }
 
 /**
@@ -88,8 +91,35 @@ class ReaderController(
     private var web: WebView? = null
     private var pendingState: Bundle? = null
 
+    private val _generation = MutableStateFlow(0)
+    /** Bumps when the WebView was replaced (its renderer died): hosts re-attach the new one. */
+    val generation: StateFlow<Int> = _generation.asStateFlow()
+
+    private val _unavailable = MutableStateFlow(false)
+    /** The system WebView could not be created (missing, or being updated): the reader shows a retry. */
+    val unavailable: StateFlow<Boolean> = _unavailable.asStateFlow()
+
+    /** The reader's WebView, created on first use; null while the system WebView cannot be created. */
+    fun webViewOrNull(): WebView? = web ?: try {
+        create().also {
+            web = it
+            _unavailable.value = false
+        }
+    } catch (e: Exception) {
+        // MissingWebViewPackageException, AndroidRuntimeException during a WebView update, …
+        Log.w(TAG, "WebView not available: $e")
+        _unavailable.value = true
+        null
+    }
+
     val webView: WebView
-        get() = web ?: create().also { web = it }
+        get() = webViewOrNull() ?: throw IllegalStateException("WebView not available")
+
+    /** "Zkusit znovu" after the WebView could not be created. */
+    fun retry() {
+        _unavailable.value = false
+        _generation.value++
+    }
 
     /** Follows the shelf; cancelled in [destroy] so a finished activity is never kept alive by it. */
     internal val stateJob: Job = scope.launch {
@@ -118,7 +148,10 @@ class ReaderController(
 
     /** Loads [url]. [fresh] starts a new reading session: back then leaves the reader instead of going to older pages. */
     fun load(url: String, fresh: Boolean) {
-        val w = webView
+        val w = webViewOrNull() ?: run {
+            pendingUrl = url
+            return
+        }
         if (w.url == url) {
             if (fresh) w.clearHistory()
             return
@@ -257,7 +290,7 @@ class ReaderController(
     private var lastAutoReload = 0L
 
     /** Takes the WebView out of its old parent so a new screen can host it. */
-    fun detachedWebView(): WebView = webView.also { (it.parent as? ViewGroup)?.removeView(it) }
+    fun detachedWebView(): WebView? = webViewOrNull()?.also { (it.parent as? ViewGroup)?.removeView(it) }
 
     fun destroy() {
         stateJob.cancel()
@@ -447,7 +480,27 @@ class ReaderController(
         }
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceErrorCompat) {
-            Log.i(TAG, "load error ${request.url}")
+            // No article URLs in the log: only which book.
+            Log.i(TAG, "load error in ${bookOf(request.url.toString()) ?: "-"}")
+        }
+
+        /**
+         * The renderer process crashed or was killed for memory (a big map, a long list page on a small
+         * phone). Without this the whole app would be killed with it: drop the dead view, create a new
+         * one on the same page and let the host re-attach it.
+         */
+        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+            Log.w(TAG, "renderer gone, crashed=${detail.didCrash()}")
+            if (view === web) {
+                val url = view.url ?: _page.value.url
+                (view.parent as? ViewGroup)?.removeView(view)
+                web = null
+                pendingState = null
+                pendingUrl = url?.takeIf { ReaderUrls.isOurs(it) }
+                _generation.value++
+            }
+            runCatching { view.destroy() }
+            return true
         }
     }
 
@@ -475,17 +528,15 @@ class ReaderController(
     private fun openFile(url: String, mime: String?) {
         val target = ReaderUrls.parse(url) ?: return
         scope.launch {
+            var tooBig = false
             val file = withContext(Dispatchers.IO) {
                 runCatching {
                     val book = shelf.servedBooks()[target.bookId] ?: return@runCatching null
-                    val res = book.content.get(target.path)
-                    val dir = File(context.cacheDir, "shared").apply { mkdirs() }
-                    dir.listFiles()?.forEach { it.delete() }
-                    File(dir, target.path.substringAfterLast('/').ifBlank { "soubor" }).apply { writeBytes(res.data) }
+                    FileCopy.toCache(book.content, target.path, File(context.cacheDir, "shared")).also { tooBig = it == null }
                 }.getOrNull()
             }
             if (file == null) {
-                _events.tryEmit(ReaderEvent.CannotOpenFile)
+                _events.tryEmit(if (tooBig) ReaderEvent.FileTooBig else ReaderEvent.CannotOpenFile)
                 return@launch
             }
             val uri: Uri = FileProvider.getUriForFile(context, context.packageName + ".files", file)

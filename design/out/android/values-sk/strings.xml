@@ -72,7 +72,7 @@
     <string name="book_medicine_desc">Lekárske články, po anglicky</string>
     <string name="book_maps_desc">Od celej krajiny po ulice</string>
     <string name="book_guides_desc">Prvá pomoc, výpadok prúdu, návody (po česky)</string>
-    <string name="book_games_desc">2048 a dáma</string>
+    <string name="book_games_desc">10 hier: šach, dáma, sudoku, míny…</string>
     <string name="book_wikibooks_desc">České učebnice a príručky</string>
     <string name="book_wikiquote_desc">Citáty a príslovia (po česky)</string>
     <string name="book_wikisource_desc">Česká klasika v celých textoch</string>
@@ -263,4 +263,6 @@
     <string name="try_map">Prezrite si mapu</string>
     <string name="try_first_aid">Prvá pomoc</string>
     <string name="try_game">Zahrajte si 2048</string>
+    <string name="about_licence_texts">Úplné znenia licencií</string>
+    <string name="reader_file_too_big">Súbor je na otvorenie v telefóne príliš veľký.</string>
 </resources>

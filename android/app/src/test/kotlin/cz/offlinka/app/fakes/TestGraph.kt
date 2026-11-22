@@ -49,6 +49,8 @@ class TestGraph(context: Context, scope: CoroutineScope) {
         settings = Settings(context.getSharedPreferences("test-settings", Context.MODE_PRIVATE).also { it.edit().clear().commit() }, locales),
         scope = scope,
         indexDir = null,
+        // Like the app: its own guides edition, never the drive's.
+        builtinGuidesPath = { bundledGuidesFile().path },
     )
     val tree = drives.add(
         "content://com.android.externalstorage.documents/tree/1234-ABCD%3A", "OFFLINKA",
@@ -66,3 +68,7 @@ class TestGraph(context: Context, scope: CoroutineScope) {
         }
     }
 }
+
+/** A file named like the guides bundled in the APK (FakeContentSource opens books by file name). */
+fun bundledGuidesFile(): java.io.File =
+    java.io.File(java.nio.file.Files.createTempDirectory("bundled").toFile(), "offlinka_cs_prirucky.zim").apply { writeText("zim") }

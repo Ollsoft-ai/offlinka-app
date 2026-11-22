@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import cz.offlinka.app.AppGraph
 import cz.offlinka.app.data.HistoryEntry
 import cz.offlinka.app.data.SavedArticle
+import cz.offlinka.app.data.safeWrite
 import cz.offlinka.app.drive.ShelfState
 import cz.offlinka.app.reader.ReaderUrls
 import cz.offlinka.ui.model.AppLanguage
@@ -189,15 +190,15 @@ class SavedViewModel(private val graph: AppGraph) : ViewModel() {
 
     fun setTab(t: SavedTab) { tab.value = t }
 
-    fun removeSaved(ref: ArticleRef) = viewModelScope.launch { graph.db.saved().remove(ref.bookId, ref.path) }
+    fun removeSaved(ref: ArticleRef) = viewModelScope.launch { safeWrite("saved") { graph.db.saved().remove(ref.bookId, ref.path) } }
 
     fun restoreSaved(ref: ArticleRef) = viewModelScope.launch {
-        graph.db.saved().save(SavedArticle(ref.bookId, ref.path, ref.title, ref.time))
+        safeWrite("saved") { graph.db.saved().save(SavedArticle(ref.bookId, ref.path, ref.title, ref.time)) }
     }
 
-    fun removeHistory(ref: ArticleRef) = viewModelScope.launch { graph.db.history().remove(ref.bookId, ref.path) }
+    fun removeHistory(ref: ArticleRef) = viewModelScope.launch { safeWrite("history") { graph.db.history().remove(ref.bookId, ref.path) } }
 
-    fun clearHistory() = viewModelScope.launch { graph.db.history().clear() }
+    fun clearHistory() = viewModelScope.launch { safeWrite("history") { graph.db.history().clear() } }
 
     private companion object {
         const val HISTORY_SHOWN = 300
@@ -234,10 +235,10 @@ class SettingsViewModel(private val graph: AppGraph) : ViewModel() {
 
     fun setSaveHistory(on: Boolean) {
         graph.settings.setSaveHistory(on)
-        if (!on) viewModelScope.launch { graph.db.history().clear() }
+        if (!on) viewModelScope.launch { safeWrite("history") { graph.db.history().clear() } }
     }
 
-    fun clearSearches() = viewModelScope.launch { graph.db.searches().clear() }
+    fun clearSearches() = viewModelScope.launch { safeWrite("searches") { graph.db.searches().clear() } }
 
     fun forgetDrive(id: String) = graph.shelf.forget(id)
 }
@@ -245,14 +246,18 @@ class SettingsViewModel(private val graph: AppGraph) : ViewModel() {
 /** Saves or removes the article shown in the reader; records history. */
 class ArticleStore(private val graph: AppGraph) {
     suspend fun toggleSaved(bookId: String, path: String, title: String, saved: Boolean) {
-        if (saved) graph.db.saved().remove(bookId, path)
-        else graph.db.saved().save(SavedArticle(bookId, path, title, System.currentTimeMillis()))
+        safeWrite("saved") {
+            if (saved) graph.db.saved().remove(bookId, path)
+            else graph.db.saved().save(SavedArticle(bookId, path, title, System.currentTimeMillis()))
+        }
     }
 
     suspend fun recordVisit(bookId: String, path: String, title: String) {
         if (!graph.settings.values.value.saveHistory) return
-        graph.db.history().record(HistoryEntry(bookId, path, title, System.currentTimeMillis()))
-        graph.db.history().trim(HISTORY_KEPT)
+        safeWrite("history") {
+            graph.db.history().record(HistoryEntry(bookId, path, title, System.currentTimeMillis()))
+            graph.db.history().trim(HISTORY_KEPT)
+        }
     }
 
     private companion object {

@@ -90,8 +90,10 @@ class DriveFlowTest {
         connect()
         compose.onNodeWithText(str(R.string.book_guides)).assertExists()
         val ready = app.graph.shelf.state.value as ShelfState.Ready
-        assertEquals(listOf("offlinka_cs_prirucky"), ready.tiles.map { it.id })
-        assertTrue(ready.books.single().builtin.not())
+        assertEquals(setOf("offlinka_cs_prirucky", FolderDrive.BOOK_ID), ready.tiles.map { it.id }.toSet())
+        // The drive carries its own guides file (the edition that explains Kiwix): the app shows its own.
+        assertTrue(ready.byId.getValue("offlinka_cs_prirucky").builtin)
+        assertTrue(!ready.byId.getValue(FolderDrive.BOOK_ID).builtin)
     }
 
     @Test fun searchOpensTheArticleAndBackReturnsToTheSearch() {

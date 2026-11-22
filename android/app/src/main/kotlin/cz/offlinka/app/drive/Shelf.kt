@@ -207,6 +207,10 @@ class Shelf(
             runCatching {
                 val content = source.openPath(path)
                 val name = ZimName.parse(File(path).name)
+                // Search in the guides is accent-free once their (tiny) index is built on the phone.
+                indexDir?.let { File(it, indexFileName(File(path).name, File(path).length())) }?.takeIf { it.isFile }?.let { idx ->
+                    runCatching { content.attachIndexPath(idx.path) }.onFailure { idx.delete() }
+                }
                 val info = content.info
                 OpenBook(uiFor(name, File(path).name, File(path).length(), DriveFolder.PICKED, null).copy(
                     zimTitle = info.title, zimDescription = info.description, articleCount = info.articleCount,
@@ -300,7 +304,7 @@ class Shelf(
      * Called from WebView and search threads.
      */
     fun reportIoError(e: Throwable) {
-        Log.w(TAG, "read failed: $e")
+        Log.w(TAG, "read failed: ${e.javaClass.simpleName}")
         scope.launch {
             val current = ready ?: return@launch
             val alive = withContext(io) { reachableTrees() }
@@ -410,7 +414,9 @@ class Shelf(
             return
         }
         val ui = uiLanguage()
-        val choices = BookSelector.select(l.files, ui)
+        // The drive's guides edition still explains the Kiwix apps (founders' rule until the store launch):
+        // the app only ever shows its own bundled edition, so the drive's copy is left out everywhere.
+        val choices = BookSelector.select(l.files.filterNot { isDriveGuides(it.name) }, ui)
         if (choices.isEmpty()) {
             _state.value = ShelfState.Problem(ConnectProblem.WRONG_FOLDER)
             (before as? ShelfState.Ready)?.let { retire(it) }
@@ -432,8 +438,10 @@ class Shelf(
             }
         }.toMutableList()
         // Without guides on the drive, the copy bundled with the app stands in.
+        // Opened at start; tried again here when that failed (or the shelf was used without start()).
+        if (builtin == null) openBuiltin()
         val guides = builtin
-        if (guides != null && choices.none { it.name.kind == BookKind.GUIDES }) {
+        if (guides != null) {
             books += guides
             withContext(io) { library.add(guides.content) }
             tiles += guides.ui
@@ -451,7 +459,8 @@ class Shelf(
             tiles = tiles,
             books = books,
             replaced = replaced,
-            drives = drivesUi(trees, l, choices),
+            // A drive's book count still includes its own guides file (it is on the drive).
+            drives = drivesUi(trees, l, BookSelector.select(l.files, ui)),
             library = library,
             reachable = l.reachable.map { it.toString() }.toSet(),
             generation = gen,
@@ -546,7 +555,7 @@ class Shelf(
         if (indexDir == null) return emptyList()
         val asked = memory.indexRequests()
         return now.books
-            .filter { !it.builtin && !it.ui.hasIndex && it.ui.fileName !in failedIndex && it.id !in stoppedIndex }
+            .filter { !it.ui.hasIndex && it.ui.fileName !in failedIndex && it.id !in stoppedIndex }
             .mapNotNull { b ->
                 val p = BookSelector.indexPriority(ZimName.parse(b.ui.fileName), ui) ?: if (b.id in asked) 10 else null
                 p?.let { b to it }
@@ -574,7 +583,7 @@ class Shelf(
             updateQueue(lowSpace = false)
             while (isActive && gen == generation && !indexCancelled) {
                 val b = indexTargets(ui).firstOrNull() ?: break
-                val size = listing?.files?.firstOrNull { it.name == b.ui.fileName }?.size ?: b.ui.sizeBytes
+                val size = if (b.builtin) b.ui.sizeBytes else listing?.files?.firstOrNull { it.name == b.ui.fileName }?.size ?: b.ui.sizeBytes
                 val file = File(dir, indexFileName(b.ui.fileName, size))
                 if (!file.isFile) {
                     dir.mkdirs()
@@ -624,7 +633,9 @@ class Shelf(
                         failedIndex += b.ui.fileName
                     }.isSuccess
                 _indexing.value = null
-                if (attached && publishTile(gen, b.ui.copy(hasIndex = true), OpenBook(b.ui.copy(hasIndex = true), b.content, b.coreId))) {
+                val indexed = OpenBook(b.ui.copy(hasIndex = true), b.content, b.coreId, b.builtin)
+                if (attached && b.builtin) builtin = indexed
+                if (attached && publishTile(gen, indexed.ui, indexed)) {
                     _indexed.tryEmit(b.id)
                 }
                 updateQueue()
@@ -649,7 +660,8 @@ class Shelf(
                 .map { indexFileName(it.name, it.size) }.toSet()
             runCatching { memory.rememberIndexes(t.toString(), names) }
         }
-        val keep = l.trees.flatMap { memory.indexesOf(it.toString()).orEmpty() }.toSet()
+        val keep = l.trees.flatMap { memory.indexesOf(it.toString()).orEmpty() }.toSet() +
+            listOfNotNull(builtin?.let { indexFileName(it.ui.fileName, it.ui.sizeBytes) })
         dir.listFiles()?.forEach { f ->
             val stale = f.name.endsWith(".part") || (f.name.endsWith(".offidx") && f.name !in keep)
             if (stale && f.delete()) Log.i(TAG, "removed index ${f.name}")
@@ -687,13 +699,22 @@ class Shelf(
                 runCatching { drives.volumeLabel(tree) }.getOrNull() ?: DEFAULT_LABEL
             }
             labels += label
-            val root = try {
+            val picked = try {
                 drives.list(tree, null)
             } catch (e: IOException) {
                 Log.i(TAG, "drive $tree not reachable: $e")
                 return@forEachIndexed
             }
             reachable += tree
+            // A copy of the drive in phone storage (the review sample unzipped into Download) is picked one level
+            // too high: when the only relevant child is OFFLINKA, read that folder instead.
+            var root = picked
+            var nested: DocEntry? = null
+            repeat(2) { // Download/OFFLINKA, or OFFLINKA/OFFLINKA when the zip was unzipped into its own folder
+                val inner = DriveLayout.nestedDrive(root) ?: return@repeat
+                root = runCatching { drives.list(tree, inner.id) }.getOrNull() ?: return@repeat
+                nested = inner
+            }
             if (label != null) runCatching { memory.remember(tree.toString(), label) }
             root.firstOrNull { !it.isDir && it.name.equals("README.txt", ignoreCase = true) && it.size in 1..65_536 }?.let { readme ->
                 editions[index] = runCatching {
@@ -708,6 +729,7 @@ class Shelf(
             add(
                 root,
                 when {
+                    nested != null -> DriveFolder.PICKED
                     folderName.equals("Knihovna", true) -> DriveFolder.LIBRARY
                     folderName.equals("Telefon", true) -> DriveFolder.PHONE
                     else -> DriveFolder.PICKED
@@ -826,6 +848,10 @@ class Shelf(
          * could rank wrongly up to app 0.3.0). Files with other names are removed by the load clean-up.
          */
         const val INDEX_TAG = "v5b"
+
+        /** The drive's own guides book (or its index): never shown, the app has its own edition. */
+        fun isDriveGuides(fileName: String): Boolean =
+            ZimName.parse(fileName.substringBeforeLast('.') + ".zim").kind == BookKind.GUIDES
 
         /** Name of a search index built on the phone for a ZIM file (bound to that exact file and format). */
         fun indexFileName(fileName: String, size: Long): String =

@@ -18,6 +18,12 @@ class FolderDrive(context: Context) : DriveAccess {
     val root = File(context.filesDir, "fixture-drive")
     private val away = File(context.filesDir, "fixture-drive-unplugged")
 
+    companion object {
+        /** The drive's own book: the guides' pages under another name, so the shelf shows it as a drive book. */
+        const val BOOK = "wikibooks_cs_all_maxi-offlinka_2026-10.zim"
+        const val BOOK_ID = "wikibooks_cs_all"
+    }
+
     /** What the system folder picker hands back for this drive. */
     val tree: Uri = Uri.parse("content://cz.offlinka.fixture/tree/FIXTURE%3A")
 
@@ -27,7 +33,8 @@ class FolderDrive(context: Context) : DriveAccess {
     val gates: MutableMap<String, java.util.concurrent.CountDownLatch> = java.util.concurrent.ConcurrentHashMap()
 
     /**
-     * A drive like the real one: Knihovna with the guides book (the copy bundled in the APK) and a README.
+     * A drive like the real one: Knihovna with its own guides book (which the app must never show: it has
+     * its own edition), a book of its own ([BOOK], the guides' pages under a Wikibooks name) and a README.
      * [alsoAs]: more books, copies of the guides under other file names (another book id on the shelf).
      */
     fun prepare(context: Context, alsoAs: List<String> = emptyList()) {
@@ -39,7 +46,7 @@ class FolderDrive(context: Context) : DriveAccess {
         context.assets.open(OfflinkaApp.BUNDLED_GUIDES).use { input ->
             File(root, "Knihovna/${OfflinkaApp.BUNDLED_GUIDES}").outputStream().use { input.copyTo(it) }
         }
-        alsoAs.forEach { name -> File(root, "Knihovna/${OfflinkaApp.BUNDLED_GUIDES}").copyTo(File(root, "Knihovna/$name")) }
+        (listOf(BOOK) + alsoAs).forEach { name -> File(root, "Knihovna/${OfflinkaApp.BUNDLED_GUIDES}").copyTo(File(root, "Knihovna/$name")) }
         File(root, "README.txt").writeText("Offlinka\nStav obsahu (edice listopad 2026)\n")
         granted = false
     }

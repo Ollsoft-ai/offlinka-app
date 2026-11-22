@@ -16,6 +16,8 @@ source "$ROOT/scripts/lib-lock.sh"
 OUT="${OUT:-$ROOT/android/app/src/main/jniLibs}"
 mkdir -p "$OUT"
 cd "$ROOT/core"
+# No build-machine paths in the shipped library (panic messages name source files): map them to neutral ones.
+export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME/.cargo/registry/src=/cargo --remap-path-prefix=$HOME/.cargo=/cargo --remap-path-prefix=$HOME/.rustup=/rustup --remap-path-prefix=$ROOT=/offlinka"
 # minSdk 26 (Android 8)
 run cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 -P 26 -o "$OUT" \
   build --profile "$PROFILE" --lib -p offlinka-core -j 4

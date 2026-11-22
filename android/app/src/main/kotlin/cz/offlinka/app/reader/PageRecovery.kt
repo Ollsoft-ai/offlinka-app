@@ -64,3 +64,29 @@ object LinkPolicy {
     fun userInitiated(lastTouch: Long, now: Long, windowMillis: Long = 3_000): Boolean =
         lastTouch > 0 && now - lastTouch in 0..windowMillis
 }
+
+/** A file from a book handed to another app (PDF viewer): copied to the app cache in chunks, never all in memory. */
+object FileCopy {
+    /** Bigger files are not opened: a phone with 2 GB would run out of memory or storage. */
+    const val MAX_BYTES = 50L * 1024 * 1024
+    private const val CHUNK = 1024 * 1024
+
+    /** The copy in [dir] (which holds only the last opened file), or null when the entry is too big. */
+    fun toCache(content: cz.offlinka.app.content.ContentBook, path: String, dir: java.io.File): java.io.File? {
+        val length = content.contentLength(path)
+        if (length > MAX_BYTES) return null
+        dir.mkdirs()
+        dir.listFiles()?.forEach { it.delete() }
+        val out = java.io.File(dir, path.substringAfterLast('/').ifBlank { "soubor" })
+        out.outputStream().use { stream ->
+            var offset = 0L
+            while (offset < length) {
+                val chunk = content.getRange(path, offset, minOf(CHUNK.toLong(), length - offset).toInt())
+                if (chunk.isEmpty()) break
+                stream.write(chunk)
+                offset += chunk.size
+            }
+        }
+        return out
+    }
+}

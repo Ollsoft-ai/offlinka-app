@@ -71,7 +71,7 @@
   "book_medicine_desc": "Medical articles, in English",
   "book_maps_desc": "From the whole country down to streets",
   "book_guides_desc": "First aid, power cuts, how-tos (in Czech)",
-  "book_games_desc": "2048 and draughts",
+  "book_games_desc": "10 games: chess, draughts, sudoku…",
   "book_wikibooks_desc": "Czech textbooks and manuals",
   "book_wikiquote_desc": "Quotes and proverbs (in Czech)",
   "book_wikisource_desc": "Czech classics in full text",
@@ -257,5 +257,7 @@
   "try_title": "Try it now",
   "try_map": "Explore the map",
   "try_first_aid": "First aid",
-  "try_game": "Play 2048"
+  "try_game": "Play 2048",
+  "about_licence_texts": "Full licence texts",
+  "reader_file_too_big": "This file is too big to open on the phone."
 }

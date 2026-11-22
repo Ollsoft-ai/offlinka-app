@@ -97,23 +97,23 @@ class ShelfRound3Test {
 
     @Test fun `a retry that finishes after the drive was pulled does not bring the old books back`() {
         val s = shelf(io = Dispatchers.IO)
-        source.failing += "offlinka_cs_prirucky.zim"
+        source.failing += "maps_en_czech-republic_2026-06.zim"
         val tree = drive()
         s.onPicked(tree)
         waitFor { (s.state.value as? ShelfState.Ready)?.opening == false }
         source.failing.clear()
         val gate = CountDownLatch(1)
-        source.gated["offlinka_cs_prirucky.zim"] = gate
-        s.retry("offlinka_cs_prirucky")
-        waitFor { ready(s).tiles.any { it.id == "offlinka_cs_prirucky" && it.state == BookState.OPENING } }
+        source.gated["maps_en_czech-republic_2026-06.zim"] = gate
+        s.retry("maps_en_czech-republic")
+        waitFor { ready(s).tiles.any { it.id == "maps_en_czech-republic" && it.state == BookState.OPENING } }
         // The file is open on the drive and the core is still reading it when the drive goes.
-        waitFor { "offlinka_cs_prirucky.zim" in source.waitingAtGate }
+        waitFor { "maps_en_czech-republic_2026-06.zim" in source.waitingAtGate }
         drives.drives.getValue(tree).plugged = false
         s.reportIoError(java.io.IOException("EIO"))
         waitFor { s.state.value == ShelfState.Unplugged }
         gate.countDown()
         // The late book is never published, and nobody holds it: it is destroyed.
-        waitFor { source.opened.any { it.meta.id == "offlinka_cs_prirucky" && it.destroyed } }
+        waitFor { source.opened.any { it.meta.id == "maps_en_czech-republic" && it.destroyed } }
         assertThat(s.state.value).isEqualTo(ShelfState.Unplugged)
         stopWatchers()
     }
@@ -157,8 +157,8 @@ class ShelfRound3Test {
     @Test fun `a drive pulled while the books open ends on the unplugged cover, not on failed tiles`() = runTest(dispatcher) {
         val s = shelf()
         val tree = drive()
-        // Opening the map (second) pulls the drive: the guides (third) then fail to open.
-        source.onOpen = { name -> if (name.startsWith("maps")) drives.drives.getValue(tree).plugged = false }
+        // Opening the Wikipedia (first) pulls the drive: the map then fails to open.
+        source.onOpen = { name -> if (name.startsWith("wikipedia")) drives.drives.getValue(tree).plugged = false }
         s.onPicked(tree)
         advanceUntilIdle()
         assertThat(s.state.value).isEqualTo(ShelfState.Unplugged)
@@ -192,10 +192,11 @@ class ShelfRound3Test {
         s.onPicked(phone)
         advanceUntilIdle()
         val r = ready(s)
+        // Two books on the drive (its guides count), though the app shows its own guides, not the drive's.
         assertThat(r.drives.map { it.name to it.bookCount }).containsExactly("OFFLINKA" to 2)
         assertThat(r.byId.getValue("wikipedia_cs_all").ui.driveName).isEqualTo("OFFLINKA")
         assertThat(r.byId.getValue("wikipedia_cs_all").ui.folder).isEqualTo("Knihovna")
-        assertThat(r.byId.getValue("offlinka_cs_prirucky").ui.folder).isEqualTo("Telefon")
+        assertThat(r.byId).doesNotContainKey("offlinka_cs_prirucky")
         // Forgetting it releases both folders.
         s.forget(r.drives.single().id)
         advanceUntilIdle()
@@ -272,7 +273,7 @@ class ShelfRound3Test {
         val s = shelf(indexDir = dir)
         s.onPicked(drive())
         advanceUntilIdle()
-        assertThat(source.built).containsExactly("offlinka_cs_prirucky", "maps_en_czech-republic").inOrder()
+        assertThat(source.built).containsExactly("maps_en_czech-republic")
         assertThat(s.state.value).isInstanceOf(ShelfState.Ready::class.java)
         assertThat(ready(s).byId.getValue("wikipedia_cs_all").ui.hasIndex).isFalse()
     }
@@ -284,7 +285,7 @@ class ShelfRound3Test {
         advanceUntilIdle()
         assertThat(source.built).isEmpty()
         assertThat(s.indexRun.value.lowSpace).isTrue()
-        assertThat(s.indexRun.value.queued).containsAtLeast("wikipedia_cs_all", "offlinka_cs_prirucky")
+        assertThat(s.indexRun.value.queued).containsAtLeast("wikipedia_cs_all", "maps_en_czech-republic")
     }
 
     // --- major #4: stopping a build forgets the request and the others go on
@@ -327,7 +328,7 @@ class ShelfRound3Test {
         s.onPicked(drive())
         advanceUntilIdle()
         runCurrent()
-        assertThat(got).containsAtLeast("offlinka_cs_prirucky", "wikipedia_cs_all")
+        assertThat(got).contains("wikipedia_cs_all")
         c.cancel()
     }
 

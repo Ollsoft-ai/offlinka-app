@@ -25,6 +25,21 @@ object DriveTrees {
         runCatching { DocumentsContract.getTreeDocumentId(tree) }.getOrNull() ?: tree.lastPathSegment.orEmpty()
 }
 
+/** How the drive's folders look, independent of how they are read. */
+object DriveLayout {
+    private fun isBookFolder(e: DocEntry) = e.isDir && (e.name.equals("Knihovna", true) || e.name.equals("Telefon", true))
+    private fun isBook(e: DocEntry) = !e.isDir && e.name.endsWith(".zim", true)
+
+    /**
+     * The OFFLINKA folder inside [entries] when that is the only relevant thing there: no books and no
+     * Knihovna/Telefon of its own (e.g. Download picked after unzipping the drive copy there).
+     */
+    fun nestedDrive(entries: List<DocEntry>): DocEntry? {
+        if (entries.any { isBookFolder(it) || isBook(it) }) return null
+        return entries.singleOrNull { it.isDir && it.name.equals("OFFLINKA", true) }
+    }
+}
+
 /** One entry of a drive folder. */
 data class DocEntry(val id: String, val name: String, val isDir: Boolean, val size: Long)
 

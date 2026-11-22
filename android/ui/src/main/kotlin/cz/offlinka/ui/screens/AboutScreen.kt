@@ -71,6 +71,8 @@ fun AboutScreen(
     onCopyEmail: (String) -> Unit = {},
     /** Opens the privacy policy (a web page in the browser) at the given URL. */
     onPrivacy: (String) -> Unit = {},
+    /** Opens the full licence texts of the open-source components (a page inside the app). */
+    onLicences: () -> Unit = {},
 ) {
     val c = Offlinka.colors
     val locale = currentLocale()
@@ -163,6 +165,18 @@ fun AboutScreen(
                             Text(n.name, style = Offlinka.type.label, color = c.ink)
                             Text(n.licence, style = Offlinka.type.caption, color = c.ink2)
                         }
+                    }
+                    GroupDivider()
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable(role = Role.Button, onClick = onLicences)
+                            .heightIn(min = 52.dp)
+                            .padding(start = 58.dp, end = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(stringResource(R.string.about_licence_texts), style = Offlinka.type.label, color = c.ink, modifier = Modifier.weight(1f))
+                        Icon(OfflinkaIcons.ChevronRight, null, tint = c.ink2, modifier = Modifier.size(22.dp))
                     }
                 }
             }

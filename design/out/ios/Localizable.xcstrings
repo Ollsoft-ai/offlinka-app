@@ -1641,19 +1641,19 @@
         "cs": {
           "stringUnit": {
             "state": "translated",
-            "value": "2048 a dáma"
+            "value": "10 her: šachy, dáma, sudoku, miny…"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "translated",
-            "value": "2048 a dáma"
+            "value": "10 hier: šach, dáma, sudoku, míny…"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "2048 and draughts"
+            "value": "10 games: chess, draughts, sudoku…"
           }
         }
       }
@@ -5914,6 +5914,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "Play 2048"
+          }
+        }
+      }
+    },
+    "about_licence_texts": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Úplná znění licencí"
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Úplné znenia licencií"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full licence texts"
+          }
+        }
+      }
+    },
+    "reader_file_too_big": {
+      "extractionState": "manual",
+      "localizations": {
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soubor je na otevření v telefonu příliš velký."
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Súbor je na otvorenie v telefóne príliš veľký."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This file is too big to open on the phone."
           }
         }
       }

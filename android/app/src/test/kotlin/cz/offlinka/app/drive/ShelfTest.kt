@@ -45,7 +45,10 @@ class ShelfTest {
     )
     private var ui = "cs"
     private val foreground = MutableStateFlow(true)
-    private fun shelf(indexDir: File? = null, builtin: (() -> String?)? = null) = Shelf(
+    /** Like the app: the guides always come from the copy bundled in the APK, never from the drive. */
+    private val bundled: () -> String? = { cz.offlinka.app.fakes.bundledGuidesFile().path }
+
+    private fun shelf(indexDir: File? = null, builtin: (() -> String?)? = bundled) = Shelf(
         drives, source, scope, io = dispatcher, pollMillis = 1_000, indexDir = indexDir,
         uiLanguage = { ui }, foreground = foreground, builtinGuides = builtin,
     )
@@ -89,7 +92,7 @@ class ShelfTest {
         val tree = drives.addWithContent(
             "content://ext/tree/1234-ABCD%3A", "OFFLINKA",
             mapOf("README.txt" to "﻿Offlinka\r\nStav obsahu (edice listopad 2026)\r\n".toByteArray()),
-            "Knihovna/offlinka_cs_prirucky.zim" to 393_612L,
+            "Knihovna/wikipedia_cs_all_maxi-offlinka_2026-09.zim" to 1L,
         )
         shelf.onPicked(tree)
         advanceUntilIdle()
@@ -172,7 +175,7 @@ class ShelfTest {
         val a = offlinkaDrive()
         shelf.onPicked(a)
         advanceUntilIdle()
-        val old = ready.books.map { it.content as FakeBook }
+        val old = ready.books.filter { !it.builtin }.map { it.content as FakeBook }
         var stateAtClose: ShelfState.Ready? = null
         old.first().onClose = { stateAtClose = shelf.state.value as? ShelfState.Ready }
         drives.add("content://ext/tree/9999-0000%3A", "MAPY", "Knihovna/maps_en_czech-republic_2026-06.zim" to 1L)
@@ -273,7 +276,6 @@ class ShelfTest {
 
     @Test fun `the UI-language Wikipedia opens first, the rest fill in`() = runTest(dispatcher) {
         val gate = CountDownLatch(1)
-        source.gated["offlinka_cs_prirucky.zim"] = gate
         source.gated["maps_en_czech-republic_2026-06.zim"] = gate
         ui = "sk"
         val tree = drives.add(
@@ -283,12 +285,14 @@ class ShelfTest {
             "Knihovna/offlinka_cs_prirucky.zim" to 1L,
             "Knihovna/maps_en_czech-republic_2026-06.zim" to 1L,
         )
-        val parallel = Shelf(drives, source, scope, io = kotlinx.coroutines.Dispatchers.IO, uiLanguage = { ui })
+        val parallel = Shelf(drives, source, scope, io = kotlinx.coroutines.Dispatchers.IO, uiLanguage = { ui }, builtinGuides = bundled)
         parallel.onPicked(tree)
         val first = waitFor(parallel) { it.byId.containsKey("wikipedia_sk_all") }
         assertThat(source.openedNames.first()).isEqualTo("wikipedia_sk_all_maxi-offlinka_2026-08.zim")
         assertThat(first.tiles.first().id).isEqualTo("wikipedia_sk_all")
-        assertThat(first.tiles.first { it.id == "offlinka_cs_prirucky" }.state).isEqualTo(BookState.OPENING)
+        assertThat(first.tiles.first { it.id == "maps_en_czech-republic" }.state).isEqualTo(BookState.OPENING)
+        // The guides are the app's own copy: there at once, never the drive's.
+        assertThat(first.byId.getValue("offlinka_cs_prirucky").builtin).isTrue()
         gate.countDown()
         val all = waitFor(parallel) { r -> r.tiles.all { it.state == BookState.OPEN } }
         // Slovak UI: the Czech map moves behind the Czech Wikipedia (the Slovak map would be second).
@@ -309,16 +313,17 @@ class ShelfTest {
     }
 
     @Test fun `a book that fails is a dimmed tile and can be retried`() = runTest(dispatcher) {
-        source.failing += "offlinka_cs_prirucky.zim"
-        shelf.onPicked(offlinkaDrive())
+        source.failing += "maps_en_czech-republic_2026-06.zim"
+        shelf.onPicked(drives.add("content://ext/tree/1234-ABCD%3A", "OFFLINKA",
+            "Knihovna/wikipedia_cs_all_maxi-offlinka_2026-09.zim" to 1L, "Knihovna/maps_en_czech-republic_2026-06.zim" to 2L))
         advanceUntilIdle()
-        assertThat(ready.tiles.first { it.id == "offlinka_cs_prirucky" }.state).isEqualTo(BookState.FAILED)
-        assertThat(ready.byId).doesNotContainKey("offlinka_cs_prirucky")
+        assertThat(ready.tiles.first { it.id == "maps_en_czech-republic" }.state).isEqualTo(BookState.FAILED)
+        assertThat(ready.byId).doesNotContainKey("maps_en_czech-republic")
         source.failing.clear()
-        shelf.retry("offlinka_cs_prirucky")
+        shelf.retry("maps_en_czech-republic")
         advanceUntilIdle()
-        assertThat(ready.tiles.first { it.id == "offlinka_cs_prirucky" }.state).isEqualTo(BookState.OPEN)
-        assertThat(ready.byId).containsKey("offlinka_cs_prirucky")
+        assertThat(ready.tiles.first { it.id == "maps_en_czech-republic" }.state).isEqualTo(BookState.OPEN)
+        assertThat(ready.byId).containsKey("maps_en_czech-republic")
     }
 
     @Test fun `a broken file falls back to the next edition`() = runTest(dispatcher) {
@@ -331,13 +336,14 @@ class ShelfTest {
     @Test fun `the search index next to a book is attached`() = runTest(dispatcher) {
         val tree = drives.add(
             "content://ext/tree/1234-ABCD%3A", "OFFLINKA",
-            "Knihovna/offlinka_cs_prirucky.zim" to 393_612L,
-            "Knihovna/offlinka_cs_prirucky.offidx" to 1_000L,
+            "Knihovna/wikipedia_cs_all_maxi-offlinka_2026-09.zim" to 1L,
+            "Knihovna/wikipedia_cs_all_maxi-offlinka_2026-09.offidx" to 1_000L,
         )
         shelf.onPicked(tree)
         advanceUntilIdle()
-        assertThat(ready.books.single().ui.hasIndex).isTrue()
-        assertThat((ready.books.single().content as FakeBook).attachedIndex).startsWith("fd:")
+        val wiki = ready.byId.getValue("wikipedia_cs_all")
+        assertThat(wiki.ui.hasIndex).isTrue()
+        assertThat((wiki.content as FakeBook).attachedIndex).startsWith("fd:")
     }
 
     @Test fun `missing indexes are built on the phone, most useful first, English top1m only on request`() = runTest(dispatcher) {
@@ -345,7 +351,7 @@ class ShelfTest {
         val memory = InMemoryDriveMemory()
         val s = Shelf(
             drives, source, scope, io = dispatcher, pollMillis = 1_000, indexDir = dir, memory = memory,
-            uiLanguage = { ui }, foreground = foreground,
+            uiLanguage = { ui }, foreground = foreground, builtinGuides = bundled,
         )
         val tree = drives.add(
             "content://ext/tree/1234-ABCD%3A", "OFFLINKA",
@@ -432,5 +438,58 @@ class ShelfTest {
         assertThat(s.servedBooks().keys).containsExactly("offlinka_cs_prirucky")
         // Stop the unplug watcher (it polls until the drive returns).
         scope.coroutineContext[kotlinx.coroutines.Job]!!.cancelChildren()
+    }
+
+    @Test fun `the drive's own guides are never shown, the app's edition is`() = runTest(dispatcher) {
+        // The drive still carries the guides edition that explains the Kiwix apps (until the store launch).
+        val tree = offlinkaDrive()
+        shelf.onPicked(tree)
+        advanceUntilIdle()
+        val guides = ready.byId.getValue("offlinka_cs_prirucky")
+        assertThat(guides.builtin).isTrue()
+        assertThat(ready.tiles.single { it.id == "offlinka_cs_prirucky" }.folder).isEmpty()
+        assertThat(ready.replaced.map { it.id }).doesNotContain("offlinka_cs_prirucky")
+        assertThat(ready.library.let { (it as cz.offlinka.app.fakes.FakeLibrary).books }).contains(guides.content)
+        // Never even opened from the drive.
+        assertThat(drives.openedFds.filter { it.endsWith("offlinka_cs_prirucky.zim") }).isEmpty()
+        // The drive's own count still includes the file it carries.
+        assertThat(ready.drives.single().bookCount).isEqualTo(2)
+    }
+
+    @Test fun `the drive copied into Download is found when Download itself is picked`() = runTest(dispatcher) {
+        val tree = drives.addWithContent(
+            "content://com.android.externalstorage.documents/tree/primary%3ADownload", "Download",
+            mapOf("OFFLINKA/README.txt" to "Offlinka\nStav obsahu (edice listopad 2026)\n".toByteArray()),
+            "OFFLINKA/Knihovna/wikipedia_cs_all_maxi-offlinka_2026-09.zim" to 10L,
+            "OFFLINKA/Telefon/wikipedia_cs_all_mini-offlinka_2026-09.zim" to 5L,
+        )
+        shelf.onPicked(tree)
+        advanceUntilIdle()
+        assertThat(ready.byId.getValue("wikipedia_cs_all").ui.folder).isEqualTo("Knihovna")
+        assertThat(ready.drives.single().edition).isEqualTo("2026-11")
+    }
+
+    @Test fun `a zip unzipped into its own OFFLINKA folder is found too`() = runTest(dispatcher) {
+        val tree = drives.add(
+            "content://com.android.externalstorage.documents/tree/primary%3ADownload%2FOFFLINKA", "OFFLINKA",
+            "OFFLINKA/Knihovna/wikipedia_cs_all_maxi-offlinka_2026-09.zim" to 10L,
+        )
+        shelf.onPicked(tree)
+        advanceUntilIdle()
+        assertThat(ready.byId).containsKey("wikipedia_cs_all")
+    }
+
+    @Test fun `a folder with other things next to OFFLINKA is still the wrong folder`() = runTest(dispatcher) {
+        val tree = drives.add(
+            "content://com.android.externalstorage.documents/tree/primary%3ADownload", "Download",
+            "OFFLINKA/Knihovna/wikipedia_cs_all_maxi-offlinka_2026-09.zim" to 10L,
+            "Fotky/OFFLINKA/x.zim" to 1L,
+            "film.zim" to 1L,
+        )
+        shelf.onPicked(tree)
+        advanceUntilIdle()
+        // A book right in the picked folder: that folder is the drive (its books are read as they are).
+        assertThat(ready.drives).hasSize(1)
+        assertThat(ready.byId).doesNotContainKey("wikipedia_cs_all")
     }
 }

@@ -34,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -288,13 +289,14 @@ private fun QuickLinks(state: HomeState, onQuickLink: (QuickLink) -> Unit) {
     }
 }
 
-/** Quick chip on the forest hero: 40 dp, 15 sp, tinted fill and a 3:1 outline. */
+/** Quick chip on the forest hero: 40 dp drawn, 48 dp to touch, 15 sp, tinted fill and a 3:1 outline. */
 @Composable
 private fun QuickChip(text: String, icon: ImageVector, onClick: () -> Unit) {
     val c = Offlinka.colors
     val shape = RoundedCornerShape(8.dp)
     Row(
         Modifier
+            .minimumInteractiveComponentSize()
             .clip(shape)
             .background(c.heroDeep.copy(alpha = 0.35f))
             .border(1.5.dp, c.onHero2.copy(alpha = 0.5f), shape)
