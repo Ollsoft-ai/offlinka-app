@@ -416,18 +416,22 @@ class Shelf(
         val ui = uiLanguage()
         // The drive's guides edition still explains the Kiwix apps (founders' rule until the store launch):
         // the app only ever shows its own bundled edition, so the drive's copy is left out everywhere.
-        val choices = BookSelector.select(l.files.filterNot { isDriveGuides(it.name) }, ui)
-        if (choices.isEmpty()) {
+        // A folder holding only the drive's guides is still the drive (it shows the app's guides then).
+        if (BookSelector.select(l.files, ui).isEmpty()) {
             _state.value = ShelfState.Problem(ConnectProblem.WRONG_FOLDER)
             (before as? ShelfState.Ready)?.let { retire(it) }
             return
         }
+        val choices = BookSelector.select(l.files.filterNot { isDriveGuides(it.name) }, ui)
         listing = l
         // The book people start with opens first; Home shows as soon as it is there.
-        val primaryIndex = choices.indexOfFirst { it.name.kind == BookKind.WIKIPEDIA && BookSelector.uiLanguage(it.name.language) == ui }
-            .takeIf { it >= 0 } ?: choices.indexOfFirst { it.name.kind == BookKind.WIKIPEDIA }.takeIf { it >= 0 } ?: 0
-        val primaryChoice = choices[primaryIndex]
-        val primary = withContext(io) { openChoice(primaryChoice, l) }
+        val primaryIndex = if (choices.isEmpty()) {
+            -1
+        } else {
+            choices.indexOfFirst { it.name.kind == BookKind.WIKIPEDIA && BookSelector.uiLanguage(it.name.language) == ui }
+                .takeIf { it >= 0 } ?: choices.indexOfFirst { it.name.kind == BookKind.WIKIPEDIA }.takeIf { it >= 0 } ?: 0
+        }
+        val primary = choices.getOrNull(primaryIndex)?.let { withContext(io) { openChoice(it, l) } }
         val library = withContext(io) { source.newLibrary().also { lib -> primary?.let { lib.add(it.content) } } }
         val books = listOfNotNull(primary).toMutableList()
         val tiles = choices.mapIndexed { i, c ->

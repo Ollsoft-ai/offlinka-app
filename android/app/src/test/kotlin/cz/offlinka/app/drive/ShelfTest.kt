@@ -492,4 +492,13 @@ class ShelfTest {
         assertThat(ready.drives).hasSize(1)
         assertThat(ready.byId).doesNotContainKey("wikipedia_cs_all")
     }
+
+    @Test fun `a folder with only the drive's guides is the drive, showing the app's guides`() = runTest(dispatcher) {
+        val tree = drives.add("content://ext/tree/1234-ABCD%3A", "OFFLINKA", "Knihovna/offlinka_cs_prirucky.zim" to 393_612L)
+        shelf.onPicked(tree)
+        advanceUntilIdle()
+        assertThat(ready.tiles.map { it.id }).containsExactly("offlinka_cs_prirucky")
+        assertThat(ready.byId.getValue("offlinka_cs_prirucky").builtin).isTrue()
+        assertThat(drives.openedFds).isEmpty()
+    }
 }

@@ -118,7 +118,8 @@ class DriveFlowTest {
     @Test fun aPageOfABookStillOpeningLoadsOnceTheBookIsThere() {
         scenario.close()
         Intents.release()
-        val slowBook = "wikivoyage_en_europe_maxi-offlinka_2026-09.zim"
+        // Ordered after the drive's own book on Home, so Home shows while this one is still opening.
+        val slowBook = "wikisource_cs_all_maxi-offlinka_2026-10.zim"
         app.drive.prepare(app, alsoAs = listOf(slowBook))
         val gate = java.util.concurrent.CountDownLatch(1)
         app.drive.gates[slowBook] = gate
@@ -130,8 +131,8 @@ class DriveFlowTest {
         scenario.onActivity { activity = it }
 
         connect()
-        val url = ReaderUrls.article("wikivoyage_en_europe", "prvni-pomoc.html")
-        assertTrue(app.graph.shelf.isPending("wikivoyage_en_europe"))
+        val url = ReaderUrls.article("wikisource_cs_all", "prvni-pomoc.html")
+        assertTrue(app.graph.shelf.isPending("wikisource_cs_all"))
         onMain { app.graph.openRequest.value = url }
         // The reader asked for the page while the book was opening: "come back later".
         compose.waitUntil(20_000) { app.graph.server.wasUnavailable(url) }
