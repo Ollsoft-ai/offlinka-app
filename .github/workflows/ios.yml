@@ -42,6 +42,10 @@ on:
         description: "Screenshot languages (comma-separated)"
         type: string
         default: cs,sk,en
+      shot_frames:
+        description: "Screenshot frames: empty = all, or some of home,search,map,guides,library,dark"
+        type: string
+        default: ""
       demo_video:
         description: "App Review demo video (simulator recording of the demo walk), after the tests"
         type: boolean
@@ -361,6 +365,7 @@ jobs:
           ONLY_SETS: ${{ inputs.shot_devices }}
           TEST_RUNNER_OFFLINKA_STORE_SHOTS: "1"
           TEST_RUNNER_OFFLINKA_STORE_LANGS: ${{ inputs.shot_langs || 'cs,sk,en' }}
+          TEST_RUNNER_OFFLINKA_STORE_FRAMES: ${{ inputs.shot_frames }}
           TEST_RUNNER_OFFLINKA_FIXTURE_DRIVE: ${{ github.workspace }}/store-shots/OFFLINKA
           TEST_RUNNER_OFFLINKA_FIXTURE_SIZES: ${{ github.workspace }}/store-shots/sizes.json
           # Prague's old town at street level (as in store/screenshots/frames.json)

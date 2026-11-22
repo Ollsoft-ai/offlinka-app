@@ -43,11 +43,33 @@ final class StoreScreenshotTests: XCTestCase {
         try captureLanguage(language)
     }
 
-    private func captureLanguage(_ loc: String) throws {
-        // Home, then search „cesky krumlov“ and the article.
-        app = launchApp(language: loc, theme: "light")
-        try capture("ScreensTest_home[\(loc)-light]")
+    /// Frames to take (`OFFLINKA_STORE_FRAMES`: home, search, map, guides, library, dark; empty = all).
+    /// „search“ also takes the article it opens.
+    private var frames: Set<String> {
+        let list = ProcessInfo.processInfo.environment["OFFLINKA_STORE_FRAMES"] ?? ""
+        let parsed = Set(list.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+        return parsed.isEmpty ? ["home", "search", "map", "guides", "library", "dark"] : parsed
+    }
 
+    private func captureLanguage(_ loc: String) throws {
+        let frames = self.frames
+        if frames.contains("home") || frames.contains("search") {
+            // Home, then search „cesky krumlov“ and the article.
+            app = launchApp(language: loc, theme: "light")
+            if frames.contains("home") {
+                try capture("ScreensTest_home[\(loc)-light]")
+            }
+            if frames.contains("search") {
+                try captureSearchAndArticle(loc)
+            }
+        }
+        if frames.contains("map") { try captureMap(loc) }
+        if frames.contains("guides") { try captureGuides(loc) }
+        if frames.contains("library") { try captureLibrary(loc) }
+        if frames.contains("dark") { try captureDark(loc) }
+    }
+
+    private func captureSearchAndArticle(_ loc: String) throws {
         app.buttons["home.search"].tap()
         let field = app.textFields["search.field"]
         XCTAssertTrue(field.waitForExistence(timeout: 10), "[\(loc)] search did not open")
@@ -62,7 +84,9 @@ final class StoreScreenshotTests: XCTestCase {
         hit.tap()
         XCTAssertTrue(app.webViews.firstMatch.staticTexts.firstMatch.waitForExistence(timeout: 60), "[\(loc)] article did not load")
         try capture("ScreensTest_reader[\(loc)-light]", settle: 3)
+    }
 
+    private func captureMap(_ loc: String) throws {
         // The map (MapLibre draws its tiles after the page loaded).
         app = launchApp(language: loc, theme: "light")
         let map = revealTile(in: app, "maps_en_czech")
@@ -70,7 +94,9 @@ final class StoreScreenshotTests: XCTestCase {
         map.tap()
         // No UI query on the map: its accessibility tree can time out XCUITest while MapLibre loads.
         try capture("ScreenStatesTest_readerMap[\(loc)-light]", settle: 25)
+    }
 
+    private func captureGuides(_ loc: String) throws {
         // First aid from the guides.
         app = launchApp(language: loc, theme: "light")
         let firstAid = app.buttons["home.firstAid"]
@@ -78,7 +104,9 @@ final class StoreScreenshotTests: XCTestCase {
         firstAid.tap()
         XCTAssertTrue(app.webViews.firstMatch.staticTexts.firstMatch.waitForExistence(timeout: 60), "[\(loc)] guide did not load")
         try capture("ScreenStatesTest_readerGuides[\(loc)-light]", settle: 3)
+    }
 
+    private func captureLibrary(_ loc: String) throws {
         // Library.
         app = launchApp(language: loc, theme: "light")
         let library = app.buttons[Self.library(loc)].firstMatch
@@ -86,7 +114,9 @@ final class StoreScreenshotTests: XCTestCase {
         library.tap()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Wiki")).firstMatch.waitForExistence(timeout: 10))
         try capture("ScreensTest_library[\(loc)-light]")
+    }
 
+    private func captureDark(_ loc: String) throws {
         // Dark: Home and an article with pictures (Karlštejn; in Slovak the mountains of the Vysoké Tatry).
         app = launchApp(language: loc, theme: "dark")
         try capture("ScreensTest_home[\(loc)-dark]")
