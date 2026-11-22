@@ -215,8 +215,13 @@ struct SchemeResponder: Sendable {
             // Book ids are ZIM names, the same across editions: never let WebKit reuse a page of
             // the previous drive. Revalidating costs one more call into the core's cluster cache.
             "Cache-Control": "no-cache",
+            "Content-Security-Policy": Self.contentSecurityPolicy,
         ]
     }
+
+    /// Pages may load only from the drive (`offlinka:`) and inline data: nothing remote, even if the content
+    /// rules could not be set up (a full phone). Maps use blob: workers, games inline scripts.
+    static let contentSecurityPolicy = "default-src offlinka: data: blob: 'unsafe-inline' 'unsafe-eval'"
 
     private func asset(_ path: String) -> SchemeReply {
         guard let data = assets.data(for: path) else {

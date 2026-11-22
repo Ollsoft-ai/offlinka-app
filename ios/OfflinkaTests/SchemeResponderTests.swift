@@ -196,6 +196,28 @@ final class SchemeResponderTests: XCTestCase {
         XCTAssertEqual(try reply("offlinka://wikipedia_cs_all/Praha").statusCode, 200)
     }
 
+    /// Every reply (page, redirect, error, range, app asset) carries a policy that allows nothing remote, so
+    /// pages stay offline even when the content rules could not be set up (a full phone).
+    func testEveryReplyForbidsRemoteLoads() throws {
+        responder.maxWholeLength = 1024
+        let replies = [
+            try reply("offlinka://wikipedia_cs_all/Praha"),
+            try reply("offlinka://wikipedia_cs_all/"),
+            try reply("offlinka://wikipedia_cs_all/Neexistující_článek"),
+            try reply("offlinka://wikipedia_de_all/Berlin"),
+            try reply("offlinka://wikipedia_cs_all/media/ukazka.bin", headers: ["Range": "bytes=0-9"]),
+            try reply("offlinka://wikipedia_cs_all/media/ukazka.bin", headers: ["Range": "bytes=99999-"]),
+            try reply("offlinka://wikipedia_cs_all/media/ukazka.bin"),
+            try reply("offlinka://\(OfflinkaURL.appHost)/missing.css"),
+        ]
+        for reply in replies {
+            let policy = try XCTUnwrap(reply.headers["Content-Security-Policy"], "status \(reply.statusCode)")
+            XCTAssertTrue(policy.hasPrefix("default-src offlinka: data: blob: "), policy)
+            XCTAssertFalse(policy.contains("http") || policy.contains("*") || policy.contains("ws:"), policy)
+        }
+        XCTAssertEqual(Set(replies.map(\.statusCode)), [200, 404, 206, 416, 413])
+    }
+
     func testReaderHeadLeavesPagesWithoutHeadAlone() {
         let head = ReaderHead(bookIds: [], theme: "system", scale: 1)
         let html = Data("<p>no head</p>".utf8)

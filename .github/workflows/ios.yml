@@ -122,8 +122,9 @@ jobs:
       - name: Committed bindings match the core
         run: |
           if ! git diff --quiet -- ios/Offlinka/Generated; then
-            echo "::warning::ios/Offlinka/Generated differs from what this core generates: run scripts/gen-bindings.sh and commit"
+            echo "::error::ios/Offlinka/Generated differs from what this core generates: run scripts/gen-bindings.sh and commit"
             git diff --stat -- ios/Offlinka/Generated
+            exit 1
           fi
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -563,6 +564,16 @@ jobs:
             echo "- SDK: $(/usr/libexec/PlistBuddy -c 'Print :DTSDKName' "$APP/Info.plist"), Xcode $(/usr/libexec/PlistBuddy -c 'Print :DTXcode' "$APP/Info.plist")"
             echo "- app: $(du -sh "$APP" | cut -f1), binary: $(du -h "$APP/Offlinka" | cut -f1)"
             # Required-reason APIs linked (compare with ios/Offlinka/Resources/PrivacyInfo.xcprivacy).
-            echo "- required-reason symbols: $(nm -u "$APP/Offlinka" | grep -E '^_(mach_absolute_time|stat|fstat|lstat|fstatat|statfs|fstatfs|getattrlist|getattrlistbulk|fgetattrlist|systemUptime)$' | tr '\n' ' ')"
+            echo "- required-reason symbols: $(nm -u "$APP/Offlinka" | grep -E '^_(mach_absolute_time|stat|fstat|lstat|fstatat|statfs|fstatfs|statvfs|fstatvfs|getattrlist|getattrlistat|getattrlistbulk|fgetattrlist|systemUptime|NSUserDefaults|NSURL(Volume|CreationDate|ContentModificationDate|ContentAccessDate|AttributeModificationDate)[A-Za-z]*|NSFileSystem[A-Za-z]*|NSFile(CreationDate|ModificationDate))$' | tr '\n' ' ')"
           } >> "$GITHUB_STEP_SUMMARY"
           cat "$GITHUB_STEP_SUMMARY"
+          # For a manual look at what ships: the archived Info.plist, the privacy manifest and the linked symbols.
+          mkdir -p build/archive-check
+          cp "$APP/Info.plist" "$APP/PrivacyInfo.xcprivacy" build/archive-check/
+          nm -u "$APP/Offlinka" > build/archive-check/nm-u.txt
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-archive-check
+          path: build/archive-check
+          retention-days: 30

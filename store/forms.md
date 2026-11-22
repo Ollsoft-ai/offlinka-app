@@ -43,7 +43,7 @@ Answers for Google Play Console and App Store Connect, checked against the app o
   - The app cannot transmit anything: no INTERNET permission. Settings, history, saved articles and search indexes stay in app storage.
   - WebView: maps and games run JavaScript from the drive, but without network access nothing leaves the device.
   - The shop link on Connect („Nemáte ještě Offlinku? Kupte ji zde“) and the privacy link only hand a fixed URL to the browser after a tap (`ACTION_VIEW`). The app sends nothing itself; the URL holds no user or device data, only `utm_source=app`, `utm_medium=android|ios` and `utm_campaign=connect`. The visit is the browser's and the shop's, under the shop's own policy, so the answer stays No.
-  - Android backup is off (`allowBackup=false`, decided 2026-11-21): nothing from the app goes into a Google backup. On iOS the settings, saved articles and history may be in the user's own iCloud backup; the app never sends or reads it; the privacy policy discloses it (point 3.4).
+  - Backup is off on both platforms: Android `allowBackup=false` (decided 2026-11-21); iOS excludes all app data (settings, saved articles, history, searches, page storage) from iCloud and computer backups (decided 2026-11-22). Nothing from the app goes into a Google or Apple backup.
 - Sources: https://support.google.com/googleplay/android-developer/answer/10787469
 
 ### Content rating (IARC questionnaire)
@@ -69,7 +69,7 @@ Answers for Google Play Console and App Store Connect, checked against the app o
 ### App Privacy
 
 - "Do you or your third-party partners collect data from this app?" **No, we do not collect data from this app.** Label: **Data Not Collected**.
-- Consistent with `ios/Offlinka/Resources/PrivacyInfo.xcprivacy`: `NSPrivacyTracking` false, no tracking domains, no collected data types. Required-reason APIs declared: file timestamp (3B52.1) and disk space (E174.1).
+- Consistent with `ios/Offlinka/Resources/PrivacyInfo.xcprivacy`: `NSPrivacyTracking` false, no tracking domains, no collected data types. Required-reason APIs declared: file timestamp (3B52.1 for the drive the user picked, C617.1 for the bundled guides and the search indexes in the app container) and disk space (E174.1).
 - Apple: "Data that is processed only on device is not 'collected'."
 - The shop link on Connect opens Safari with a fixed URL (`utm_medium=ios`) after a tap: no identifier, nothing sent by the app, so neither collection nor tracking.
 - **Privacy policy URL:** https://offlinka.cz/aplikace/soukromi (sk: https://offlinka.sk/aplikacia/sukromie, en: https://offlinka.cz/en/app/privacy). Already in `ios/fastlane/metadata/<locale>/privacy_url.txt`.
@@ -81,15 +81,16 @@ Answers for Google Play Console and App Store Connect, checked against the app o
 - **Capabilities:**
   - Unrestricted Web Access **No**: the web view shows only the drive's files; internet links are not opened.
   - User-Generated Content **No**. Social Media **No**. Messaging and Chat **No**. Shared Location **No**. Advertising **No**.
+- Answer what the drive really holds (guideline 2.3.6), the same content as the Play answers above: Wikipedia maxi with photos and Wikislovník (articles about words) mention drugs, crude words, wars and crimes, and show nude art and anatomy, all in an encyclopedic context and a small part of the library.
 - **Mature Themes:**
-  - Profanity or Crude Humor **None**. Horror/Fear Themes **None**.
-  - Alcohol, Tobacco, or Drug Use or References **None**. Dating and Relationships **None**.
+  - Profanity or Crude Humor **Infrequent** (Wikislovník entries for crude words). Horror/Fear Themes **None**.
+  - Alcohol, Tobacco, or Drug Use or References **Infrequent** (encyclopedic articles). Dating and Relationships **None**.
 - **Medical or Wellness:** Medical or Treatment Information **Infrequent** (first aid guides and the medical Wikipedia are a small part of the library). Health or Wellness Topics **None**.
-- **Sexuality or Nudity:** Mature or Suggestive Themes **Infrequent**. Sexual Content or Nudity **None**. Graphic Sexual Content and Nudity **None**.
-- **Violence:** Cartoon or Fantasy Violence **None**. Realistic Violence **None**. Prolonged Graphic or Sadistic Realistic Violence **None**. Guns or Other Weapons **Infrequent**.
+- **Sexuality or Nudity:** Mature or Suggestive Themes **Infrequent**. Sexual Content or Nudity **Infrequent** (nude art and anatomy photos in Wikipedia; decided 2026-11-22 to answer it honestly like Play's "nude art"). Graphic Sexual Content and Nudity **None**.
+- **Violence:** Cartoon or Fantasy Violence **None**. Realistic Violence **Infrequent** (photos and articles on wars and crimes). Prolonged Graphic or Sadistic Realistic Violence **None**. Guns or Other Weapons **Infrequent**.
 - **Chance-Based Activities:** Gambling **No**. Simulated Gambling **None**. Contests **None**. Loot Boxes **No**.
 - **Made for Kids:** No.
-- **Expected rating: 13+** (Infrequent Medical or Treatment Information). Benchmark: the official Wikipedia app is 9+ with Infrequent Mature or Suggestive Themes and Infrequent Guns or Other Weapons; we answer the encyclopedic content the same way and add the medical line.
+- **Expected rating: 13+, possibly 16+.** App Store Connect shows the rating as you answer: write down what it computes. Infrequent Sexual Content or Nudity can raise it to 16+; keep the honest answer anyway (a wrong one risks a rejection or a removal later). The game answers stay as on Play: no violence, no gambling.
 - If you answer Medical "Frequent", the rating becomes 16+. Do so only if the reviewer asks.
 - Sources: https://developer.apple.com/help/app-store-connect/reference/app-information/age-ratings-values-and-definitions/, https://developer.apple.com/news/?id=ks775ehf, https://developer.apple.com/news/?id=yxkh08us
 

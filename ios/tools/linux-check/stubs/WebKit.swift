@@ -12,11 +12,14 @@ public enum WKNavigationType: Int, Sendable { case linkActivated, formSubmitted,
 @MainActor open class WKFrameInfo { public var isMainFrame: Bool { true } }
 @MainActor open class WKNavigationAction { public var request: URLRequest { fatalError() }; public var targetFrame: WKFrameInfo? { nil }; public var navigationType: WKNavigationType { .other } }
 open class WKNavigation {}
+@MainActor open class WKBackForwardList { public init() {}; public var currentItem: WKBackForwardListItem? { nil } }
+@MainActor open class WKBackForwardListItem {}
 @MainActor open class WKWindowFeatures {}
 public final class WKContentRuleList: @unchecked Sendable {}
 @MainActor open class WKContentRuleListStore {
     public class func `default`() -> WKContentRuleListStore! { WKContentRuleListStore() }
     public func compileContentRuleList(forIdentifier: String!, encodedContentRuleList: String!) async throws -> WKContentRuleList? { nil }
+    public func lookUpContentRuleList(forIdentifier: String!, completionHandler: @escaping @MainActor @Sendable (WKContentRuleList?, (any Error)?) -> Void) {}
 }
 @MainActor open class WKUserContentController { public func add(_ list: WKContentRuleList) {} }
 @MainActor open class WKWebsiteDataStore { public class func `default`() -> WKWebsiteDataStore { WKWebsiteDataStore() } }
@@ -52,6 +55,7 @@ public final class WKContentRuleList: @unchecked Sendable {}
     public var findInteraction: UIFindInteraction? { nil }
     public var scrollView = UIScrollView()
     public var isInspectable = false
+    public var backForwardList = WKBackForwardList()
     @discardableResult public func loadFileURL(_ url: URL, allowingReadAccessTo readAccessURL: URL) -> WKNavigation? { nil }
     public weak var navigationDelegate: (any WKNavigationDelegate)?
     public weak var uiDelegate: (any WKUIDelegate)?

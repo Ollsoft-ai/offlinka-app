@@ -44,6 +44,11 @@ final class ReaderModel {
     @ObservationIgnored private var observations: [NSKeyValueObservation] = []
     @ObservationIgnored private var appearance: ReaderAppearance
     @ObservationIgnored private var initialTarget: ReaderTarget?
+    /// The page last asked for: reopened when the content process died before anything was on screen.
+    @ObservationIgnored private var lastTarget: ReaderTarget?
+    /// A page asked for before the offline rules settled; it loads as soon as they have.
+    @ObservationIgnored private var pendingTarget: ReaderTarget?
+    @ObservationIgnored private var rulesSettled = false
     @ObservationIgnored private var waitingForBook: String?
 
     init(target: ReaderTarget, engine: ReaderEngine, store: UserStore, appearance: ReaderAppearance) {
@@ -52,6 +57,8 @@ final class ReaderModel {
         self.appearance = appearance
         self.initialTarget = target
 
+        let rulesInConfiguration: Bool
+        if case .ready(.some(_)) = OfflineRules.state { rulesInConfiguration = true } else { rulesInConfiguration = false }
         let webView = WKWebView(frame: .zero, configuration: engine.makeConfiguration())
         webView.allowsBackForwardNavigationGestures = true
         webView.allowsLinkPreview = false
@@ -68,10 +75,16 @@ final class ReaderModel {
         coordinator.model = self
         webView.navigationDelegate = coordinator
         webView.uiDelegate = coordinator
-        if engine.contentRules == nil {
-            // Rules still compiling (first reader after launch): add them as soon as they exist.
-            engine.whenContentRulesReady { [weak webView] rules in
-                webView?.configuration.userContentController.add(rules)
+        // The first reader after launch can come before the rules: pages wait for them (see `open`).
+        OfflineRules.whenReady { [weak self] rules in
+            guard let self else { return }
+            if let rules, !rulesInConfiguration {
+                self.webView.configuration.userContentController.add(rules)
+            }
+            self.rulesSettled = true
+            if let pending = self.pendingTarget {
+                self.pendingTarget = nil
+                self.open(pending)
             }
         }
         observe()
@@ -133,7 +146,12 @@ final class ReaderModel {
 
     func open(_ target: ReaderTarget) {
         DebugLog.note("reader open \(target.bookId)/\(target.path ?? "")")
+        guard rulesSettled else {
+            pendingTarget = target
+            return
+        }
         guard let url = OfflinkaURL.make(bookId: target.bookId, path: target.path ?? "") else { return }
+        lastTarget = target
         webView.load(URLRequest(url: url))
     }
 
@@ -268,7 +286,7 @@ final class ReaderModel {
         switch recovery.processTerminated() {
         case .reload:
             DebugLog.note("reader: content process ended, reloading")
-            webView.reload()
+            reloadOrReopen()
         case .giveUp:
             DebugLog.note("reader: content process ended again, giving up")
             contentFailed = true
@@ -279,7 +297,16 @@ final class ReaderModel {
     func retryAfterContentFailure() {
         recovery.reset()
         contentFailed = false
-        webView.reload()
+        reloadOrReopen()
+    }
+
+    /// A process that died before the first page committed left nothing to reload: open that page again.
+    private func reloadOrReopen() {
+        if webView.backForwardList.currentItem == nil, let lastTarget {
+            open(lastTarget)
+        } else {
+            webView.reload()
+        }
     }
 
     // MARK: - Private

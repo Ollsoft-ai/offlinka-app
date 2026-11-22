@@ -80,6 +80,8 @@ final class AppModel {
     @ObservationIgnored private var watchTask: Task<Void, Never>?
     @ObservationIgnored private var openGeneration = 0
     @ObservationIgnored private var lastReopen = Date.distantPast
+    /// A restore of the remembered drive is running (off the main thread).
+    @ObservationIgnored private var restoring = false
     @ObservationIgnored private var isActive = true
     @ObservationIgnored private var toastTask: Task<Void, Never>?
     @ObservationIgnored private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
@@ -114,7 +116,7 @@ final class AppModel {
         shelf.indexRequests = { [store] in store.indexRequests }
         shelf.requestIndex = { [store] name in store.requestIndex(name) }
         shelf.removeIndexRequest = { [store] name in store.removeIndexRequest(name) }
-        shelf.driveReachable = { [access] in access.isCurrentReachable() }
+        shelf.driveReachable = { [access] in await access.checkCurrentReachable() ?? true }
         shelf.onIndexingChange = { [weak self] building in self?.updateIdleTimer(building: building) }
         shelf.onIndexed = { [weak self] record in self?.bookIndexed(record) }
         shelf.onContentChange = { [weak self] content in self?.contentChanged(content) }
@@ -143,6 +145,7 @@ final class AppModel {
             return demo(store: store)
         }
         #endif
+        UserStore.excludeAppDataFromBackup()
         return AppModel(
             store: UserStore(fileURL: UserStore.defaultFileURL()),
             access: DriveAccess(bookmarkFile: DriveAccess.defaultBookmarkFile()),
@@ -319,11 +322,14 @@ final class AppModel {
     /// still there (unplugged and plugged back between checks), reopen the books once.
     func reportDriveFailure() {
         guard phase == .ready, !isDemo else { return }
-        if !access.isCurrentReachable() {
-            driveDisappeared()
-        } else if Date().timeIntervalSince(lastReopen) > 10, let root = access.current {
-            lastReopen = Date()
-            open(root, mode: .restore)
+        Task {
+            guard let reachable = await access.checkCurrentReachable(), phase == .ready else { return }
+            if !reachable {
+                driveDisappeared()
+            } else if Date().timeIntervalSince(lastReopen) > 10, let root = access.current {
+                lastReopen = Date()
+                open(root, mode: .restore)
+            }
         }
     }
 
@@ -422,16 +428,25 @@ final class AppModel {
         engine = newEngine
     }
 
+    /// Off the main thread with a time limit (`DriveAccess.restore`): a stalled drive never freezes the launch.
     private func restoreRememberedDrive() {
-        switch access.restore() {
-        case .none:
-            phase = .connect(problem: nil)
-        case .unavailable:
-            shelf.retire()
-            phase = .unplugged
-            startWatching()
-        case .available(let url):
-            open(url, mode: .restore)
+        guard !restoring else { return }
+        restoring = true
+        let before = phase
+        Task {
+            let result = await access.restore()
+            restoring = false
+            guard phase == before else { return }   // a drive was picked meanwhile
+            switch result {
+            case .none:
+                phase = .connect(problem: nil)
+            case .unavailable:
+                shelf.retire()
+                phase = .unplugged
+                startWatching()
+            case .available(let url):
+                open(url, mode: .restore)
+            }
         }
     }
 
@@ -546,7 +561,11 @@ final class AppModel {
                 case .ready:
                     self.checkDrive()
                 case .unplugged:
-                    if case .available(let url) = self.access.restore() {
+                    guard !self.restoring else { continue }
+                    self.restoring = true
+                    let result = await self.access.restore()
+                    self.restoring = false
+                    if case .available(let url) = result, self.phase == .unplugged {
                         self.open(url, mode: .restore)
                     }
                 default:
@@ -559,8 +578,10 @@ final class AppModel {
 
     private func checkDrive() {
         guard phase == .ready, !isDemo else { return }
-        if !access.isCurrentReachable() {
-            driveDisappeared()
+        Task {
+            if await access.checkCurrentReachable() == false, phase == .ready {
+                driveDisappeared()
+            }
         }
     }
 }

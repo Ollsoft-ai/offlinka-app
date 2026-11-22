@@ -135,7 +135,7 @@ final class Shelf {
     @ObservationIgnored var requestIndex: (String) -> Void = { _ in }
     @ObservationIgnored var removeIndexRequest: (String) -> Void = { _ in }
     /// Is the drive still there? A read error on one book then only fails that book's index.
-    @ObservationIgnored var driveReachable: () -> Bool = { true }
+    @ObservationIgnored var driveReachable: () async -> Bool = { true }
     /// Building started or stopped (the app keeps the screen on meanwhile).
     @ObservationIgnored var onIndexingChange: ((Bool) -> Void)?
     /// A book got its search index during this run (Home: „Hledání je připravené“).
@@ -565,7 +565,7 @@ final class Shelf {
                     indexLowSpace = true
                     return
                 case .driveFailed:
-                    if driveReachable() {
+                    if await driveReachable() {
                         // A bad sector or a full phone: only this book fails, the others go on.
                         failedIndex.insert(target.record.fileName)
                         continue

@@ -99,7 +99,28 @@ final class UserStore {
         try data.write(to: url, options: .atomic)
     }
 
-    static func defaultFileURL() -> URL {
+    /// Keeps everything the app stores out of iCloud and computer backups, like Android (`allowBackup=false`):
+    /// saved articles, history, searches, settings and the drive bookmark (`Application Support/Offlinka`,
+    /// indexes included) and the pages' own storage, such as game scores (`Library/WebKit`). Then „everything
+    /// stays on this phone“ is literally true. Called at launch; a folder that is missing is created first so
+    /// the flag is on it before anything is written.
+    nonisolated static func excludeAppDataFromBackup(appSupport: URL? = nil, library: URL? = nil) {
+        let manager = FileManager.default
+        let support = appSupport ?? defaultFileURL().deletingLastPathComponent()
+        let webKit = (library ?? manager.urls(for: .libraryDirectory, in: .userDomainMask).first)?
+            .appendingPathComponent("WebKit", isDirectory: true)
+        for folder in [support, webKit].compactMap({ $0 }) {
+            try? manager.createDirectory(at: folder, withIntermediateDirectories: true)
+            #if canImport(Darwin)
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            var url = folder
+            try? url.setResourceValues(values)
+            #endif
+        }
+    }
+
+    nonisolated static func defaultFileURL() -> URL {
         let base = (try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true))
             ?? FileManager.default.temporaryDirectory
         return base.appendingPathComponent("Offlinka", isDirectory: true).appendingPathComponent("user-data.json")

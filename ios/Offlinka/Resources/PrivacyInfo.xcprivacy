@@ -11,12 +11,14 @@
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
 		<dict>
-			<!-- The Rust core (std File::metadata -> fstat) reads the size of the ZIM files on the drive the user picked. -->
+			<!-- The Rust core (std File::metadata -> fstat) reads the size of the ZIM files on the drive the user picked
+			     (3B52.1), and of the bundled guides and the search indexes in the app container (C617.1). -->
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
 				<string>3B52.1</string>
+				<string>C617.1</string>
 			</array>
 		</dict>
 		<dict>

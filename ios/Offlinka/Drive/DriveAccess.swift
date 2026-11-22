@@ -18,6 +18,8 @@ final class DriveAccess {
     private var accessing = false
     private var bookmark: Data?
     private let bookmarkFile: URL?
+    /// Calls into the drive (`DriveProbe`): one at a time, off the main thread, with a time limit.
+    private let gate = DriveProbe.Gate()
 
     /// `bookmarkFile` nil keeps the bookmark in memory only (demo mode, tests).
     init(bookmarkFile: URL?) {
@@ -54,33 +56,48 @@ final class DriveAccess {
         store(data)
     }
 
-    /// Resolves the remembered drive and opens its security scope.
-    func restore() -> Restore {
+    /// Resolves the remembered drive and opens its security scope, off the main thread. A drive that does not
+    /// answer within `DriveProbe.timeout` counts as unplugged (`.unavailable`); the watcher tries again.
+    func restore() async -> Restore {
         guard let bookmark else { return .none }
-        if let current, Self.isReachable(current) {
-            return .available(current)
+        if let current {
+            switch await DriveProbe.run(gate: gate, { Self.isReachable(current) }) {
+            case .value(true): return .available(current)
+            case .busy: return .unavailable
+            case .value(false), .timedOut: break
+            }
+            guard self.current == current else { return self.current.map { .available($0) } ?? .unavailable }
         }
         release()
-        var isStale = false
-        guard let url = try? URL(resolvingBookmarkData: bookmark, options: [], relativeTo: nil, bookmarkDataIsStale: &isStale) else {
+        let outcome = await DriveProbe.run(gate: gate, { Self.resolve(bookmark) }, late: { late in
+            // Answered after the time ran out: nobody uses this scope.
+            if late.started { late.url?.stopAccessingSecurityScopedResource() }
+        })
+        guard case .value(let resolved) = outcome, let url = resolved.url, resolved.reachable else {
             return .unavailable
         }
-        let started = url.startAccessingSecurityScopedResource()
-        guard Self.isReachable(url) else {
-            if started { url.stopAccessingSecurityScopedResource() }
-            return .unavailable
+        if let adopted = self.current {
+            // A drive was picked while this ran: keep that one.
+            if resolved.started { url.stopAccessingSecurityScopedResource() }
+            return .available(adopted)
         }
         current = url
-        accessing = started
-        if isStale, let fresh = try? url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil) {
+        accessing = resolved.started
+        if let fresh = resolved.freshBookmark, self.bookmark == bookmark {
             store(fresh)
         }
         return .available(url)
     }
 
-    /// Is the folder being read still there? (Cheap; polled while reading.)
-    func isCurrentReachable() -> Bool {
-        current.map(Self.isReachable) ?? false
+    /// Is the folder being read still there? Off the main thread; a drive that does not answer in time is gone.
+    /// nil: an earlier check is still waiting for the drive (it reports itself).
+    func checkCurrentReachable() async -> Bool? {
+        guard let current else { return false }
+        switch await DriveProbe.run(gate: gate, { Self.isReachable(current) }) {
+        case .value(let reachable): return reachable
+        case .timedOut: return false
+        case .busy: return nil
+        }
     }
 
     /// Ends the security scope (drive unplugged, another drive picked).
@@ -108,7 +125,29 @@ final class DriveAccess {
         try? data.write(to: bookmarkFile, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
 
-    private static func isReachable(_ url: URL) -> Bool {
+    private struct Resolved: Sendable {
+        var url: URL?
+        var started = false
+        var reachable = false
+        var freshBookmark: Data?
+    }
+
+    /// Bookmark → folder, security scope started, folder there? (Runs on a background thread.)
+    nonisolated private static func resolve(_ bookmark: Data) -> Resolved {
+        var isStale = false
+        guard let url = try? URL(resolvingBookmarkData: bookmark, options: [], relativeTo: nil, bookmarkDataIsStale: &isStale) else {
+            return Resolved()
+        }
+        let started = url.startAccessingSecurityScopedResource()
+        guard isReachable(url) else {
+            if started { url.stopAccessingSecurityScopedResource() }
+            return Resolved(url: url)
+        }
+        let fresh = isStale ? try? url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil) : nil
+        return Resolved(url: url, started: started, reachable: true, freshBookmark: fresh)
+    }
+
+    nonisolated private static func isReachable(_ url: URL) -> Bool {
         var isDirectory: ObjCBool = false
         return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
     }

@@ -23,6 +23,7 @@
 4. **Signing, TestFlight, App Store processing.** No Apple account yet: no signed build, no upload checks (entitlements, privacy manifest validation, export compliance).
 
 5a. **Hard failures, tested only by injection:** a dying web content process reloads the page once, then shows „Zkusit znovu“ (unit-tested; a real WebContent crash on a phone is untested). A full phone: user data writes fail quietly and leave the old file whole, an index build that fills the phone waits with „Málo místa“ (injected write failures). Files over 50 MB are refused with „Soubor je na otevření v telefonu příliš velký.“
+5b. **Offline guards and drive checks, untested on a device:** every reader reply carries `Content-Security-Policy: default-src offlinka: data: blob: …` (unit-tested; whether WebKit enforces CSP from scheme-handler replies is not checked), and the first page waits for the content rules. Drive checks (restore at launch and foreground, the 2 s watch) run off the main thread and count a drive that gives no answer in 4 s as unplugged; a really stalled USB drive was never tried. All app data is excluded from iCloud backups (flag unit-tested; a real backup not inspected).
 
 ### Medium
 

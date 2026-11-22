@@ -49,6 +49,26 @@ final class UserStoreTests: XCTestCase {
         XCTAssertEqual(reloaded.recentSearches, ["praha", "krkonose"])
     }
 
+    /// Saved articles, history, searches, settings and page storage stay out of iCloud backups (like Android).
+    func testAppDataIsKeptOutOfBackups() throws {
+        let support = directory.appendingPathComponent("Application Support/Offlinka", isDirectory: true)
+        let library = directory.appendingPathComponent("Library", isDirectory: true)
+        UserStore.excludeAppDataFromBackup(appSupport: support, library: library)
+        let webKit = library.appendingPathComponent("WebKit", isDirectory: true)
+        for folder in [support, webKit] {
+            var isDirectory: ObjCBool = false
+            XCTAssertTrue(FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory) && isDirectory.boolValue)
+            #if canImport(Darwin)
+            XCTAssertEqual(try folder.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup, true, folder.path)
+            #endif
+        }
+        // The store keeps writing there as before.
+        let store = UserStore(fileURL: support.appendingPathComponent("user-data.json"))
+        store.addRecentSearch("praha")
+        store.flush()
+        XCTAssertEqual(UserStore(fileURL: support.appendingPathComponent("user-data.json")).recentSearches, ["praha"])
+    }
+
     func testSavedToggleAndPersistence() {
         let store = UserStore(fileURL: file)
         XCTAssertTrue(store.toggleSaved(article("Praha")))

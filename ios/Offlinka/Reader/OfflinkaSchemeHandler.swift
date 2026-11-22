@@ -4,11 +4,18 @@ import WebKit
 /// Serves `offlinka://<bookId>/<path>` to WKWebView from the content source.
 ///
 /// WebKit calls `start`/`stop` on the main thread. The core read runs on `reads` (blocking reads from
-/// a slow drive must not hold Swift's cooperative threads) and the reply is delivered back on the
+/// a slow drive must not hold Swift's cooperative threads; at most 6 at once, so a map or a page with many
+/// pictures on a slow drive does not tie up dozens of threads) and the reply is delivered back on the
 /// main thread, unless WebKit stopped the task meanwhile (calling a stopped task raises an
 /// exception, so every task is tracked by a token).
 final class OfflinkaSchemeHandler: NSObject, WKURLSchemeHandler {
-    private static let reads = DispatchQueue(label: "cz.offlinka.reader-reads", qos: .userInitiated, attributes: .concurrent)
+    private static let reads: OperationQueue = {
+        let queue = OperationQueue()
+        queue.name = "cz.offlinka.reader-reads"
+        queue.qualityOfService = .userInitiated
+        queue.maxConcurrentOperationCount = 6
+        return queue
+    }()
 
     private let source: ContentSource
     private let assets: AppAssets
@@ -45,7 +52,7 @@ final class OfflinkaSchemeHandler: NSObject, WKURLSchemeHandler {
             let responder = SchemeResponder(source: source, assets: assets, texts: texts, readerHead: readerHead)
             let started = DispatchTime.now().uptimeNanoseconds
             DebugLog.note("scheme #\(token) start \(url.absoluteString)")
-            Self.reads.async { [weak self] in
+            Self.reads.addOperation { [weak self] in
                 let reply = responder.reply(to: request)
                 DebugLog.note("scheme #\(token) read \(reply.statusCode) \(reply.body.count) B in \(DebugLog.ms(since: started)) ms")
                 DispatchQueue.main.async {

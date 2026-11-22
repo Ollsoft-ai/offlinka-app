@@ -37,7 +37,7 @@ struct AboutView: View {
                     BrandIconView(icon: .lock, size: BrandSize.iconSmall)
                         .foregroundStyle(Color.brandInk2)
                 }
-                // The one link that leaves the app (Apple 5.1.1(i)): opens Safari.
+                // The privacy policy (Apple 5.1.1(i)) opens in Safari; the only other link out is the shop on Connect.
                 Button {
                     openURL(WebLinks.privacyPolicy())
                 } label: {
