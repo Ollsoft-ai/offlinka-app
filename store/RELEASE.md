@@ -110,6 +110,7 @@ For the session with the founders. Work top to bottom and tick the boxes. Rules 
 
 - [ ] Add the store badges and links to offlinka.cz (an idea branch first, per the shop rules), and change the shop's mobile guide from Kiwix to the Offlinka app.
 - [ ] Replies to store reviews: a founder approves, like customer e-mails.
+- [ ] **Before April 2027: build iOS with Xcode 27 (iOS 27 SDK).** Apple warned on build 58 (ITMS-90725, built with the iOS 26.5 SDK); after that date older SDKs can't be uploaded. Change `DEVELOPER_DIR` in `.github/workflows/ios.yml`.
 - [ ] Every new version: changelog in `android/fastlane/metadata/android/*/changelogs/<versionCode>.txt` and `ios/fastlane/metadata/*/release_notes.txt`, screenshots re-built.
 
 ## Rejection risks (fix before submitting)
