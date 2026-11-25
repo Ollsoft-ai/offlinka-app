@@ -30,7 +30,7 @@ flock /tmp/claude-1000/offlinka-app-build.lock nice -n 10 timeout 3600 ./gradlew
 
 ## Release signing
 
-Only from env vars, never from a file in the tree: `OFFLINKA_KEYSTORE`, `OFFLINKA_KEYSTORE_PASSWORD`, `OFFLINKA_KEY_ALIAS`, `OFFLINKA_KEY_PASSWORD`. **The APK (drive) is signed with the app signing key, the AAB (Play) with the upload key**: two builds, `assembleRelease` with the `OFFLINKA_SIGNING_*` values and `bundleRelease` with the `OFFLINKA_UPLOAD_*` values (see store/RELEASE.md). A release build (APK or AAB) without them fails in `checkReleaseSigning`; it never falls back to the debug key. Debug builds, unit tests and lint need nothing. CI only: with `CI=true` (GitHub Actions) or `-Pofflinka.unsignedRelease=true` the release builds **unsigned** (to check R8 and shrinking; not installable). Read the key password in the shell, never print it.
+Only from env vars, never from a file in the tree: `OFFLINKA_KEYSTORE`, `OFFLINKA_KEYSTORE_PASSWORD`, `OFFLINKA_KEY_ALIAS`, `OFFLINKA_KEY_PASSWORD`. **The APK (drive) and the AAB (Play) are both signed with the app signing key** (`OFFLINKA_SIGNING_*`): Play holds the same key and registered no separate upload key (store/RELEASE.md, 2026-11-25). An AAB signed with `OFFLINKA_UPLOAD_*` is rejected by Play. A release build (APK or AAB) without them fails in `checkReleaseSigning`; it never falls back to the debug key. Debug builds, unit tests and lint need nothing. CI only: with `CI=true` (GitHub Actions) or `-Pofflinka.unsignedRelease=true` the release builds **unsigned** (to check R8 and shrinking; not installable). Read the key password in the shell, never print it.
 
 ## Decisions worth knowing
 
