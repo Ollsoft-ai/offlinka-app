@@ -13,7 +13,7 @@ options:
 
 settings:
   base:
-    MARKETING_VERSION: "0.2.0"
+    MARKETING_VERSION: "0.3.2"
     CURRENT_PROJECT_VERSION: "2"
     # agvtool (fastlane increment_build_number) needs this.
     VERSIONING_SYSTEM: apple-generic
