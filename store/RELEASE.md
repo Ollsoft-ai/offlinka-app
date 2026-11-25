@@ -25,7 +25,7 @@ For the session with the founders. Work top to bottom and tick the boxes. Rules 
 
 ## 1. Google Play account (once, for all Ollsoft apps)
 
-- [ ] Create at https://play.google.com/console/signup: **organization** account, Ollsoft s.r.o., D-U-N-S 933697073.
+- [x] (account 6707358614901730690, verified 2026-11-25) Create at https://play.google.com/console/signup: **organization** account, Ollsoft s.r.o., D-U-N-S 933697073.
   - **Fee: US$25, one time** (2026-11-21).
   - Legal name and address must match the Dun & Bradstreet record exactly.
   - Contact email and phone, developer email and phone: each confirmed by a one-time code.
@@ -46,11 +46,11 @@ For the session with the founders. Work top to bottom and tick the boxes. Rules 
 
 ## 2. Google Play: the Offlinka app
 
-- [ ] **Create app:** name `Offlinka`, default language Czech (cs-CZ), App, Free. Accept the declarations.
+- [x] **Create app:** name `Offlinka`, default language Czech (cs-CZ), App, Free. Accept the declarations.
 - **Which key signs which file** (both only from `signing.env`, never in the repo):
   - **Done 2026-11-25: Play has our app signing key and uses it as the upload key too** (no separate upload key was registered, so every AAB for Play is signed with the **app signing key**; Play's generated APKs verified 68:B2:3A…). Old plan, unused: **upload key** `_secrets/android/offlinka-upload.jks` (`OFFLINKA_UPLOAD_*`), CN=Offlinka upload, RSA 4096, valid to 2057-01-02. Certificate SHA-256 `A8:ED:90:80:EA:0E:41:D5:A1:01:46:60:C1:2B:18:50:2A:09:0D:03:52:65:B5:75:22:90:90:0D:91:9E:A5:4E`.
   - **APK → the drive: app signing key** `_secrets/android/offlinka-app-signing.jks` (`OFFLINKA_SIGNING_*`), CN=Offlinka. Certificate SHA-256 `68:B2:3A:D7:CD:94:A3:81:EC:9D:6E:23:A9:DB:11:02:5D:AD:E1:17:34:A2:0F:B4:B8:35:1A:97:0F:4C:30:CB`. The same key is uploaded to Play below, so Play updates install over the drive APK.
-- [ ] **App signing with our own key, BEFORE the first release.** Play's default is now Google-generated keys; once a release is rolled out it cannot be changed. Source: https://support.google.com/googleplay/android-developer/answer/9842756
+- [x] **App signing with our own key, BEFORE the first release.** Play's default is now Google-generated keys; once a release is rolled out it cannot be changed. Source: https://support.google.com/googleplay/android-developer/answer/9842756
   - Test and release → App integrity → Play app signing → **Change app signing key** → "Export and upload a key from Java keystore".
   - Download the PEPK tool and the encryption key from that page.
   - Run PEPK on `_secrets/android/offlinka-app-signing.jks` (alias and password from `signing.env`, read in the shell, never printed). Upload the encrypted zip.
@@ -62,32 +62,32 @@ For the session with the founders. Work top to bottom and tick the boxes. Rules 
 - [x] **Store listing** (uploaded by API 2026-11-25, cs/sk/en texts + icon, feature graphic, 8 screenshots each; no listing phone; category set by hand): `fastlane supply --package_name cz.offlinka.app --metadata_path android/fastlane/metadata/android --json_key <service account json> --skip_upload_apk --skip_upload_aab`, or paste the texts by hand. Category, contact and the rest: `store/forms.md`.
 - [ ] **App content** forms: privacy policy, ads, app access, content rating, target audience 13+, data safety, health, financial, news, advertising ID (`store/forms.md`).
 - [ ] **Countries:** Czechia and Slovakia.
-- [ ] **Internal testing:** upload the AAB, add the founders' Google accounts, install from the opt-in link and run the device checklist once with the drive. Read the pre-launch report: without a drive it only sees the Connect screen, which is fine.
+- [x] **Internal testing:** (0.3.2 vc5 live 2026-11-25; first review via a closed-testing release, sent 2026-11-25) upload the AAB, add the founders' Google accounts, install from the opt-in link and run the device checklist once with the drive. Read the pre-launch report: without a drive it only sees the Connect screen, which is fine.
 - [ ] **Closed testing** (optional for us): the same build to a few friends with drives for a week.
 - [ ] **Production:** promote the build, staged rollout 20 % → 100 % after two days without crashes in Android vitals.
 - [ ] Check that the **app signing certificate** under App integrity is ours (SHA-256 matches `keytool -list -v` of `offlinka-app-signing.jks`).
 
 ## 3. Apple
 
-- [ ] **Apple Developer Program, organization:** https://developer.apple.com/programs/enroll/
+- [x] **Apple Developer Program, organization:** (active 2026-11-24, Team D5B5L4G2C8) https://developer.apple.com/programs/enroll/
   - Legal entity Ollsoft s.r.o., D-U-N-S 933697073.
   - Enrolled by someone who can sign for the company (jednatel).
   - **Apple Account email on the company domain**, e.g. `…@ollsoft.ai`. Apple: "Your work email address needs to [be] associated with your organization's domain name".
   - Website https://ollsoft.ai must be public and belong to the company.
   - **Fee: 99 USD per membership year**, shown in local currency during enrollment (2026-11-21).
 - [ ] **EU trader (DSA):** yes. Apple publishes the D-U-N-S address, a phone and an email on the EU product page; it needs a document proving the business name and address. Apps without trader status are removed from the EU App Store. Source: https://developer.apple.com/help/app-store-connect/manage-compliance-information/manage-european-union-digital-services-act-trader-requirements
-- [ ] **Identifiers:** explicit App ID `cz.offlinka.app`. Note the Team ID (`OFFLINKA_TEAM_ID`). The App Store Connect API team key (.p8, App Manager) exists since 2026-11-24 and is shared by all Ollsoft apps, so it lives in Kryštof's private user-wide secrets (`users/krystof/_secrets/apple/asc-api.env`: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_PATH`, `FASTLANE_TEAM_ID`; see `ios/fastlane/Appfile`), not in the project `_secrets/`. CI gets it as GitHub Actions secrets.
-- [ ] **App record** in App Store Connect: iOS, name `Offlinka`, primary language Czech, bundle ID `cz.offlinka.app`, SKU `offlinka-ios`.
+- [x] **Identifiers:** (bundle ID by API 2026-11-24) explicit App ID `cz.offlinka.app`. Note the Team ID (`OFFLINKA_TEAM_ID`). The App Store Connect API team key (.p8, App Manager) exists since 2026-11-24 and is shared by all Ollsoft apps, so it lives in Kryštof's private user-wide secrets (`users/krystof/_secrets/apple/asc-api.env`: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_PATH`, `FASTLANE_TEAM_ID`; see `ios/fastlane/Appfile`), not in the project `_secrets/`. CI gets it as GitHub Actions secrets.
+- [x] **App record** (Apple ID 6838847374) in App Store Connect: iOS, name `Offlinka`, primary language Czech, bundle ID `cz.offlinka.app`, SKU `offlinka-ios`.
 - [ ] **App Information and App Privacy:** categories, content rights, age rating, Data Not Collected, privacy URL (`store/forms.md`). Price free, availability Czechia and Slovakia. In Pricing and Availability **untick "Mac (Apple silicon)" and "Apple Vision Pro"**: they are on by default and untested (the app needs a USB drive and a phone).
 - [ ] **First build on a Mac** (cloud Mac: skill `cloud-mac`): `ios/README.md` "Build on macOS", then `ios/UI-SMOKE-TESTS.md` on an iPhone 15 with the drive.
   - Since 2026-04-28 uploads must be built with **Xcode 26 or later**. Source: https://developer.apple.com/news/upcoming-requirements/
-- [ ] **TestFlight:** `cd ios && fastlane beta`, then add the founders as internal testers and test with the drive.
+- [x] **TestFlight:** (CI job `testflight`; 0.3.2 build 60 VALID 2026-11-25, internal group "Ollsoft" gets every build) `cd ios && fastlane beta`, then add the founders as internal testers and test with the drive.
 - [ ] **Screenshots from the iOS simulator:** capture the same moments (Home, search „cesky krumlov“, article, map, first aid, dark, Library) on an iPhone 17 Pro Max simulator and an iPad Pro 13″ simulator. Name them like the Paparazzi files, run `SNAPSHOTS=<that folder> store/screenshots/build.sh ios-69 ios-63 ipad-13`.
   - Apple requires at least one screenshot of the **"iPhone with Dynamic Island (medium display)"** class (1206×2622 or 1179×2556; our `ios-63`).
   - It also requires **iPad 13″** (2064×2752) because the app runs on iPad.
   - 1320×2868 (`ios-69`) and 1284×2778 (`ios-65`) cover the large classes.
   - Up to 10 per size, no alpha. Source: https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/
-- [ ] **Metadata:** `cd ios && fastlane release` (uploads the build and `fastlane/metadata`, no auto-submit). Upload the screenshots in App Store Connect, or `fastlane deliver --screenshots_path ../store/screenshots/out/appstore --skip_binary_upload --skip_metadata`.
+- [x] **Metadata:** (by API 2026-11-25: texts cs/sk/en, Reference + Education, age rating 12+, review notes + demo video, 63 screenshots, build 60 attached; manual release) `cd ios && fastlane release` (uploads the build and `fastlane/metadata`, no auto-submit). Upload the screenshots in App Store Connect, or `fastlane deliver --screenshots_path ../store/screenshots/out/appstore --skip_binary_upload --skip_metadata`.
   - **No "What's New" for the first version:** App Store Connect does not take it. Add `release_notes.txt` from the second version on.
 - [ ] **App Review Information:** contact name, phone and email. Notes come from `review_information/notes.txt` (sample URL filled in). Attach the demo video. Sign-in: not required.
 - [ ] **Submit for review**, release manually after approval.
