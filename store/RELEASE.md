@@ -64,7 +64,7 @@ For the session with the founders. Work top to bottom and tick the boxes. Rules 
 - [ ] **Countries:** Czechia and Slovakia.
 - [x] **Internal testing:** (0.3.2 vc5 live 2026-11-25; first review via a closed-testing release, sent 2026-11-25) upload the AAB, add the founders' Google accounts, install from the opt-in link and run the device checklist once with the drive. Read the pre-launch report: without a drive it only sees the Connect screen, which is fine.
 - [ ] **Closed testing** (optional for us): the same build to a few friends with drives for a week.
-- [ ] **Production:** promote the build, staged rollout 20 % → 100 % after two days without crashes in Android vitals.
+- [x] **Production:** (0.3.2 vc5 sent 2026-11-26 at 100%, countries CZ, SK, DE; no staged rollout: no existing users) promote the build, staged rollout 20 % → 100 % after two days without crashes in Android vitals.
 - [ ] Check that the **app signing certificate** under App integrity is ours (SHA-256 matches `keytool -list -v` of `offlinka-app-signing.jks`).
 
 ## 3. Apple
@@ -90,7 +90,7 @@ For the session with the founders. Work top to bottom and tick the boxes. Rules 
 - [x] **Metadata:** (by API 2026-11-25: texts cs/sk/en, Reference + Education, age rating 12+, review notes + demo video, 63 screenshots, build 60 attached; manual release) `cd ios && fastlane release` (uploads the build and `fastlane/metadata`, no auto-submit). Upload the screenshots in App Store Connect, or `fastlane deliver --screenshots_path ../store/screenshots/out/appstore --skip_binary_upload --skip_metadata`.
   - **No "What's New" for the first version:** App Store Connect does not take it. Add `release_notes.txt` from the second version on.
 - [ ] **App Review Information:** contact name, phone and email. Notes come from `review_information/notes.txt` (sample URL filled in). Attach the demo video. Sign-in: not required.
-- [ ] **Submit for review**, release manually after approval.
+- [x] **Submit for review** (0.3.2 build 60, 2026-11-26, WAITING_FOR_REVIEW; release after approval), release manually after approval.
 - **Export compliance:** nothing to answer per build: `ITSAppUsesNonExemptEncryption` = NO is already in `ios/project.yml`.
 
 ## 4. The APK on the drive
